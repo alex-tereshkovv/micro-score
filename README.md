@@ -76,12 +76,12 @@ git clone https://github.com/yourusername/MicroScore.git
 cd MicroScore
 pip install -r requirements.txt
 jupyter notebook notebooks/first_analysis.ipynb
+```
 
 ## Code
 See first_analysis.ipynb for the complete analysis.
 
 ## Author
-
 Alexandr
 Pavlodar, Kazakhstan
 
