@@ -83,6 +83,7 @@ See first_analysis.ipynb for the complete analysis.
 
 ## Author
 Alexandr
+
 Pavlodar, Kazakhstan
 
 This project started from a simple observation: people in my region get rejected 
