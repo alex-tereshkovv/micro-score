@@ -1,3 +1,12 @@
 __pycache__/
 .ipynb_checkpoints/
 .env
+.venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+data/interim/*
+data/processed/*
+!data/interim/.gitkeep
+!data/processed/.gitkeep

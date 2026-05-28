@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microscore"
+version = "0.1.0"
+description = "Behavioral credit-risk scoring research for microfinance contexts."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+notebook = [
+    "jupyter>=1.0",
+]
+
+[project.scripts]
+microscore-train = "microscore.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
