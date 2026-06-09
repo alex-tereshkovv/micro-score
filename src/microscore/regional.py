@@ -12,11 +12,14 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .paths import PROJECT_ROOT
+
 
 @dataclass(frozen=True)
 class DistrictProfile:
     district: str
     settlement_type: str
+    population_2023: int
     base_weight: float
     distance_to_pavlodar_km: float
     digital_access_index: float
@@ -25,26 +28,51 @@ class DistrictProfile:
     seasonal_income_risk: float
 
 
+EXTERNAL_PROFILE_PATH = PROJECT_ROOT / "data" / "external" / "pavlodar_district_profiles.csv"
+
 PAVLODAR_DISTRICT_PROFILES: tuple[DistrictProfile, ...] = (
-    DistrictProfile("Pavlodar city", "urban", 0.24, 0, 0.92, 1.12, 0.95, 0.18),
-    DistrictProfile("Ekibastuz", "industrial_city", 0.18, 135, 0.82, 1.06, 0.82, 0.28),
-    DistrictProfile("Aksu", "industrial_city", 0.10, 50, 0.78, 1.02, 0.74, 0.30),
-    DistrictProfile("Pavlodar district", "peri_urban", 0.08, 35, 0.68, 0.96, 0.62, 0.42),
-    DistrictProfile("Bayanaul", "rural", 0.07, 220, 0.54, 0.88, 0.45, 0.68),
-    DistrictProfile("Aktogay", "rural", 0.06, 125, 0.50, 0.84, 0.40, 0.64),
-    DistrictProfile("Uspenka", "rural", 0.06, 95, 0.48, 0.82, 0.38, 0.66),
-    DistrictProfile("Sharbakty", "rural", 0.06, 90, 0.50, 0.84, 0.40, 0.62),
-    DistrictProfile("Zhelezinka", "rural", 0.05, 180, 0.44, 0.80, 0.34, 0.70),
-    DistrictProfile("Terenkol", "rural", 0.04, 110, 0.46, 0.81, 0.36, 0.67),
-    DistrictProfile("Irtysh", "rural", 0.03, 160, 0.42, 0.78, 0.32, 0.72),
-    DistrictProfile("May district", "rural", 0.03, 210, 0.38, 0.76, 0.28, 0.76),
+    DistrictProfile("Pavlodar city", "urban", 367254, 0.486469, 0, 0.92, 1.12, 0.95, 0.18),
+    DistrictProfile("Ekibastuz", "industrial_city", 145509, 0.192741, 135, 0.82, 1.06, 0.82, 0.28),
+    DistrictProfile("Aksu", "industrial_city", 72270, 0.095729, 50, 0.78, 1.02, 0.74, 0.30),
+    DistrictProfile("Pavlodar district", "peri_urban", 26692, 0.035356, 35, 0.68, 0.96, 0.62, 0.42),
+    DistrictProfile("Bayanaul", "rural", 23712, 0.031409, 220, 0.54, 0.88, 0.45, 0.68),
+    DistrictProfile("Sharbakty", "rural", 18981, 0.025142, 90, 0.50, 0.84, 0.40, 0.62),
+    DistrictProfile("Terenkol", "rural", 19947, 0.026421, 110, 0.46, 0.81, 0.36, 0.67),
+    DistrictProfile("Irtysh", "rural", 17009, 0.022530, 160, 0.42, 0.78, 0.32, 0.72),
+    DistrictProfile("Zhelezinka", "rural", 15234, 0.020179, 180, 0.44, 0.80, 0.34, 0.70),
+    DistrictProfile("Aktogay", "rural", 12859, 0.017033, 125, 0.50, 0.84, 0.40, 0.64),
+    DistrictProfile("Akkuly", "rural", 12491, 0.016546, 120, 0.48, 0.82, 0.38, 0.66),
+    DistrictProfile("Uspenka", "rural", 12534, 0.016602, 95, 0.48, 0.82, 0.38, 0.66),
+    DistrictProfile("May district", "rural", 10457, 0.013851, 210, 0.38, 0.76, 0.28, 0.76),
 )
 
 
 def district_profile_table() -> pd.DataFrame:
     """Return the simulation assumptions in a readable table."""
 
-    return pd.DataFrame([profile.__dict__ for profile in PAVLODAR_DISTRICT_PROFILES])
+    if EXTERNAL_PROFILE_PATH.exists():
+        profiles = pd.read_csv(EXTERNAL_PROFILE_PATH)
+    else:
+        profiles = pd.DataFrame([profile.__dict__ for profile in PAVLODAR_DISTRICT_PROFILES])
+
+    required_columns = {
+        "district",
+        "settlement_type",
+        "population_2023",
+        "base_weight",
+        "distance_to_pavlodar_km",
+        "digital_access_index",
+        "income_index",
+        "mfi_branch_access_index",
+        "seasonal_income_risk",
+    }
+    missing = sorted(required_columns.difference(profiles.columns))
+    if missing:
+        raise ValueError(f"Regional profile table is missing columns: {missing}")
+
+    profiles = profiles.copy()
+    profiles["base_weight"] = profiles["base_weight"] / profiles["base_weight"].sum()
+    return profiles
 
 
 def _zscore(series: pd.Series) -> pd.Series:

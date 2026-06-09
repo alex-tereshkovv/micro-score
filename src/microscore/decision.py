@@ -20,6 +20,8 @@ from .modeling import RANDOM_STATE, build_logistic_regression
 class DecisionReport:
     model_quality: pd.DataFrame
     threshold_table: pd.DataFrame
+    profit_optimal_threshold: float
+    profit_optimal_metrics: pd.DataFrame
     best_threshold: float
     best_threshold_metrics: pd.DataFrame
     segment_approval: pd.DataFrame
@@ -145,6 +147,7 @@ def run_decision_analysis(
     loan_amount_column: str = "loan_application_amount",
     interest_margin: float = 0.22,
     loss_given_default: float = 0.65,
+    min_approval_rate: float = 0.05,
     segment_columns: tuple[str, ...] = ("pavlodar_district", "settlement_type", "gender"),
 ) -> DecisionReport:
     """Train a model and evaluate lending thresholds on the held-out test set."""
@@ -177,7 +180,15 @@ def run_decision_analysis(
         interest_margin=interest_margin,
         loss_given_default=loss_given_default,
     )
-    best_index = threshold_table["expected_profit_per_applicant"].idxmax()
+
+    profit_optimal_index = threshold_table["expected_profit_per_applicant"].idxmax()
+    profit_optimal_threshold = float(threshold_table.loc[profit_optimal_index, "threshold"])
+    profit_optimal_metrics = threshold_table.loc[[profit_optimal_index]].reset_index(drop=True)
+
+    eligible_thresholds = threshold_table[threshold_table["approval_rate"] >= min_approval_rate]
+    if eligible_thresholds.empty:
+        eligible_thresholds = threshold_table
+    best_index = eligible_thresholds["expected_profit_per_applicant"].idxmax()
     best_threshold = float(threshold_table.loc[best_index, "threshold"])
     best_threshold_metrics = threshold_table.loc[[best_index]].reset_index(drop=True)
 
@@ -189,6 +200,7 @@ def run_decision_analysis(
                 "brier_score": brier_score_loss(y_test, y_probability),
                 "interest_margin": interest_margin,
                 "loss_given_default": loss_given_default,
+                "min_approval_rate": min_approval_rate,
             }
         ]
     )
@@ -204,6 +216,8 @@ def run_decision_analysis(
     return DecisionReport(
         model_quality=model_quality,
         threshold_table=threshold_table,
+        profit_optimal_threshold=profit_optimal_threshold,
+        profit_optimal_metrics=profit_optimal_metrics,
         best_threshold=best_threshold,
         best_threshold_metrics=best_threshold_metrics,
         segment_approval=segment_approval,

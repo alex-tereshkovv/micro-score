@@ -4,6 +4,7 @@ This folder keeps data separate from notebooks and source code.
 
 ```text
 data/
+|-- external/   # public-context reference tables
 |-- raw/        # immutable source files
 |-- processed/  # cleaned or transformed datasets, if needed later
 `-- interim/    # temporary analysis extracts, if needed later

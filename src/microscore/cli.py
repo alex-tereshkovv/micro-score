@@ -6,7 +6,9 @@ import argparse
 from pathlib import Path
 
 from .audit import run_audit
-from .modeling import DEFAULT_DATA_PATH, results_table, run_experiment
+from .decision import run_decision_analysis
+from .modeling import DEFAULT_DATA_PATH, load_dataset, results_table, run_experiment, run_experiment_on_frame
+from .regional import add_pavlodar_regional_context, regional_summary
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +29,16 @@ def parse_args() -> argparse.Namespace:
         "--audit",
         action="store_true",
         help="Run proxy-feature and segment/fairness audit tables.",
+    )
+    parser.add_argument(
+        "--regional",
+        action="store_true",
+        help="Add simulated Pavlodar-region context and compare regional model results.",
+    )
+    parser.add_argument(
+        "--decision",
+        action="store_true",
+        help="Run threshold-based loan approval and expected-loss analysis.",
     )
     return parser.parse_args()
 
@@ -74,5 +86,34 @@ def main() -> int:
 
         print("\nSegment metrics")
         print(audit.segment_metrics.round(4).to_string(index=False))
+
+    if args.regional or args.decision:
+        regional_frame = add_pavlodar_regional_context(load_dataset(args.data))
+
+    if args.regional:
+        print("\nPavlodar regional simulation summary")
+        print(regional_summary(regional_frame).round(4).to_string(index=False))
+
+        regional_results = run_experiment_on_frame(regional_frame)
+        print("\nModel comparison with simulated Pavlodar regional context")
+        print(results_table(regional_results).round(4).to_string(index=False))
+
+    if args.decision:
+        decision = run_decision_analysis(regional_frame)
+
+        print("\nDecision model quality")
+        print(decision.model_quality.round(4).to_string(index=False))
+
+        print("\nProfit-optimal threshold")
+        print(decision.profit_optimal_metrics.round(4).to_string(index=False))
+
+        print("\nSelected threshold with minimum approval-rate constraint")
+        print(decision.best_threshold_metrics.round(4).to_string(index=False))
+
+        print("\nThreshold decision table")
+        print(decision.threshold_table.round(4).to_string(index=False))
+
+        print("\nSegment approval at best threshold")
+        print(decision.segment_approval.round(4).to_string(index=False))
 
     return 0
