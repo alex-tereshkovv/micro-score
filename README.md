@@ -150,6 +150,8 @@ The project now has two planning documents:
 - [Product Roadmap](docs/PRODUCT_ROADMAP.md): five-month plan toward a working
   application with borrower login, loan applications, MFI analytics, and model
   governance.
+- [API Contract](docs/API_CONTRACT.md): backend roles, endpoints, response
+  schemas, and borrower form fields for the future frontend.
 
 ## Product API Prototype
 
@@ -169,6 +171,18 @@ Run the local API:
 .venv\Scripts\python -m uvicorn microscore_api.main:app --reload
 ```
 
+Seed demo users and one demo loan application:
+
+```bash
+.venv\Scripts\python -m microscore_api.seed
+```
+
+Demo accounts use password `password123`:
+
+- `borrower@test.com`
+- `analyst@test.com`
+- `admin@test.com`
+
 Current API scope:
 
 - `GET /health`
@@ -180,15 +194,87 @@ Current API scope:
 - `GET /mfi/applications`
 - `POST /mfi/applications/{application_id}/score`
 - `GET /mfi/analytics/segments`
+- `GET /admin/audit-events`
+- `DELETE /admin/applications`
 
-The current API uses in-memory storage. This is intentional for the first
-prototype; PostgreSQL and persistent audit logs are the next product milestone.
+The current API uses SQLite persistence by default:
+
+```text
+data/app/microscore.sqlite3
+```
+
+The database path can be changed with `MICROSCORE_API_DB_PATH`. Runtime database
+files are ignored by Git; only `data/app/.gitkeep` is tracked.
+
+The API flow is covered by integration tests: borrower registration,
+application submission, MFI scoring, segment analytics, and admin audit events.
+OpenAPI now exposes typed response schemas for applications, score results,
+segment analytics, and audit events.
+
+Loan applications persist in SQLite until an admin clears them or the local
+database file is removed. The current demo values use the synthetic dataset's
+prototype numeric scale, not calibrated real KZT amounts.
+
+Scoring now reports two scenarios for each application:
+
+- standard model
+- thin-file model without `late_payment_count`
+
+This makes proxy sensitivity visible instead of hiding it behind one risk band.
+The API also returns a decision-support recommendation with rationale and next
+steps, so an MFI analyst sees what to review instead of receiving only a raw
+probability.
+
+## Web Prototype
+
+MicroScore also includes a static frontend prototype under `apps/web/`. It
+connects to the local API and supports:
+
+- borrower login/register
+- borrower loan application form
+- application status lookup
+- MFI application queue
+- application scoring
+- segment analytics
+- admin audit trail
+
+Start the API:
+
+```powershell
+.venv\Scripts\python -m microscore_api.seed
+.venv\Scripts\python -m uvicorn microscore_api.main:app --reload
+```
+
+Start the web UI in another PowerShell window:
+
+```powershell
+.venv\Scripts\python -m http.server 5173 --directory apps\web
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
 
 ## Project Structure
 
 ```text
 MicroScore/
+|-- apps/
+|   `-- web/
+|       |-- README.md
+|       |-- assets/
+|       |   |-- apple-touch-icon.png
+|       |   |-- favicon.svg
+|       |   |-- favicon-32.png
+|       |   |-- microscore-mark.svg
+|       |   `-- micro-score.png
+|       |-- app.js
+|       |-- index.html
+|       `-- styles.css
 |-- docs/
+|   |-- API_CONTRACT.md
 |   |-- METHODOLOGY.md
 |   `-- PRODUCT_ROADMAP.md
 |-- notebooks/
@@ -198,6 +284,8 @@ MicroScore/
 |   |-- external/
 |   |   |-- README.md
 |   |   `-- pavlodar_district_profiles.csv
+|   |-- app/
+|   |   `-- .gitkeep
 |   |-- interim/
 |   |-- processed/
 |   `-- raw/
@@ -217,15 +305,23 @@ MicroScore/
 |   |   `-- regional.py
 |   |-- microscore_api/
 |   |   |-- __init__.py
+|   |   |-- database.py
 |   |   |-- main.py
-|   |   `-- scoring.py
+|   |   |-- scoring.py
+|   |   |-- schemas.py
+|   |   |-- security.py
+|   |   `-- seed.py
 |   `-- train_model.py
 |-- tests/
 |   |-- test_audit.py
+|   |-- test_api_database.py
+|   |-- test_api_integration.py
+|   |-- test_api_seed.py
 |   |-- test_api_scoring.py
 |   |-- test_decision.py
 |   |-- test_features.py
-|   `-- test_regional.py
+|   |-- test_regional.py
+|   `-- test_web_static.py
 |-- .gitignore
 |-- README.md
 `-- requirements.txt

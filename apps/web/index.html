@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10252d" />
+    <title>MicroScore Risk Console</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+    <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-logo-card" aria-hidden="true">
+            <img src="./assets/microscore-mark.svg" alt="" />
+          </div>
+          <div class="brand-copy">
+            <h1><span>Micro</span><strong>Score</strong></h1>
+            <p>Financial inclusion</p>
+          </div>
+        </div>
+
+        <div class="sidebar-summary" aria-label="Prototype focus">
+          <div>
+            <span>Region</span>
+            <strong>Pavlodar</strong>
+          </div>
+          <div>
+            <span>Mode</span>
+            <strong>Review</strong>
+          </div>
+        </div>
+
+        <section class="connection-panel" aria-labelledby="connection-title">
+          <h2 id="connection-title">Connection</h2>
+          <label for="apiBase">API base</label>
+          <div class="input-row">
+            <input id="apiBase" name="apiBase" type="url" value="http://127.0.0.1:8000" />
+            <button id="checkApiButton" class="icon-button" type="button" title="Check API">
+              <span aria-hidden="true">&#8635;</span>
+            </button>
+          </div>
+          <div id="apiStatus" class="status-line neutral">Checking API...</div>
+        </section>
+
+        <nav class="role-tabs" aria-label="Workspace role">
+          <button class="role-tab active" type="button" data-view="borrowerView">Borrower</button>
+          <button class="role-tab" type="button" data-view="mfiView">MFI</button>
+          <button class="role-tab" type="button" data-view="adminView">Admin</button>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Pavlodar decision support</p>
+            <h2 id="viewTitle">Borrower workspace</h2>
+          </div>
+          <div class="session-strip">
+            <span id="sessionRole" class="pill muted">No session</span>
+            <button id="logoutButton" class="secondary-button" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <div id="messageArea" class="message-area" aria-live="polite"></div>
+
+        <section class="auth-band" aria-labelledby="auth-title">
+          <div>
+            <h3 id="auth-title">Session</h3>
+            <p id="authHint">Local prototype session</p>
+          </div>
+          <form id="authForm" class="auth-form">
+            <input id="email" name="email" type="email" placeholder="email" autocomplete="email" required />
+            <input id="password" name="password" type="password" placeholder="password" autocomplete="current-password" required />
+            <select id="role" name="role">
+              <option value="borrower">borrower</option>
+              <option value="mfi_analyst">mfi_analyst</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="loginButton" class="primary-button" type="submit">Sign in</button>
+            <button id="registerButton" class="secondary-button" type="button">Register</button>
+          </form>
+          <div class="demo-actions">
+            <button class="text-button" type="button" data-demo="borrower@test.com" data-role="borrower">Borrower demo</button>
+            <button class="text-button" type="button" data-demo="analyst@test.com" data-role="mfi_analyst">MFI demo</button>
+            <button class="text-button" type="button" data-demo="admin@test.com" data-role="admin">Admin demo</button>
+          </div>
+        </section>
+
+        <section id="borrowerView" class="view-grid active-view" aria-labelledby="borrower-title">
+          <section class="panel form-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Borrower</p>
+                <h3 id="borrower-title">Loan application</h3>
+              </div>
+              <button id="fillDemoApplication" class="secondary-button" type="button">Fill demo</button>
+            </div>
+            <form id="applicationForm" class="application-form">
+              <div class="form-grid">
+                <label>
+                  Requested amount
+                  <input name="requested_amount" type="number" min="1" step="1000" required />
+                </label>
+                <label>
+                  Purpose
+                  <input name="purpose" type="text" />
+                </label>
+                <label>
+                  District
+                  <select name="district">
+                    <option>Pavlodar city</option>
+                    <option>Ekibastuz</option>
+                    <option>Aksu</option>
+                    <option>Pavlodar district</option>
+                    <option>Bayanaul</option>
+                    <option>Sharbakty</option>
+                    <option>Terenkol</option>
+                    <option>Irtysh</option>
+                    <option>Zhelezinka</option>
+                    <option>Aktogay</option>
+                    <option>Akkuly</option>
+                    <option>Uspenka</option>
+                    <option>May district</option>
+                  </select>
+                </label>
+                <label>
+                  Settlement type
+                  <select name="settlement_type">
+                    <option value="urban">urban</option>
+                    <option value="industrial_city">industrial_city</option>
+                    <option value="peri_urban">peri_urban</option>
+                    <option value="rural">rural</option>
+                  </select>
+                </label>
+                <label>
+                  Annual income
+                  <input name="annual_income" type="number" min="0" step="1000" />
+                </label>
+                <label>
+                  Outstanding debt
+                  <input name="total_outstanding_debt" type="number" min="0" step="1000" />
+                </label>
+                <label>
+                  Mobile logins
+                  <input name="mobile_banking_logins" type="number" min="0" step="1" />
+                </label>
+                <label>
+                  Online transfers
+                  <input name="online_transfer_frequency" type="number" min="0" step="1" />
+                </label>
+                <label>
+                  ATM withdrawals
+                  <input name="atm_withdrawal_frequency" type="number" min="0" step="1" />
+                </label>
+                <label>
+                  Average deposits
+                  <input name="avg_deposit_amount" type="number" min="0" step="1000" />
+                </label>
+                <label>
+                  Card spending
+                  <input name="debit_card_spending" type="number" min="0" step="1000" />
+                </label>
+                <label>
+                  Open loans
+                  <input name="num_open_loans" type="number" min="0" step="1" />
+                </label>
+                <label>
+                  Late payments
+                  <input name="late_payment_count" type="number" min="0" step="1" />
+                </label>
+                <label>
+                  Gender
+                  <select name="gender">
+                    <option>Female</option>
+                    <option>Male</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+                <label>
+                  Employment
+                  <select name="employment_status">
+                    <option>Self-employed</option>
+                    <option>Employed</option>
+                    <option>Unemployed</option>
+                  </select>
+                </label>
+              </div>
+              <button class="primary-button submit-wide" type="submit">Submit application</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Status</p>
+                <h3>Application lookup</h3>
+              </div>
+              <button id="refreshBorrowerApplication" class="icon-button" type="button" title="Refresh application">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <label for="borrowerApplicationId">Application ID</label>
+            <div class="input-row">
+              <input id="borrowerApplicationId" type="text" placeholder="application id" />
+              <button id="loadBorrowerApplication" class="secondary-button" type="button">Load</button>
+            </div>
+            <div id="borrowerApplicationCard" class="result-block empty">No application selected.</div>
+          </section>
+        </section>
+
+        <section id="mfiView" class="view-grid" aria-labelledby="mfi-title">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">MFI</p>
+                <h3 id="mfi-title">Application queue</h3>
+              </div>
+              <button id="refreshApplications" class="icon-button" type="button" title="Refresh queue">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Risk</p>
+                <h3>Score detail</h3>
+              </div>
+              <button id="scoreSelectedApplication" class="primary-button" type="button">Score</button>
+            </div>
+            <div id="scoreDetail" class="result-block empty">Select an application.</div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Analytics</p>
+                <h3>Segment risk</h3>
+              </div>
+              <button id="refreshAnalytics" class="icon-button" type="button" title="Refresh analytics">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="segmentAnalytics" class="table-shell empty">No segment analytics loaded.</div>
+          </section>
+        </section>
+
+        <section id="adminView" class="view-grid" aria-labelledby="admin-title">
+          <section class="panel wide-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Admin</p>
+                <h3 id="admin-title">Audit trail</h3>
+              </div>
+              <div class="button-row">
+                <button id="clearApplications" class="danger-button" type="button">Clear applications</button>
+                <button id="refreshAudit" class="icon-button" type="button" title="Refresh audit">
+                  <span aria-hidden="true">&#8635;</span>
+                </button>
+              </div>
+            </div>
+            <div id="auditTrail" class="table-shell empty">No audit events loaded.</div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

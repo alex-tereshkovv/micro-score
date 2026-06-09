@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">MicroScore mark</title>
+  <defs>
+    <linearGradient id="mark-bg" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12313c" />
+      <stop offset="1" stop-color="#0f262b" />
+    </linearGradient>
+    <linearGradient id="mark-teal" x1="32" y1="60" x2="68" y2="31" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#04968c" />
+      <stop offset="1" stop-color="#23c4af" />
+    </linearGradient>
+    <linearGradient id="mark-sun" x1="24" y1="35" x2="72" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f1a21a" />
+      <stop offset="1" stop-color="#ffc24a" />
+    </linearGradient>
+  </defs>
+  <rect x="5" y="5" width="86" height="86" rx="16" fill="url(#mark-bg)" />
+  <rect x="5.5" y="5.5" width="85" height="85" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)" />
+  <path d="M24 42a24 24 0 0 1 48 0" fill="none" stroke="url(#mark-sun)" stroke-width="6" stroke-linecap="round" />
+  <path d="M15 67 32 48l13 19H15Z" fill="#f5faf8" />
+  <path d="M34 57 49 40l25 27" fill="none" stroke="url(#mark-teal)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M63 61 76 49l12 18" fill="none" stroke="#f5faf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M33 78h30" stroke="#f1a21a" stroke-width="4" stroke-linecap="round" />
+</svg>

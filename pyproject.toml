@@ -21,11 +21,13 @@ notebook = [
 ]
 app = [
     "fastapi>=0.111",
+    "httpx>=0.27",
     "uvicorn[standard]>=0.30",
 ]
 
 [project.scripts]
 microscore-train = "microscore.cli:main"
+microscore-seed-api = "microscore_api.seed:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

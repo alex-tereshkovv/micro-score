@@ -39,6 +39,7 @@ MFI side:
 - borrower-level risk summary
 - model probability and risk band
 - top contributing factors
+- decision-support recommendation
 - regional context
 - fairness/segment analytics
 - threshold decision analysis
@@ -108,6 +109,8 @@ Minimum score result fields:
 - risk band
 - top positive factors
 - top protective factors
+- scenario comparison
+- decision-support recommendation
 - threshold recommendation
 - created timestamp
 
@@ -217,12 +220,20 @@ dashboard, risk scoring, and analytics.
 
 ## Near-Term Next Step
 
-The first backend scaffold now exists in `src/microscore_api/`. The next
-engineering milestone is to replace in-memory state with a real persistence
-layer:
+The first backend scaffold now exists in `src/microscore_api/`, and it now uses
+SQLite persistence for users, sessions, applications, score results, and audit
+events. The API also has demo seed data, typed response schemas, an API contract
+document, integration tests for the complete borrower/MFI/admin flow, dual
+standard/thin-file scoring, decision-support recommendations, and a static web
+prototype in `apps/web/`. The next engineering milestone is to turn the
+frontend and scoring review flow into a more production-like application:
 
-- PostgreSQL or SQLite development database
-- persistent users, applications, scores, and audit events
-- migration workflow
-- stronger password and session handling
-- seeded demo accounts for borrower and MFI analyst roles
+- stronger client-side form validation
+- clearer borrower application status history
+- richer MFI risk detail page
+- district and settlement-type charts
+- dedicated frontend integration tests
+- real KZT feature calibration before pilot use
+- eventual React or Next.js migration when the product flow stabilizes
+- migration path from SQLite development storage to PostgreSQL
+- stronger password and session handling before any real user data

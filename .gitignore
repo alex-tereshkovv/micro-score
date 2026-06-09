@@ -8,5 +8,7 @@ build/
 dist/
 data/interim/*
 data/processed/*
+data/app/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
+!data/app/.gitkeep

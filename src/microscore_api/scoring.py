@@ -10,14 +10,30 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
-from microscore.features import add_behavioral_features, make_model_frame
+from microscore.features import DEFAULT_DROP_COLUMNS, add_behavioral_features, make_model_frame
 from microscore.modeling import (
     RANDOM_STATE,
     build_logistic_regression,
-    feature_importance,
     load_dataset,
 )
-from microscore.regional import add_pavlodar_regional_context
+from microscore.regional import add_pavlodar_regional_context, district_profile_table
+
+
+@dataclass(frozen=True)
+class ScenarioScore:
+    scenario: str
+    label: str
+    high_risk_probability: float
+    risk_band: str
+    notes: list[str]
+
+
+@dataclass(frozen=True)
+class DecisionSupport:
+    recommendation_code: str
+    title: str
+    rationale: list[str]
+    next_steps: list[str]
 
 
 @dataclass(frozen=True)
@@ -26,6 +42,9 @@ class ScoreResult:
     model_version: str
     high_risk_probability: float
     risk_band: str
+    proxy_sensitivity_delta: float
+    scenario_scores: list[ScenarioScore]
+    decision_support: DecisionSupport
     missing_feature_count: int
     missing_features_preview: list[str]
     top_model_factors: list[dict[str, object]]
@@ -40,20 +59,169 @@ def risk_band(probability: float) -> str:
     return "high"
 
 
-def _importance_records(importance: pd.DataFrame, limit: int = 8) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    value_columns = [column for column in importance.columns if column not in {"feature", "abs_value"}]
-    value_column = value_columns[0] if value_columns else "abs_value"
+def _decision_support(
+    standard_score: ScenarioScore,
+    thin_file_score: ScenarioScore,
+    proxy_sensitivity_delta: float,
+    missing_feature_count: int,
+) -> DecisionSupport:
+    rationale = [
+        f"Standard risk is {standard_score.risk_band} ({standard_score.high_risk_probability:.1%}).",
+        f"Thin-file risk is {thin_file_score.risk_band} ({thin_file_score.high_risk_probability:.1%}).",
+    ]
+    if missing_feature_count:
+        rationale.append(f"{missing_feature_count} expected model features were not supplied.")
 
-    for row in importance.head(limit).to_dict(orient="records"):
+    if proxy_sensitivity_delta >= 0.25:
+        rationale.append(
+            f"Proxy sensitivity is high ({proxy_sensitivity_delta:.1%}); late-payment history changes the score materially."
+        )
+        return DecisionSupport(
+            recommendation_code="manual_review_proxy_sensitive",
+            title="Manual review - proxy-sensitive score",
+            rationale=rationale,
+            next_steps=[
+                "Verify the context behind late payments before making a decision.",
+                "Request additional behavioral or income-stability evidence.",
+                "Do not use this score as an automatic decline.",
+            ],
+        )
+
+    if (
+        standard_score.high_risk_probability < 0.35
+        and thin_file_score.high_risk_probability < 0.55
+    ):
+        return DecisionSupport(
+            recommendation_code="starter_loan_candidate",
+            title="Candidate for small starter loan",
+            rationale=rationale,
+            next_steps=[
+                "Consider a small first loan with conservative exposure.",
+                "Use repayment behavior to update future credit limits.",
+                "Keep human approval in the loop.",
+            ],
+        )
+
+    if (
+        standard_score.high_risk_probability >= 0.75
+        and thin_file_score.high_risk_probability >= 0.65
+    ):
+        return DecisionSupport(
+            recommendation_code="high_risk_review",
+            title="High risk - additional review required",
+            rationale=rationale,
+            next_steps=[
+                "Request additional documentation or guarantor information.",
+                "Consider restructuring loan size or term.",
+                "Escalate to a senior analyst before approval.",
+            ],
+        )
+
+    return DecisionSupport(
+        recommendation_code="standard_manual_review",
+        title="Manual review",
+        rationale=rationale,
+        next_steps=[
+            "Review borrower context and application purpose.",
+            "Compare score with affordability and income-stability evidence.",
+            "Choose a threshold policy before making a decision.",
+        ],
+    )
+
+
+def _clean_feature_names(feature_names: np.ndarray) -> list[str]:
+    return [
+        name.replace("num__", "").replace("cat__", "")
+        for name in feature_names
+    ]
+
+
+def _is_missing_derived_feature(feature_name: str, missing_features: set[str]) -> bool:
+    return any(
+        feature_name == missing_feature or feature_name.startswith(f"{missing_feature}_")
+        for missing_feature in missing_features
+    )
+
+
+def _local_factor_records(
+    estimator: Any,
+    input_frame: pd.DataFrame,
+    missing_features: list[str],
+    *,
+    limit: int = 8,
+) -> list[dict[str, object]]:
+    preprocessor = estimator.named_steps["preprocess"]
+    model = estimator.named_steps["model"]
+
+    if not hasattr(model, "coef_"):
+        return []
+
+    feature_names = _clean_feature_names(preprocessor.get_feature_names_out())
+    transformed = preprocessor.transform(input_frame)
+    if hasattr(transformed, "toarray"):
+        transformed = transformed.toarray()
+
+    contributions = np.asarray(transformed)[0] * model.coef_[0]
+    factor_frame = pd.DataFrame(
+        {
+            "feature": feature_names,
+            "value": contributions,
+            "abs_value": np.abs(contributions),
+        }
+    )
+
+    missing = set(missing_features)
+    factor_frame = factor_frame[
+        (factor_frame["abs_value"] > 1e-9)
+        & ~factor_frame["feature"].map(lambda name: _is_missing_derived_feature(name, missing))
+    ]
+    factor_frame = factor_frame.sort_values("abs_value", ascending=False).head(limit)
+
+    records: list[dict[str, object]] = []
+    for row in factor_frame.to_dict(orient="records"):
         records.append(
             {
                 "feature": str(row["feature"]),
-                "value": float(row[value_column]),
+                "value": float(row["value"]),
                 "abs_value": float(row["abs_value"]),
             }
         )
     return records
+
+
+def _add_known_regional_fields(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    if "pavlodar_district" not in result.columns:
+        return result
+
+    district = result["pavlodar_district"].iloc[0]
+    if pd.isna(district):
+        return result
+
+    profiles = district_profile_table()
+    matches = profiles[profiles["district"] == district]
+    if matches.empty:
+        return result
+
+    profile = matches.iloc[0]
+    regional_values = {
+        "settlement_type": profile["settlement_type"],
+        "distance_to_pavlodar_km": profile["distance_to_pavlodar_km"],
+        "regional_digital_access_index": profile["digital_access_index"],
+        "regional_income_index": profile["income_index"],
+        "mfi_branch_access_index": profile["mfi_branch_access_index"],
+        "seasonal_income_risk": profile["seasonal_income_risk"],
+        "financial_access_gap": 1.0
+        - (
+            0.55 * profile["digital_access_index"]
+            + 0.45 * profile["mfi_branch_access_index"]
+        ),
+        "rural_flag": int(profile["settlement_type"] == "rural"),
+    }
+    for column, value in regional_values.items():
+        if column not in result.columns or pd.isna(result[column].iloc[0]):
+            result[column] = value
+    return result
 
 
 class ScoringService:
@@ -73,45 +241,120 @@ class ScoringService:
     ) -> None:
         frame = add_pavlodar_regional_context(load_dataset(), random_state=random_state)
         X, y = make_model_frame(frame)
+        X_thin_file, y_thin_file = make_model_frame(
+            frame,
+            drop_columns=(*DEFAULT_DROP_COLUMNS, "late_payment_count"),
+        )
 
         estimator = build_logistic_regression(random_state=random_state)
         estimator.fit(X, y)
+
+        thin_file_estimator = build_logistic_regression(random_state=random_state)
+        thin_file_estimator.fit(X_thin_file, y_thin_file)
 
         self.model_name = model_name
         self.model_version = model_version
         self.estimator = estimator
         self.expected_columns = list(X.columns)
         self.training_dtypes = X.dtypes.to_dict()
-        self.top_model_factors = _importance_records(feature_importance(estimator))
+        self.thin_file_estimator = thin_file_estimator
+        self.thin_file_expected_columns = list(X_thin_file.columns)
+        self.thin_file_training_dtypes = X_thin_file.dtypes.to_dict()
 
-    def _build_input_frame(self, features: dict[str, Any]) -> tuple[pd.DataFrame, list[str]]:
-        raw = pd.DataFrame([features])
+    def _build_input_frame(
+        self,
+        features: dict[str, Any],
+        *,
+        expected_columns: list[str],
+        training_dtypes: dict[str, Any],
+    ) -> tuple[pd.DataFrame, list[str]]:
+        raw = _add_known_regional_fields(pd.DataFrame([features]))
         engineered = add_behavioral_features(raw)
 
         row: dict[str, Any] = {}
         missing_features: list[str] = []
-        for column in self.expected_columns:
+        for column in expected_columns:
             value = engineered[column].iloc[0] if column in engineered.columns else np.nan
             if pd.isna(value):
                 missing_features.append(column)
 
-            if is_numeric_dtype(self.training_dtypes[column]):
+            if is_numeric_dtype(training_dtypes[column]):
                 value = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
             elif value is None:
                 value = np.nan
 
             row[column] = value
 
-        return pd.DataFrame([row], columns=self.expected_columns), missing_features
+        return pd.DataFrame([row], columns=expected_columns), missing_features
+
+    def _scenario_score(
+        self,
+        *,
+        estimator: Any,
+        input_frame: pd.DataFrame,
+        scenario: str,
+        label: str,
+        notes: list[str],
+    ) -> ScenarioScore:
+        probability = float(estimator.predict_proba(input_frame)[0, 1])
+        return ScenarioScore(
+            scenario=scenario,
+            label=label,
+            high_risk_probability=probability,
+            risk_band=risk_band(probability),
+            notes=notes,
+        )
 
     def score(self, features: dict[str, Any]) -> ScoreResult:
-        input_frame, missing_features = self._build_input_frame(features)
-        probability = float(self.estimator.predict_proba(input_frame)[0, 1])
+        input_frame, missing_features = self._build_input_frame(
+            features,
+            expected_columns=self.expected_columns,
+            training_dtypes=self.training_dtypes,
+        )
+        thin_file_input_frame, thin_file_missing_features = self._build_input_frame(
+            {key: value for key, value in features.items() if key != "late_payment_count"},
+            expected_columns=self.thin_file_expected_columns,
+            training_dtypes=self.thin_file_training_dtypes,
+        )
+
+        standard_score = self._scenario_score(
+            estimator=self.estimator,
+            input_frame=input_frame,
+            scenario="standard",
+            label="Standard model",
+            notes=["Uses the current research feature set, including late payment history when supplied."],
+        )
+        thin_file_score = self._scenario_score(
+            estimator=self.thin_file_estimator,
+            input_frame=thin_file_input_frame,
+            scenario="thin_file_without_late_payment_count",
+            label="Thin-file model",
+            notes=["Drops late_payment_count to test how robust the score is without the strongest proxy feature."],
+        )
+        probability = standard_score.high_risk_probability
+        proxy_sensitivity_delta = abs(
+            standard_score.high_risk_probability - thin_file_score.high_risk_probability
+        )
+        decision_support = _decision_support(
+            standard_score,
+            thin_file_score,
+            proxy_sensitivity_delta,
+            len(missing_features),
+        )
+        local_factors = _local_factor_records(
+            self.estimator,
+            input_frame,
+            missing_features,
+        )
 
         warnings: list[str] = []
         if missing_features:
             warnings.append(
                 "Some model features were missing and were handled by the preprocessing pipeline."
+            )
+        if thin_file_missing_features:
+            warnings.append(
+                "Thin-file scenario also handled missing features through the preprocessing pipeline."
             )
         if "late_payment_count" in features:
             warnings.append(
@@ -121,15 +364,22 @@ class ScoringService:
             warnings.append(
                 "No late_payment_count was supplied; this is closer to a thin-file borrower scenario."
             )
+        if proxy_sensitivity_delta >= 0.2:
+            warnings.append(
+                "Risk estimate is sensitive to late_payment_count; review the thin-file scenario before deciding."
+            )
 
         return ScoreResult(
             model_name=self.model_name,
             model_version=self.model_version,
             high_risk_probability=probability,
             risk_band=risk_band(probability),
+            proxy_sensitivity_delta=proxy_sensitivity_delta,
+            scenario_scores=[standard_score, thin_file_score],
+            decision_support=decision_support,
             missing_feature_count=len(missing_features),
             missing_features_preview=missing_features[:12],
-            top_model_factors=self.top_model_factors,
+            top_model_factors=local_factors,
             warnings=warnings,
         )
 
@@ -137,4 +387,3 @@ class ScoringService:
 @lru_cache(maxsize=1)
 def get_scoring_service() -> ScoringService:
     return ScoringService()
-

@@ -123,6 +123,16 @@ The project intentionally treats ROC-AUC as necessary but insufficient. A credit
 model must also be evaluated as a decision system with threshold, access, and
 loss trade-offs.
 
+The API prototype also reports an application-level proxy-sensitivity check:
+the standard score is compared with a separately trained thin-file model that
+drops `late_payment_count`. This helps identify cases where the model's risk
+estimate depends heavily on the strongest repayment-history proxy.
+
+The API adds a decision-support layer on top of the model output. It converts
+standard and thin-file scores into a human-review recommendation with rationale
+and next steps. This is intentionally framed as analyst support, not automated
+lending approval.
+
 ## Fairness And Segment Audits
 
 The current audit layer reports metrics by:
@@ -164,7 +174,8 @@ and repayment-performance data.
 
 1. Add calibration curves and Brier score reporting to the main notebook.
 2. Create model cards for each model version.
-3. Add a no-repayment-history scenario that drops `late_payment_count`.
+3. Expand the no-repayment-history scenario with calibration and stability
+   checks.
 4. Add temporal features once longitudinal data exists.
 5. Replace regional assumptions with official open data where possible.
 6. Seek anonymized pilot data from a local MFI.
