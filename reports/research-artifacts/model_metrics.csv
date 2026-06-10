@@ -1,0 +1,3 @@
+model,test_accuracy,test_roc_auc,test_brier_score,test_precision,test_recall,test_f1,cv_accuracy_mean,cv_roc_auc_mean,cv_precision_mean,cv_recall_mean,cv_f1_mean,cv_accuracy_std,cv_roc_auc_std,cv_precision_std,cv_recall_std,cv_f1_std
+Logistic Regression,0.716,0.8063,0.1855,0.8964,0.7115,0.7933,0.751,0.8278,0.9202,0.7388,0.8196,0.0157,0.0146,0.0086,0.015,0.0124
+Random Forest,0.718,0.8299,0.1426,0.9859,0.641,0.7769,0.7345,0.8223,0.9847,0.6637,0.7928,0.0094,0.0098,0.0068,0.0157,0.0097

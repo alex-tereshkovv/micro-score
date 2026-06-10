@@ -151,6 +151,8 @@ Goal: stabilize research foundation and product specification.
 - add calibration metrics
 - add no-repayment-history scenario
 - design database schema
+- publish data statement and impact plan
+- prepare research paper draft
 
 Deliverable: research repo plus product specification.
 
@@ -206,6 +208,8 @@ Goal: polish, security, and demo readiness.
 - add deployment instructions
 - write final project report
 - prepare demo dataset and demo script
+- deploy public demo or simplified reviewer demo
+- record two-minute walkthrough video
 
 Deliverable: working portfolio-ready MVP with auth, borrower submission, MFI
 dashboard, risk scoring, and analytics.
@@ -225,7 +229,12 @@ SQLite persistence for users, sessions, applications, score results, and audit
 events. The API also has demo seed data, typed response schemas, an API contract
 document, integration tests for the complete borrower/MFI/admin flow, dual
 standard/thin-file scoring, decision-support recommendations, and a static web
-prototype in `apps/web/`. The next engineering milestone is to turn the
+prototype in `apps/web/`. The MFI workspace now includes a Policy Lab that
+compares approve/review/decline threshold policies on scored applications. The
+project also now generates reproducible research artifacts under
+`reports/research-artifacts/`: model metrics, ablation results, calibration
+bins, calibration/ablation plots, and example local explanations.
+The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
 - stronger client-side form validation
@@ -233,6 +242,9 @@ frontend and scoring review flow into a more production-like application:
 - richer MFI risk detail page
 - district and settlement-type charts
 - dedicated frontend integration tests
+- screenshot-ready dashboard states for portfolio review
+- public demo plan: Vercel/Netlify frontend plus hosted API or Streamlit review app
+- two-minute demo video script
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL

@@ -1,7 +1,107 @@
 # MicroScore
 
-Alternative behavioral credit scoring for underserved borrowers in Kazakhstan,
-with an initial focus on Pavlodar and Pavlodar region.
+Interpretable alternative credit-risk scoring prototype for thin-file borrowers
+in Pavlodar, Kazakhstan.
+
+## Snapshot
+
+| Field | Status |
+| --- | --- |
+| Project type | Research + product prototype |
+| Region | Pavlodar region, Kazakhstan |
+| Borrower focus | Thin-file and underserved borrowers |
+| Models | Logistic Regression, Random Forest |
+| Product | FastAPI API + static web prototype |
+| Current demo | Local demo at `http://127.0.0.1:5173` |
+| Public demo | Planned; not deployed yet |
+| Research artifacts | Saved under `reports/research-artifacts/` |
+| Main finding | Current synthetic-data performance depends heavily on `late_payment_count` |
+| Key limitation | Borrower-level data is synthetic and not real MFI data |
+| Next step | Public-data validation, live demo, SHAP/TreeSHAP for nonlinear models, and pilot-data outreach |
+
+## Quick Links
+
+- [Research paper draft](docs/RESEARCH_PAPER.md)
+- [Model card](docs/MODEL_CARD.md)
+- [Data statement](docs/DATA_STATEMENT.md)
+- [Impact plan](docs/IMPACT.md)
+- [Methodology](docs/METHODOLOGY.md)
+- [Product roadmap](docs/PRODUCT_ROADMAP.md)
+- [API contract](docs/API_CONTRACT.md)
+
+## Research Findings
+
+1. The full synthetic-data model reaches moderate ROC-AUC:
+   Logistic Regression about `0.806`, Random Forest about `0.830`.
+2. The result is fragile: `late_payment_count` alone has ROC-AUC about `0.827`,
+   and removing it drops ROC-AUC to about `0.486-0.492`.
+3. Threshold analysis shows a real access-vs-sustainability trade-off: a
+   purely profit-maximizing policy can approve almost nobody under the current
+   assumptions.
+4. Ablation study confirms that behavioral-only and behavioral-plus-regional
+   scenarios are still weak in the current synthetic dataset. This is the main
+   evidence that real pilot data is the next research bottleneck.
+
+These findings are intentionally presented as research findings, not as proof
+that the model is ready for real lending.
+
+## Demo Status
+
+The current demo runs locally:
+
+```powershell
+.venv\Scripts\python -m microscore_api.seed
+.venv\Scripts\python -m uvicorn microscore_api.main:app --host 127.0.0.1 --port 8010 --reload
+```
+
+```powershell
+.venv\Scripts\python -m http.server 5173 --bind 127.0.0.1 --directory apps\web
+```
+
+Open `http://127.0.0.1:5173` and set API base to
+`http://127.0.0.1:8010`.
+
+The seed command creates the three main demo accounts plus a scored portfolio
+of 20 Pavlodar-region loan applications. That gives the MFI queue, segment
+analytics, and Policy Lab useful data immediately after startup.
+
+Planned portfolio additions:
+
+- public frontend deployment;
+- hosted API or simplified Streamlit demo;
+- two-minute demo video;
+- PDF version of the research paper.
+
+## Research Artifacts
+
+MicroScore can generate reproducible research artifacts:
+
+```powershell
+.venv\Scripts\python -m microscore --reports
+```
+
+This writes:
+
+- `reports/research-artifacts/SUMMARY.md`
+- `reports/research-artifacts/model_metrics.csv`
+- `reports/research-artifacts/ablation_study.csv`
+- `reports/research-artifacts/calibration_bins.csv`
+- `reports/research-artifacts/error_analysis_summary.csv`
+- `reports/research-artifacts/segment_error_analysis.csv`
+- `reports/research-artifacts/false_positive_examples.csv`
+- `reports/research-artifacts/false_negative_examples.csv`
+- `reports/research-artifacts/prediction_errors.csv`
+- `reports/research-artifacts/policy_analysis.csv`
+- `reports/research-artifacts/segment_policy_analysis.csv`
+- `reports/research-artifacts/example_explanation_summary.csv`
+- `reports/research-artifacts/example_explanation_factors.csv`
+- `reports/research-artifacts/calibration_curve.png`
+- `reports/research-artifacts/ablation_roc_auc.png`
+
+These files make the project easier to review quickly: the key metrics,
+ablation findings, calibration bins, false-positive/false-negative analysis,
+threshold policy analysis, and one local explanation example are available
+without rerunning notebooks.
 
 ## Why This Matters
 
@@ -42,8 +142,10 @@ The pipeline includes:
 - numeric scaling inside sklearn `Pipeline`
 - stratified train/test split
 - 5-fold cross-validation
-- ROC-AUC, accuracy, precision, recall, and F1
+- ROC-AUC, Brier score, accuracy, precision, recall, and F1
 - feature-importance analysis
+- local additive explanations for individual API scores
+- feature-group ablation study
 - decision-threshold and expected-loss analysis
 - basic leakage protection
 
@@ -85,6 +187,29 @@ This does not automatically mean `late_payment_count` is forbidden. It means the
 project should treat it as a sensitive modeling decision: useful for risk, but
 possibly too close to traditional repayment history for a behavioral-scoring
 experiment focused on people with thin or missing credit files.
+
+## Feature Ablation Study
+
+The project now includes an ablation mode:
+
+```bash
+.venv\Scripts\python -m microscore --ablation
+```
+
+Current synthetic-data results:
+
+| Scenario | Logistic Regression ROC-AUC | Random Forest ROC-AUC | Interpretation |
+| --- | ---: | ---: | --- |
+| Raw all features | 0.966 | 1.000 | Diagnostic ceiling; includes leakage-like fields. |
+| No leakage baseline | 0.806 | 0.830 | Strong but still depends on `late_payment_count`. |
+| No `late_payment_count` | 0.486 | 0.492 | Near-random thin-file stress test. |
+| Behavioral only | 0.499 | 0.494 | Current synthetic behavioral signal is weak. |
+| Regional only | 0.551 | 0.551 | Simulated geography alone carries weak signal. |
+| Behavioral + regional | 0.547 | 0.529 | Regional scaffold does not yet solve thin-file scoring. |
+
+The ablation table includes a Dummy Classifier baseline and Brier score, so the
+project can compare ranking quality and probability quality instead of relying
+only on accuracy.
 
 ## Pavlodar Regional Layer
 
@@ -141,10 +266,27 @@ reports a selected threshold with a minimum approval-rate constraint. This makes
 the access-vs-sustainability trade-off explicit instead of hiding it behind one
 accuracy number.
 
+The project also includes three-zone policy analysis:
+
+```bash
+.venv\Scripts\python -m microscore --policy-analysis
+```
+
+This compares `approve`, `manual review`, and `decline` regions for policies
+such as `lender_protective`, `balanced_review`, and `inclusion_first`.
+
 ## Research And Product Docs
 
-The project now has two planning documents:
+The project now has research, governance, and product documents:
 
+- [Research Paper Draft](docs/RESEARCH_PAPER.md): academic-style project
+  writeup with findings, limitations, and future work.
+- [Model Card](docs/MODEL_CARD.md): intended use, non-use, metrics, risks,
+  fairness concerns, and oversight requirements.
+- [Data Statement](docs/DATA_STATEMENT.md): synthetic-data disclosure,
+  evidence/assumption split, public sources, and pilot-data needs.
+- [Impact Plan](docs/IMPACT.md): local motivation, stakeholder plan, possible
+  harms, and future pilot path.
 - [Methodology](docs/METHODOLOGY.md): research question, leakage policy,
   feature groups, evaluation metrics, fairness audits, and current limitations.
 - [Product Roadmap](docs/PRODUCT_ROADMAP.md): five-month plan toward a working
@@ -171,7 +313,7 @@ Run the local API:
 .venv\Scripts\python -m uvicorn microscore_api.main:app --reload
 ```
 
-Seed demo users and one demo loan application:
+Seed demo users and a scored Pavlodar demo portfolio:
 
 ```bash
 .venv\Scripts\python -m microscore_api.seed
@@ -194,6 +336,7 @@ Current API scope:
 - `GET /mfi/applications`
 - `POST /mfi/applications/{application_id}/score`
 - `GET /mfi/analytics/segments`
+- `GET /mfi/analytics/policies`
 - `GET /admin/audit-events`
 - `DELETE /admin/applications`
 
@@ -207,9 +350,10 @@ The database path can be changed with `MICROSCORE_API_DB_PATH`. Runtime database
 files are ignored by Git; only `data/app/.gitkeep` is tracked.
 
 The API flow is covered by integration tests: borrower registration,
-application submission, MFI scoring, segment analytics, and admin audit events.
+application submission, MFI scoring, segment analytics, policy analytics, and
+admin audit events.
 OpenAPI now exposes typed response schemas for applications, score results,
-segment analytics, and audit events.
+segment analytics, policy analytics, and audit events.
 
 Loan applications persist in SQLite until an admin clears them or the local
 database file is removed. The current demo values use the synthetic dataset's
@@ -225,6 +369,12 @@ The API also returns a decision-support recommendation with rationale and next
 steps, so an MFI analyst sees what to review instead of receiving only a raw
 probability.
 
+The scoring response now includes a local explanation object. For the current
+Logistic Regression API model, this is an exact additive log-odds explanation:
+baseline log-odds plus feature contributions equals the model's predicted
+log-odds. The frontend separates factors that raise predicted risk from factors
+that lower predicted risk.
+
 ## Web Prototype
 
 MicroScore also includes a static frontend prototype under `apps/web/`. It
@@ -235,7 +385,9 @@ connects to the local API and supports:
 - application status lookup
 - MFI application queue
 - application scoring
+- portfolio overview with risk-band, district, and policy-mix charts
 - segment analytics
+- Policy Lab for approve/review/decline threshold trade-offs
 - admin audit trail
 
 Start the API:
@@ -275,10 +427,33 @@ MicroScore/
 |       `-- styles.css
 |-- docs/
 |   |-- API_CONTRACT.md
+|   |-- DATA_STATEMENT.md
+|   |-- IMPACT.md
 |   |-- METHODOLOGY.md
-|   `-- PRODUCT_ROADMAP.md
+|   |-- MODEL_CARD.md
+|   |-- PRODUCT_ROADMAP.md
+|   `-- RESEARCH_PAPER.md
 |-- notebooks/
 |   `-- credit_analysis.ipynb
+|-- reports/
+|   |-- README.md
+|   `-- research-artifacts/
+|       |-- SUMMARY.md
+|       |-- ablation_study.csv
+|       |-- calibration_bins.csv
+|       |-- error_analysis_summary.csv
+|       |-- example_explanation_factors.csv
+|       |-- example_explanation_summary.csv
+|       |-- false_negative_examples.csv
+|       |-- false_positive_examples.csv
+|       |-- manifest.json
+|       |-- model_metrics.csv
+|       |-- policy_analysis.csv
+|       |-- prediction_errors.csv
+|       |-- segment_error_analysis.csv
+|       |-- segment_policy_analysis.csv
+|       |-- ablation_roc_auc.png
+|       `-- calibration_curve.png
 |-- data/
 |   |-- README.md
 |   |-- external/
@@ -296,12 +471,16 @@ MicroScore/
 |   |-- microscore/
 |   |   |-- __init__.py
 |   |   |-- __main__.py
+|   |   |-- ablation.py
 |   |   |-- audit.py
 |   |   |-- cli.py
 |   |   |-- decision.py
+|   |   |-- error_analysis.py
+|   |   |-- explainability.py
 |   |   |-- features.py
 |   |   |-- modeling.py
 |   |   |-- paths.py
+|   |   |-- reporting.py
 |   |   `-- regional.py
 |   |-- microscore_api/
 |   |   |-- __init__.py
@@ -318,8 +497,13 @@ MicroScore/
 |   |-- test_api_integration.py
 |   |-- test_api_seed.py
 |   |-- test_api_scoring.py
+|   |-- test_ablation.py
 |   |-- test_decision.py
+|   |-- test_error_analysis.py
+|   |-- test_explainability.py
 |   |-- test_features.py
+|   |-- test_modeling.py
+|   |-- test_reporting.py
 |   |-- test_regional.py
 |   `-- test_web_static.py
 |-- .gitignore
@@ -345,6 +529,30 @@ To run the regional and decision analysis:
 
 ```bash
 .venv\Scripts\python -m microscore --regional --decision
+```
+
+To run the feature-group ablation study:
+
+```bash
+.venv\Scripts\python -m microscore --ablation
+```
+
+To run false-positive and false-negative analysis:
+
+```bash
+.venv\Scripts\python -m microscore --error-analysis
+```
+
+To compare approve/review/decline policies:
+
+```bash
+.venv\Scripts\python -m microscore --policy-analysis
+```
+
+To generate reproducible research artifacts:
+
+```bash
+.venv\Scripts\python -m microscore --reports
 ```
 
 To work interactively:

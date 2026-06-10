@@ -1,0 +1,6 @@
+model,threshold,n,true_negative,false_positive,false_negative,true_positive,false_positive_rate,false_negative_rate,false_discovery_rate,false_omission_rate,error_rate,error_type,share_of_test,mean_high_risk_probability,mean_late_payment_count,mean_loan_application_amount,decision_meaning
+Logistic Regression,0.5,1000,171.0,63.0,221.0,545.0,0.2692,0.2885,0.1036,0.5638,0.284,,,,,,
+Logistic Regression,0.5,63,,,,,,,,,,false_positive,0.063,0.5937,3.0,8351.9872,Good borrower could be wrongly flagged as high risk.
+Logistic Regression,0.5,221,,,,,,,,,,false_negative,0.221,0.242,1.0498,7732.7685,High-risk borrower could be missed by the model.
+Logistic Regression,0.5,545,,,,,,,,,,true_positive,0.545,0.8514,5.2147,8403.2595,High-risk borrower correctly flagged.
+Logistic Regression,0.5,171,,,,,,,,,,true_negative,0.171,0.2395,1.0058,7979.8789,Good borrower correctly not flagged.

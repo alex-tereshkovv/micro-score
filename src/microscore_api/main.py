@@ -26,6 +26,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on optional ext
     ) from exc
 
 from .database import DuplicateUserError, MicroScoreRepository
+from .analytics import policy_analytics as build_policy_analytics
 from .schemas import (
     ApplicationCreate,
     AuditEventResponse,
@@ -34,6 +35,7 @@ from .schemas import (
     HealthResponse,
     LoanApplicationResponse,
     LoginRequest,
+    PolicyAnalyticsResponse,
     RegisterRequest,
     SegmentAnalyticsRow,
     UserPublic,
@@ -217,6 +219,14 @@ def segment_analytics(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.segment_analytics()
+
+
+@app.get("/mfi/analytics/policies", response_model=PolicyAnalyticsResponse)
+def policy_analytics(
+    _user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return build_policy_analytics(repository.list_applications())
 
 
 @app.get("/admin/audit-events", response_model=list[AuditEventResponse])

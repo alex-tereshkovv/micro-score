@@ -1,0 +1,2 @@
+method,baseline_log_odds,total_contribution,predicted_log_odds,high_risk_probability
+logistic_regression_additive_log_odds,0.4428,-1.4365,-0.9936,0.2702

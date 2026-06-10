@@ -104,6 +104,7 @@ inside training folds.
 Standard model metrics:
 
 - ROC-AUC
+- Brier score
 - accuracy
 - precision
 - recall
@@ -123,6 +124,80 @@ The project intentionally treats ROC-AUC as necessary but insufficient. A credit
 model must also be evaluated as a decision system with threshold, access, and
 loss trade-offs.
 
+## Error Analysis
+
+The project now reports false-positive and false-negative behavior on the
+held-out test set:
+
+```powershell
+.venv\Scripts\python -m microscore --error-analysis
+```
+
+In credit-risk terms:
+
+- false positives are good borrowers who may be wrongly flagged as high risk;
+- false negatives are high-risk borrowers who may be missed by the model.
+
+The reports workflow saves:
+
+- `error_analysis_summary.csv`;
+- `segment_error_analysis.csv`;
+- `false_positive_examples.csv`;
+- `false_negative_examples.csv`;
+- `prediction_errors.csv`.
+
+Current synthetic-data finding: many confident false negatives have
+`late_payment_count = 0`. This reinforces the proxy-risk concern: when repayment
+history is absent or weak, the current synthetic dataset does not provide enough
+independent behavioral signal.
+
+## Threshold Policy Analysis
+
+The project now compares three-zone decision policies:
+
+```powershell
+.venv\Scripts\python -m microscore --policy-analysis
+```
+
+Each policy has:
+
+- an auto-approval zone for low predicted risk;
+- a manual-review zone for uncertain applications;
+- an auto-decline zone for very high predicted risk.
+
+Current synthetic-data policies include:
+
+- `lender_protective`;
+- `balanced_review`;
+- `inclusion_first`;
+- `starter_loan_review`.
+
+The goal is not to recommend an operational lending policy. The goal is to make
+the access-vs-risk trade-off explicit: increasing auto-approval also increases
+the rate at which high-risk borrowers are approved, while strict decline
+policies can wrongly reject good borrowers.
+
+## Ablation Study
+
+The project now runs a feature-group ablation study with:
+
+- raw all-feature diagnostic ceiling;
+- no-leakage baseline;
+- no `late_payment_count` thin-file stress test;
+- behavioral-only features;
+- regional-only features;
+- behavioral plus regional features.
+
+The ablation includes a Dummy Classifier baseline, ROC-AUC, Brier score, and
+metric deltas against the no-leakage baseline. This makes it clear whether a
+new feature group adds real signal or only makes the model look stronger
+because of proxy or leakage effects.
+
+Current synthetic-data result: removing `late_payment_count` drops the model to
+near-random ROC-AUC, while behavioral-plus-regional features remain weak. This
+does not disprove the project idea; it shows that the current synthetic dataset
+is not enough to validate thin-file behavioral scoring.
+
 The API prototype also reports an application-level proxy-sensitivity check:
 the standard score is compared with a separately trained thin-file model that
 drops `late_payment_count`. This helps identify cases where the model's risk
@@ -132,6 +207,49 @@ The API adds a decision-support layer on top of the model output. It converts
 standard and thin-file scores into a human-review recommendation with rationale
 and next steps. This is intentionally framed as analyst support, not automated
 lending approval.
+
+## Local Explanations
+
+The API now returns individual local explanations for the current Logistic
+Regression scoring model. The explanation is additive in log-odds space:
+
+```text
+baseline_log_odds + total_feature_contribution = predicted_log_odds
+```
+
+Positive factor values increase predicted high-risk probability. Negative
+factor values reduce it. The API and frontend separate these into:
+
+- top positive factors;
+- top protective factors;
+- top factors by absolute contribution.
+
+This is a transparent explanation method for the current linear model. It is
+not a claim that future nonlinear models are already explainable. If the project
+adds Random Forest, XGBoost, or LightGBM scoring to the API, it should add SHAP
+or TreeSHAP explanations and validate them separately.
+
+## Research Artifacts
+
+The project can save reproducible research outputs with:
+
+```powershell
+.venv\Scripts\python -m microscore --reports
+```
+
+The generated `reports/research-artifacts/` folder includes:
+
+- model metrics;
+- feature-group ablation results;
+- calibration bins;
+- false-positive and false-negative analysis;
+- threshold policy analysis;
+- calibration and ablation plots;
+- one example local explanation summary;
+- top explanation factors.
+
+This keeps notebook output from becoming the only source of truth and makes the
+research easier to review from GitHub.
 
 ## Fairness And Segment Audits
 
@@ -172,10 +290,11 @@ and repayment-performance data.
 
 ## Next Methodological Steps
 
-1. Add calibration curves and Brier score reporting to the main notebook.
-2. Create model cards for each model version.
+1. Add SHAP or TreeSHAP explanations for future nonlinear/tree models.
+2. Track generated report artifacts over model versions.
 3. Expand the no-repayment-history scenario with calibration and stability
    checks.
-4. Add temporal features once longitudinal data exists.
-5. Replace regional assumptions with official open data where possible.
-6. Seek anonymized pilot data from a local MFI.
+4. Add false-positive and false-negative case review artifacts.
+5. Add temporal features once longitudinal data exists.
+6. Replace regional assumptions with official open data where possible.
+7. Seek anonymized pilot data from a local MFI.

@@ -105,6 +105,20 @@ class ApiIntegrationTests(unittest.TestCase):
             any(row["segment_feature"] == "gender" for row in analytics_response.json())
         )
 
+        policy_response = self.client.get(
+            "/mfi/analytics/policies",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(policy_response.status_code, 200, policy_response.text)
+        policy_payload = policy_response.json()
+        self.assertEqual(policy_payload["scored_application_count"], 1)
+        self.assertTrue(
+            any(row["policy"] == "balanced_review" for row in policy_payload["policies"])
+        )
+        self.assertTrue(
+            any(row["segment_feature"] == "gender" for row in policy_payload["segments"])
+        )
+
         admin_token = self._register("admin@example.com", "admin")
         audit_response = self.client.get(
             "/admin/audit-events",
@@ -122,9 +136,13 @@ class ApiIntegrationTests(unittest.TestCase):
         schemas = response.json()["components"]["schemas"]
         self.assertIn("LoanApplicationResponse", schemas)
         self.assertIn("ScoreResultResponse", schemas)
+        self.assertIn("LocalExplanationResponse", schemas)
         self.assertIn("ScenarioScoreResponse", schemas)
         self.assertIn("DecisionSupportResponse", schemas)
         self.assertIn("SegmentAnalyticsRow", schemas)
+        self.assertIn("PolicyAnalyticsResponse", schemas)
+        self.assertIn("PolicyAnalyticsRow", schemas)
+        self.assertIn("SegmentPolicyAnalyticsRow", schemas)
         self.assertIn("AuditEventResponse", schemas)
         self.assertIn("ClearApplicationsResponse", schemas)
 

@@ -42,6 +42,15 @@ class ApiScoringTests(unittest.TestCase):
         self.assertLessEqual(result.high_risk_probability, 1.0)
         self.assertIn(result.risk_band, {"low", "medium", "high"})
         self.assertGreater(len(result.top_model_factors), 0)
+        self.assertIsNotNone(result.explanation)
+        self.assertGreater(len(result.explanation.top_factors), 0)
+        self.assertGreater(len(result.explanation.top_positive_factors), 0)
+        self.assertGreater(len(result.explanation.top_protective_factors), 0)
+        self.assertAlmostEqual(
+            result.high_risk_probability,
+            result.explanation.high_risk_probability,
+            places=10,
+        )
         self.assertEqual(len(result.scenario_scores), 2)
         self.assertGreaterEqual(result.proxy_sensitivity_delta, 0.0)
         self.assertIsNotNone(result.decision_support)

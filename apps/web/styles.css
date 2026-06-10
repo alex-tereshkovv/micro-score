@@ -542,6 +542,304 @@ label {
   color: var(--muted);
 }
 
+.portfolio-panel {
+  border-top: 3px solid var(--blue);
+}
+
+.portfolio-overview {
+  display: grid;
+  gap: 14px;
+}
+
+.portfolio-overview.empty {
+  min-height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  padding: 14px;
+}
+
+.portfolio-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.35fr) minmax(240px, 0.9fr);
+  gap: 12px;
+}
+
+.portfolio-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.portfolio-card h4 {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.risk-band-chart,
+.district-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.risk-band-row,
+.district-risk-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.8fr) minmax(120px, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.risk-band-row strong,
+.district-risk-row strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.risk-band-row span,
+.district-risk-row span,
+.portfolio-policy-heading span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.risk-band-row em,
+.district-risk-row em {
+  color: var(--ink);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+}
+
+.portfolio-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef0;
+}
+
+.portfolio-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.risk-fill-low {
+  background: var(--green);
+}
+
+.risk-fill-medium {
+  background: var(--amber);
+}
+
+.risk-fill-high {
+  background: var(--red);
+}
+
+.district-risk-fill {
+  background: linear-gradient(90deg, var(--teal) 0%, var(--amber) 68%, var(--red) 100%);
+}
+
+.portfolio-policy-card {
+  display: grid;
+  align-content: start;
+}
+
+.portfolio-policy-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.portfolio-policy-heading strong {
+  font-size: 15px;
+}
+
+.portfolio-policy-mix {
+  height: 16px;
+  margin-top: 14px;
+}
+
+.portfolio-policy-legend {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.portfolio-policy-legend div {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.portfolio-policy-legend strong {
+  color: var(--ink);
+}
+
+.legend-dot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.approve-dot {
+  background: var(--green);
+}
+
+.review-dot {
+  background: var(--amber);
+}
+
+.decline-dot {
+  background: var(--red);
+}
+
+.policy-lab-panel {
+  border-top: 3px solid var(--amber);
+}
+
+.policy-note {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.policy-grid.empty {
+  display: block;
+  min-height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  padding: 14px;
+}
+
+.policy-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.policy-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.policy-card-heading span,
+.policy-card-metrics span,
+.policy-thresholds span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.policy-card-heading strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.policy-card-heading em {
+  border-radius: 999px;
+  background: #eef4f6;
+  color: var(--blue);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.policy-mix {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef0;
+}
+
+.policy-mix span {
+  display: block;
+  min-width: 0;
+}
+
+.policy-approve {
+  background: var(--green);
+}
+
+.policy-review {
+  background: var(--amber);
+}
+
+.policy-decline {
+  background: var(--red);
+}
+
+.policy-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.policy-card-metrics strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 17px;
+}
+
+.policy-thresholds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.policy-thresholds span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7faf9;
+  padding: 5px 8px;
+  color: #52666f;
+  text-transform: none;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(110px, 1fr));
@@ -603,6 +901,7 @@ label {
 }
 
 .scenario-block h4,
+.explanation-block h4,
 .decision-block h4 {
   margin: 0;
   border-bottom: 1px solid var(--line);
@@ -610,6 +909,48 @@ label {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.explanation-block {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.explanation-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  gap: 10px;
+  padding: 12px;
+  background: #f8fbfa;
+  border-bottom: 1px solid var(--line);
+}
+
+.explanation-summary span,
+.explanation-columns > div > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.explanation-summary strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.explanation-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
 }
 
 .decision-block {
@@ -722,9 +1063,57 @@ tr.selected {
   padding-left: 18px;
 }
 
+.factor-list {
+  display: grid;
+  gap: 7px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.factor-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.factor-list span {
+  overflow-wrap: anywhere;
+}
+
+.factor-list strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.factor-risk {
+  border-left-color: var(--red);
+}
+
+.factor-risk strong {
+  color: var(--red);
+}
+
+.factor-protective {
+  border-left-color: var(--green);
+}
+
+.factor-protective strong {
+  color: var(--green);
+}
+
 .warning-list li {
   margin-bottom: 6px;
   color: var(--amber);
+}
+
+.tiny-text {
+  margin-top: 8px;
+  font-size: 12px;
 }
 
 @media (max-width: 1080px) {
@@ -749,6 +1138,19 @@ tr.selected {
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+
+  .portfolio-metrics,
+  .portfolio-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .portfolio-policy-card {
+    grid-column: 1 / -1;
+  }
+
+  .policy-grid {
+    grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
 }
 
@@ -779,7 +1181,9 @@ tr.selected {
 
   .auth-form,
   .form-grid,
-  .decision-columns {
+  .decision-columns,
+  .explanation-columns,
+  .explanation-summary {
     grid-template-columns: 1fr;
   }
 
@@ -788,7 +1192,24 @@ tr.selected {
   }
 
   .metric-grid,
-  .sidebar-summary {
+  .sidebar-summary,
+  .portfolio-metrics,
+  .portfolio-grid,
+  .policy-grid {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-policy-card {
+    grid-column: auto;
+  }
+
+  .risk-band-row,
+  .district-risk-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .risk-band-row em,
+  .district-risk-row em {
+    text-align: left;
   }
 }

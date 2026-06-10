@@ -1,0 +1,28 @@
+{
+  "project": "MicroScore",
+  "data_path": "data/raw/credit_risk_dataset.csv",
+  "rows": 5000,
+  "target": "credit_risk",
+  "random_state": 42,
+  "test_size": 0.2,
+  "n_bins": 10,
+  "files": [
+    "SUMMARY.md",
+    "manifest.json",
+    "model_metrics.csv",
+    "ablation_study.csv",
+    "calibration_bins.csv",
+    "error_analysis_summary.csv",
+    "segment_error_analysis.csv",
+    "false_positive_examples.csv",
+    "false_negative_examples.csv",
+    "prediction_errors.csv",
+    "policy_analysis.csv",
+    "segment_policy_analysis.csv",
+    "example_explanation_summary.csv",
+    "example_explanation_factors.csv",
+    "calibration_curve.png",
+    "ablation_roc_auc.png"
+  ],
+  "data_warning": "Synthetic borrower-level data; not validated for real lending."
+}

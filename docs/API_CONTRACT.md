@@ -18,6 +18,10 @@ Seed demo data:
 .venv\Scripts\python -m microscore_api.seed
 ```
 
+The seed command creates the main demo users and a scored portfolio of 20
+Pavlodar-region applications so the MFI queue, segment analytics, and Policy
+Lab have data immediately.
+
 Run the API:
 
 ```powershell
@@ -46,7 +50,7 @@ http://127.0.0.1:5173
 
 - `borrower`: can create and view own loan applications.
 - `mfi_analyst`: can view all applications, score applications, and view
-  segment analytics.
+  segment and policy analytics.
 - `admin`: can do MFI analyst actions and view audit events.
 
 Demo users:
@@ -174,6 +178,7 @@ Score response includes:
 - `proxy_sensitivity_delta`
 - `scenario_scores`
 - `decision_support`
+- `explanation`
 - `top_model_factors`
 - `warnings`
 
@@ -195,6 +200,24 @@ recommendation such as manual review, proxy-sensitive review, or small starter
 loan candidate. It is deliberately not an automatic approval or decline: the
 MFI analyst still needs to review affordability, context, and policy.
 
+`explanation` provides local additive explanation fields for the current
+Logistic Regression scoring model:
+
+- `method`
+- `baseline_log_odds`
+- `total_contribution`
+- `predicted_log_odds`
+- `high_risk_probability`
+- `top_positive_factors`
+- `top_protective_factors`
+- `top_factors`
+
+Each factor includes `feature`, signed contribution `value`, `abs_value`,
+`direction`, and `label`. Positive values raise predicted high-risk log-odds;
+negative values lower them. This is not a production governance substitute for
+SHAP across all model classes, but it gives the MFI analyst a transparent local
+view for the current linear model.
+
 Segment analytics:
 
 ```http
@@ -207,6 +230,23 @@ Current segments:
 - `pavlodar_district`
 - `gender`
 - `employment_status`
+
+Policy analytics:
+
+```http
+GET /mfi/analytics/policies
+```
+
+Response schema:
+
+- `PolicyAnalyticsResponse`
+- includes policy-level rows and segment-level rows
+- uses scored applications from the local demo database
+- reports predicted approve/review/decline trade-offs only
+
+Important limitation: this endpoint does not know real repayment outcomes. It
+uses predicted high-risk probabilities from scored applications, so it should be
+read as a live portfolio preview, not as validated profit or default evidence.
 
 ## Admin Flow
 

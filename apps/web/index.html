@@ -214,6 +214,17 @@
         </section>
 
         <section id="mfiView" class="view-grid" aria-labelledby="mfi-title">
+          <section class="panel wide-panel portfolio-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Portfolio</p>
+                <h3>Overview</h3>
+              </div>
+              <span class="pill muted">Live queue</span>
+            </div>
+            <div id="portfolioOverview" class="portfolio-overview empty">Load applications to view portfolio analytics.</div>
+          </section>
+
           <section class="panel">
             <div class="panel-heading">
               <div>
@@ -249,6 +260,21 @@
               </button>
             </div>
             <div id="segmentAnalytics" class="table-shell empty">No segment analytics loaded.</div>
+          </section>
+
+          <section class="panel wide-panel policy-lab-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Policy Lab</p>
+                <h3>Approval strategy</h3>
+              </div>
+              <button id="refreshPolicyAnalytics" class="icon-button" type="button" title="Refresh policy lab">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="policyNote" class="policy-note">Score applications to compare policies.</div>
+            <div id="policyAnalytics" class="policy-grid empty">No policy analytics loaded.</div>
+            <div id="policySegments" class="table-shell empty">No segment policy analytics loaded.</div>
           </section>
         </section>
 

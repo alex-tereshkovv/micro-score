@@ -46,6 +46,7 @@ class WebStaticTests(unittest.TestCase):
             "/applications",
             "/mfi/applications",
             "/mfi/analytics/segments",
+            "/mfi/analytics/policies",
             "/admin/audit-events",
             "/admin/applications",
         ]
@@ -53,8 +54,16 @@ class WebStaticTests(unittest.TestCase):
             self.assertIn(path, script)
         self.assertIn("Scenario comparison", script)
         self.assertIn("Recommendation", script)
+        self.assertIn("Local explanation", script)
         self.assertIn("proxy_sensitivity_delta", script)
         self.assertIn("decision_support", script)
+        self.assertIn("top_positive_factors", script)
+        self.assertIn("top_protective_factors", script)
+        self.assertIn("Portfolio", (WEB_ROOT / "index.html").read_text(encoding="utf-8"))
+        self.assertIn("renderDistrictRiskRows", script)
+        self.assertIn("renderPortfolioOverview", script)
+        self.assertIn("Policy Lab", (WEB_ROOT / "index.html").read_text(encoding="utf-8"))
+        self.assertIn("renderPolicyAnalytics", script)
         self.assertIn("resetApplicationViews", script)
         self.assertIn('removeItem("microscore.lastApplicationId")', script)
 

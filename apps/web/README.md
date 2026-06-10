@@ -21,6 +21,10 @@ From the project root, start the API:
 .venv\Scripts\python -m uvicorn microscore_api.main:app --reload
 ```
 
+The seed command creates the main demo accounts and a scored 20-application
+Pavlodar-region application portfolio, so the MFI tab is populated as soon as
+the API starts.
+
 In another PowerShell window, start the web UI:
 
 ```powershell
@@ -44,3 +48,8 @@ password: password123
 
 Applications are stored in the local SQLite database until an admin clears them
 from the Admin tab or the local database file is removed.
+
+The MFI tab includes a Portfolio Overview with risk-band, district, and policy
+mix charts, plus a Policy Lab that compares approve/review/decline threshold
+policies on scored applications. These are predicted-probability previews, not
+validated lending policies.

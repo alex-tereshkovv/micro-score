@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 Role = Literal["borrower", "mfi_analyst", "admin"]
 RiskBand = Literal["low", "medium", "high"]
+ExplanationDirection = Literal["increases_risk", "reduces_risk"]
 
 
 class RegisterRequest(BaseModel):
@@ -51,6 +52,19 @@ class ScoreFactor(BaseModel):
     feature: str
     value: float
     abs_value: float
+    direction: ExplanationDirection | None = None
+    label: str | None = None
+
+
+class LocalExplanationResponse(BaseModel):
+    method: str
+    baseline_log_odds: float
+    total_contribution: float
+    predicted_log_odds: float
+    high_risk_probability: float = Field(ge=0.0, le=1.0)
+    top_positive_factors: list[ScoreFactor] = Field(default_factory=list)
+    top_protective_factors: list[ScoreFactor] = Field(default_factory=list)
+    top_factors: list[ScoreFactor] = Field(default_factory=list)
 
 
 class ScenarioScoreResponse(BaseModel):
@@ -78,6 +92,7 @@ class ScoreResultResponse(BaseModel):
     decision_support: DecisionSupportResponse | None = None
     missing_feature_count: int = Field(default=0, ge=0)
     missing_features_preview: list[str] = Field(default_factory=list)
+    explanation: LocalExplanationResponse | None = None
     top_model_factors: list[ScoreFactor] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
@@ -102,6 +117,45 @@ class SegmentAnalyticsRow(BaseModel):
     n: int = Field(ge=0)
     avg_high_risk_probability: float = Field(ge=0.0, le=1.0)
     high_risk_share: float = Field(ge=0.0, le=1.0)
+
+
+class PolicyAnalyticsRow(BaseModel):
+    policy: str
+    description: str
+    approve_threshold: float = Field(ge=0.0, le=1.0)
+    decline_threshold: float = Field(ge=0.0, le=1.0)
+    n: int = Field(ge=0)
+    auto_approve_count: int = Field(ge=0)
+    manual_review_count: int = Field(ge=0)
+    auto_decline_count: int = Field(ge=0)
+    auto_approval_rate: float = Field(ge=0.0, le=1.0)
+    manual_review_rate: float = Field(ge=0.0, le=1.0)
+    auto_decline_rate: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    mean_approved_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    mean_review_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    mean_declined_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    predicted_high_risk_auto_approved_count: int = Field(ge=0)
+    predicted_high_risk_auto_approval_rate: float = Field(ge=0.0, le=1.0)
+
+
+class SegmentPolicyAnalyticsRow(BaseModel):
+    policy: str
+    segment_feature: str
+    segment_value: str
+    n: int = Field(ge=0)
+    auto_approval_rate: float = Field(ge=0.0, le=1.0)
+    manual_review_rate: float = Field(ge=0.0, le=1.0)
+    auto_decline_rate: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    predicted_high_risk_share: float = Field(ge=0.0, le=1.0)
+
+
+class PolicyAnalyticsResponse(BaseModel):
+    scored_application_count: int = Field(ge=0)
+    policies: list[PolicyAnalyticsRow] = Field(default_factory=list)
+    segments: list[SegmentPolicyAnalyticsRow] = Field(default_factory=list)
+    note: str
 
 
 class AuditEventResponse(BaseModel):

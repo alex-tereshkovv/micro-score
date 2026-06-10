@@ -1,0 +1,25 @@
+group,rank,feature,value,abs_value,direction,label
+top_positive_factors,1,employment_status_Unemployed,0.1705,0.1705,increases_risk,Raises predicted risk
+top_positive_factors,2,loan_application_amount,0.1271,0.1271,increases_risk,Raises predicted risk
+top_positive_factors,3,gender_Male,0.1205,0.1205,increases_risk,Raises predicted risk
+top_positive_factors,4,num_open_loans,0.0846,0.0846,increases_risk,Raises predicted risk
+top_positive_factors,5,num_deposits_per_month,0.0675,0.0675,increases_risk,Raises predicted risk
+top_positive_factors,6,atm_withdrawal_frequency,0.05,0.05,increases_risk,Raises predicted risk
+top_positive_factors,7,online_transfer_frequency,0.0284,0.0284,increases_risk,Raises predicted risk
+top_positive_factors,8,annual_income,0.0112,0.0112,increases_risk,Raises predicted risk
+top_protective_factors,1,late_payment_count,-2.0107,2.0107,reduces_risk,Lowers predicted risk
+top_protective_factors,2,loan_to_income_ratio,-0.0299,0.0299,reduces_risk,Lowers predicted risk
+top_protective_factors,3,debit_card_spending,-0.0259,0.0259,reduces_risk,Lowers predicted risk
+top_protective_factors,4,total_outstanding_debt,-0.0188,0.0188,reduces_risk,Lowers predicted risk
+top_protective_factors,5,income_to_debt_ratio,-0.0089,0.0089,reduces_risk,Lowers predicted risk
+top_protective_factors,6,debt_per_open_loan,-0.007,0.007,reduces_risk,Lowers predicted risk
+top_protective_factors,7,deposit_to_spending_ratio,-0.0054,0.0054,reduces_risk,Lowers predicted risk
+top_protective_factors,8,age,-0.0021,0.0021,reduces_risk,Lowers predicted risk
+top_factors,1,late_payment_count,-2.0107,2.0107,reduces_risk,Lowers predicted risk
+top_factors,2,employment_status_Unemployed,0.1705,0.1705,increases_risk,Raises predicted risk
+top_factors,3,loan_application_amount,0.1271,0.1271,increases_risk,Raises predicted risk
+top_factors,4,gender_Male,0.1205,0.1205,increases_risk,Raises predicted risk
+top_factors,5,num_open_loans,0.0846,0.0846,increases_risk,Raises predicted risk
+top_factors,6,num_deposits_per_month,0.0675,0.0675,increases_risk,Raises predicted risk
+top_factors,7,atm_withdrawal_frequency,0.05,0.05,increases_risk,Raises predicted risk
+top_factors,8,loan_to_income_ratio,-0.0299,0.0299,reduces_risk,Lowers predicted risk

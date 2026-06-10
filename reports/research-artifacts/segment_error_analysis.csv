@@ -1,0 +1,7 @@
+segment_feature,segment_value,n,actual_high_risk_rate,predicted_high_risk_rate,mean_high_risk_probability,false_positive_count,false_negative_count,false_positive_rate,false_negative_rate
+employment_status,Employed,361,0.7645,0.6094,0.5963,29,85,0.3412,0.308
+employment_status,Unemployed,334,0.7784,0.5958,0.5932,16,77,0.2162,0.2962
+employment_status,Self-Employed,305,0.7541,0.6197,0.5981,18,59,0.24,0.2565
+gender,Female,352,0.7301,0.5824,0.5876,25,77,0.2632,0.2996
+gender,Other,334,0.7934,0.5988,0.5849,14,79,0.2029,0.2981
+gender,Male,314,0.7771,0.6465,0.6167,24,65,0.3429,0.2664

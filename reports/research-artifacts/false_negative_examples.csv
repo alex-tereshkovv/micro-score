@@ -1,0 +1,26 @@
+row_index,model,customer_id,age,gender,employment_status,annual_income,loan_application_amount,total_outstanding_debt,late_payment_count,mobile_banking_logins,online_transfer_frequency,atm_withdrawal_frequency,actual_credit_risk,predicted_credit_risk,high_risk_probability,threshold,probability_margin_from_threshold,error_type,decision_meaning
+4992,Logistic Regression,CUST_04992,56,Other,Employed,50718.7948,9681.3052,577.6895,0,2,12,2,1,0,0.0709,0.5,0.4291,false_negative,High-risk borrower could be missed by the model.
+1105,Logistic Regression,CUST_01105,54,Other,Self-Employed,64287.6466,500.0,13267.1303,0,31,4,0,1,0,0.0736,0.5,0.4264,false_negative,High-risk borrower could be missed by the model.
+3500,Logistic Regression,CUST_03500,59,Other,Self-Employed,73941.0188,5299.1195,1995.2476,0,3,17,2,1,0,0.0753,0.5,0.4247,false_negative,High-risk borrower could be missed by the model.
+1106,Logistic Regression,CUST_01106,40,Male,Employed,58892.7203,5750.4209,4454.6684,0,54,2,0,1,0,0.0816,0.5,0.4184,false_negative,High-risk borrower could be missed by the model.
+1242,Logistic Regression,CUST_01242,34,Other,Employed,19452.3803,10505.9231,6878.8582,0,55,8,0,1,0,0.0853,0.5,0.4147,false_negative,High-risk borrower could be missed by the model.
+1465,Logistic Regression,CUST_01465,45,Other,Employed,21941.5502,5598.7461,9809.9956,0,20,18,1,1,0,0.0854,0.5,0.4146,false_negative,High-risk borrower could be missed by the model.
+292,Logistic Regression,CUST_00292,22,Other,Self-Employed,70689.3673,6305.0075,12199.5263,0,21,8,0,1,0,0.0856,0.5,0.4144,false_negative,High-risk borrower could be missed by the model.
+2314,Logistic Regression,CUST_02314,28,Female,Employed,67707.2392,4814.3824,21656.0807,0,64,9,1,1,0,0.0863,0.5,0.4137,false_negative,High-risk borrower could be missed by the model.
+4528,Logistic Regression,CUST_04528,58,Female,Self-Employed,40421.6712,5997.8235,6804.9693,0,30,6,0,1,0,0.0865,0.5,0.4135,false_negative,High-risk borrower could be missed by the model.
+1001,Logistic Regression,CUST_01001,41,Male,Unemployed,52848.1557,1416.5641,11639.7753,0,63,1,4,1,0,0.0874,0.5,0.4126,false_negative,High-risk borrower could be missed by the model.
+4553,Logistic Regression,CUST_04553,66,Other,Self-Employed,28443.2515,4644.2391,7336.0732,0,23,10,5,1,0,0.0875,0.5,0.4125,false_negative,High-risk borrower could be missed by the model.
+2090,Logistic Regression,CUST_02090,64,Other,Self-Employed,61309.9408,1771.3538,11070.7755,0,36,9,9,1,0,0.0894,0.5,0.4106,false_negative,High-risk borrower could be missed by the model.
+2072,Logistic Regression,CUST_02072,39,Other,Employed,63031.5094,8339.4138,24781.4165,0,17,16,1,1,0,0.0921,0.5,0.4079,false_negative,High-risk borrower could be missed by the model.
+2781,Logistic Regression,CUST_02781,43,Female,Self-Employed,13017.5236,5000.0654,2834.4973,0,54,18,0,1,0,0.093,0.5,0.407,false_negative,High-risk borrower could be missed by the model.
+17,Logistic Regression,CUST_00017,21,Other,Self-Employed,40316.4522,7138.0651,7894.2206,0,5,19,2,1,0,0.0947,0.5,0.4053,false_negative,High-risk borrower could be missed by the model.
+4131,Logistic Regression,CUST_04131,35,Other,Self-Employed,48434.4302,6091.9447,1894.769,0,49,11,6,1,0,0.0954,0.5,0.4046,false_negative,High-risk borrower could be missed by the model.
+2509,Logistic Regression,CUST_02509,22,Other,Employed,22286.1305,4799.634,13953.9878,0,79,0,0,1,0,0.0967,0.5,0.4033,false_negative,High-risk borrower could be missed by the model.
+278,Logistic Regression,CUST_00278,68,Female,Unemployed,56354.1112,6654.5409,6592.0197,0,35,15,2,1,0,0.0971,0.5,0.4029,false_negative,High-risk borrower could be missed by the model.
+1201,Logistic Regression,CUST_01201,62,Female,Self-Employed,47315.591,4325.3431,19526.982,0,42,5,5,1,0,0.0984,0.5,0.4016,false_negative,High-risk borrower could be missed by the model.
+604,Logistic Regression,CUST_00604,32,Other,Employed,29184.5904,9139.9296,14556.0105,0,44,10,9,1,0,0.0985,0.5,0.4015,false_negative,High-risk borrower could be missed by the model.
+4517,Logistic Regression,CUST_04517,42,Male,Self-Employed,71834.265,7106.9162,8025.7838,0,19,2,1,1,0,0.0988,0.5,0.4012,false_negative,High-risk borrower could be missed by the model.
+2051,Logistic Regression,CUST_02051,51,Female,Self-Employed,35212.746,11859.2078,2423.1721,0,20,18,0,1,0,0.0996,0.5,0.4004,false_negative,High-risk borrower could be missed by the model.
+1714,Logistic Regression,CUST_01714,61,Other,Employed,31871.6353,6646.3272,9921.3476,0,6,0,6,1,0,0.0996,0.5,0.4004,false_negative,High-risk borrower could be missed by the model.
+497,Logistic Regression,CUST_00497,35,Male,Self-Employed,76420.0995,500.0,17656.3949,0,41,3,5,1,0,0.0998,0.5,0.4002,false_negative,High-risk borrower could be missed by the model.
+354,Logistic Regression,CUST_00354,68,Female,Unemployed,50696.6413,1116.1872,9271.7845,0,39,18,7,1,0,0.1002,0.5,0.3998,false_negative,High-risk borrower could be missed by the model.

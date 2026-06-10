@@ -15,6 +15,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     precision_score,
@@ -123,10 +124,46 @@ def _test_metrics(
     return {
         "accuracy": accuracy_score(y_true, y_pred),
         "roc_auc": roc_auc_score(y_true, y_probability),
+        "brier_score": brier_score_loss(y_true, y_probability),
         "precision": precision_score(y_true, y_pred, zero_division=0),
         "recall": recall_score(y_true, y_pred, zero_division=0),
         "f1": f1_score(y_true, y_pred, zero_division=0),
     }
+
+
+def calibration_table(
+    y_true: pd.Series,
+    y_probability: np.ndarray,
+    *,
+    n_bins: int = 10,
+) -> pd.DataFrame:
+    """Return probability calibration bins for credit-risk review."""
+    if n_bins < 2:
+        raise ValueError("n_bins must be at least 2")
+
+    frame = pd.DataFrame(
+        {
+            "actual": np.asarray(y_true),
+            "predicted_probability": np.asarray(y_probability),
+        }
+    )
+    frame["bin"] = pd.cut(
+        frame["predicted_probability"],
+        bins=np.linspace(0, 1, n_bins + 1),
+        include_lowest=True,
+        right=True,
+    )
+    grouped = frame.groupby("bin", observed=False)
+    table = grouped.agg(
+        n=("actual", "size"),
+        mean_predicted_probability=("predicted_probability", "mean"),
+        actual_high_risk_rate=("actual", "mean"),
+    ).reset_index()
+    table["bin"] = table["bin"].astype(str)
+    table["calibration_error"] = (
+        table["mean_predicted_probability"] - table["actual_high_risk_rate"]
+    )
+    return table
 
 
 def _cv_metrics(

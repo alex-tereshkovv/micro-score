@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+from microscore.explainability import LocalExplanation, logistic_local_explanation
 from microscore.features import DEFAULT_DROP_COLUMNS, add_behavioral_features, make_model_frame
 from microscore.modeling import (
     RANDOM_STATE,
@@ -47,6 +48,7 @@ class ScoreResult:
     decision_support: DecisionSupport
     missing_feature_count: int
     missing_features_preview: list[str]
+    explanation: LocalExplanation
     top_model_factors: list[dict[str, object]]
     warnings: list[str]
 
@@ -127,66 +129,6 @@ def _decision_support(
             "Choose a threshold policy before making a decision.",
         ],
     )
-
-
-def _clean_feature_names(feature_names: np.ndarray) -> list[str]:
-    return [
-        name.replace("num__", "").replace("cat__", "")
-        for name in feature_names
-    ]
-
-
-def _is_missing_derived_feature(feature_name: str, missing_features: set[str]) -> bool:
-    return any(
-        feature_name == missing_feature or feature_name.startswith(f"{missing_feature}_")
-        for missing_feature in missing_features
-    )
-
-
-def _local_factor_records(
-    estimator: Any,
-    input_frame: pd.DataFrame,
-    missing_features: list[str],
-    *,
-    limit: int = 8,
-) -> list[dict[str, object]]:
-    preprocessor = estimator.named_steps["preprocess"]
-    model = estimator.named_steps["model"]
-
-    if not hasattr(model, "coef_"):
-        return []
-
-    feature_names = _clean_feature_names(preprocessor.get_feature_names_out())
-    transformed = preprocessor.transform(input_frame)
-    if hasattr(transformed, "toarray"):
-        transformed = transformed.toarray()
-
-    contributions = np.asarray(transformed)[0] * model.coef_[0]
-    factor_frame = pd.DataFrame(
-        {
-            "feature": feature_names,
-            "value": contributions,
-            "abs_value": np.abs(contributions),
-        }
-    )
-
-    missing = set(missing_features)
-    factor_frame = factor_frame[
-        (factor_frame["abs_value"] > 1e-9)
-        & ~factor_frame["feature"].map(lambda name: _is_missing_derived_feature(name, missing))
-    ]
-    factor_frame = factor_frame.sort_values("abs_value", ascending=False).head(limit)
-
-    records: list[dict[str, object]] = []
-    for row in factor_frame.to_dict(orient="records"):
-        records.append(
-            {
-                "feature": str(row["feature"]),
-                "value": float(row["value"]),
-                "abs_value": float(row["abs_value"]),
-            }
-        )
-    return records
 
 
 def _add_known_regional_fields(frame: pd.DataFrame) -> pd.DataFrame:
@@ -341,11 +283,21 @@ class ScoringService:
             proxy_sensitivity_delta,
             len(missing_features),
         )
-        local_factors = _local_factor_records(
+        explanation = logistic_local_explanation(
             self.estimator,
             input_frame,
             missing_features,
         )
+        local_factors = [
+            {
+                "feature": factor.feature,
+                "value": factor.value,
+                "abs_value": factor.abs_value,
+                "direction": factor.direction,
+                "label": factor.label,
+            }
+            for factor in explanation.top_factors
+        ]
 
         warnings: list[str] = []
         if missing_features:
@@ -379,6 +331,7 @@ class ScoringService:
             decision_support=decision_support,
             missing_feature_count=len(missing_features),
             missing_features_preview=missing_features[:12],
+            explanation=explanation,
             top_model_factors=local_factors,
             warnings=warnings,
         )

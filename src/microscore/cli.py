@@ -5,9 +5,19 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .ablation import run_ablation_study
 from .audit import run_audit
 from .decision import run_decision_analysis
-from .modeling import DEFAULT_DATA_PATH, load_dataset, results_table, run_experiment, run_experiment_on_frame
+from .error_analysis import run_error_analysis
+from .modeling import (
+    DEFAULT_DATA_PATH,
+    load_dataset,
+    results_table,
+    run_experiment,
+    run_experiment_on_frame,
+)
+from .policy import run_policy_analysis
+from .reporting import DEFAULT_REPORTS_DIR, generate_research_artifacts
 from .regional import add_pavlodar_regional_context, regional_summary
 
 
@@ -40,11 +50,61 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run threshold-based loan approval and expected-loss analysis.",
     )
+    parser.add_argument(
+        "--ablation",
+        action="store_true",
+        help="Run feature-group ablation study across proxy, behavioral, and regional scenarios.",
+    )
+    parser.add_argument(
+        "--error-analysis",
+        action="store_true",
+        help="Run false-positive and false-negative analysis on the held-out test set.",
+    )
+    parser.add_argument(
+        "--policy-analysis",
+        action="store_true",
+        help="Compare approve/review/decline threshold policies.",
+    )
+    parser.add_argument(
+        "--reports",
+        action="store_true",
+        help="Generate reproducible research artifacts under reports/research-artifacts.",
+    )
+    parser.add_argument(
+        "--reports-dir",
+        type=Path,
+        default=DEFAULT_REPORTS_DIR,
+        help="Directory for generated research artifacts.",
+    )
     return parser.parse_args()
+
+
+def _print_artifact_paths(paths: tuple[Path, ...]) -> None:
+    print("\nResearch artifacts written")
+    for path in paths:
+        print(path)
 
 
 def main() -> int:
     args = parse_args()
+
+    if args.reports and not any(
+        (
+            args.audit,
+            args.regional,
+            args.decision,
+            args.ablation,
+            args.error_analysis,
+            args.policy_analysis,
+        )
+    ):
+        artifacts = generate_research_artifacts(
+            args.data,
+            output_dir=args.reports_dir,
+        )
+        _print_artifact_paths(artifacts.files)
+        return 0
+
     results = run_experiment(args.data)
 
     print("\nModel comparison")
@@ -115,5 +175,121 @@ def main() -> int:
 
         print("\nSegment approval at best threshold")
         print(decision.segment_approval.round(4).to_string(index=False))
+
+    if args.ablation:
+        ablation = run_ablation_study(args.data)
+        columns = [
+            "scenario",
+            "model",
+            "feature_count",
+            "uses_regional_context",
+            "includes_late_payment_count",
+            "includes_leakage_columns",
+            "test_roc_auc",
+            "test_brier_score",
+            "test_f1",
+            "delta_test_roc_auc_vs_no_leakage",
+            "delta_test_brier_score_vs_no_leakage",
+        ]
+
+        print("\nFeature-group ablation study")
+        print(ablation[columns].round(4).to_string(index=False))
+
+    if args.error_analysis:
+        errors = run_error_analysis(args.data)
+        summary_columns = [
+            "error_type",
+            "n",
+            "share_of_test",
+            "mean_high_risk_probability",
+            "mean_late_payment_count",
+            "decision_meaning",
+        ]
+        segment_columns = [
+            "segment_feature",
+            "segment_value",
+            "n",
+            "false_positive_rate",
+            "false_negative_rate",
+        ]
+        example_columns = [
+            "row_index",
+            "actual_credit_risk",
+            "predicted_credit_risk",
+            "high_risk_probability",
+            "late_payment_count",
+            "annual_income",
+            "loan_application_amount",
+        ]
+
+        print("\nError analysis summary")
+        print(
+            errors.summary[errors.summary["error_type"].notna()][summary_columns]
+            .round(4)
+            .to_string(index=False)
+        )
+
+        print("\nSegment error preview")
+        print(errors.segment_errors[segment_columns].round(4).head(12).to_string(index=False))
+
+        print("\nFalse positive examples")
+        print(
+            errors.false_positive_examples[
+                [column for column in example_columns if column in errors.false_positive_examples.columns]
+            ]
+            .round(4)
+            .head(8)
+            .to_string(index=False)
+        )
+
+        print("\nFalse negative examples")
+        print(
+            errors.false_negative_examples[
+                [column for column in example_columns if column in errors.false_negative_examples.columns]
+            ]
+            .round(4)
+            .head(8)
+            .to_string(index=False)
+        )
+
+    if args.policy_analysis:
+        policies = run_policy_analysis(args.data)
+        policy_columns = [
+            "policy",
+            "auto_approval_rate",
+            "manual_review_rate",
+            "auto_decline_rate",
+            "high_risk_rate_among_approved",
+            "high_risk_approval_rate",
+            "good_borrower_auto_decline_rate",
+            "expected_profit_per_applicant",
+        ]
+        segment_columns = [
+            "policy",
+            "segment_feature",
+            "segment_value",
+            "n",
+            "auto_approval_rate",
+            "manual_review_rate",
+            "auto_decline_rate",
+        ]
+
+        print("\nThreshold policy analysis")
+        print(policies.policy_table[policy_columns].round(4).to_string(index=False))
+
+        print("\nSegment policy preview")
+        print(
+            policies.segment_policy_table[segment_columns]
+            .round(4)
+            .head(16)
+            .to_string(index=False)
+        )
+
+    if args.reports:
+        artifacts = generate_research_artifacts(
+            args.data,
+            output_dir=args.reports_dir,
+        )
+        _print_artifact_paths(artifacts.files)
 
     return 0
