@@ -28,10 +28,12 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on optional ext
 from .database import DuplicateUserError, MicroScoreRepository
 from .analytics import policy_analytics as build_policy_analytics
 from .schemas import (
+    ApplicationDecisionCreate,
     ApplicationCreate,
     AuditEventResponse,
     AuthResponse,
     ClearApplicationsResponse,
+    DecisionAnalyticsResponse,
     HealthResponse,
     LoanApplicationResponse,
     LoginRequest,
@@ -213,6 +215,34 @@ def score_application(
     return updated
 
 
+@app.post("/mfi/applications/{application_id}/decision", response_model=LoanApplicationResponse)
+def record_application_decision(
+    application_id: str,
+    payload: ApplicationDecisionCreate,
+    user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    application = repository.get_application(application_id)
+    if application is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    if application.get("score_result") is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Score the application before recording an MFI decision",
+        )
+
+    updated = repository.record_application_decision(
+        application_id=application_id,
+        actor_email=user["email"],
+        decision=payload.decision,
+        policy_name=payload.policy_name,
+        note=payload.note.strip(),
+    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    return updated
+
+
 @app.get("/mfi/analytics/segments", response_model=list[SegmentAnalyticsRow])
 def segment_analytics(
     _user: dict[str, Any] = Depends(require_mfi_user),
@@ -227,6 +257,14 @@ def policy_analytics(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return build_policy_analytics(repository.list_applications())
+
+
+@app.get("/mfi/analytics/decisions", response_model=DecisionAnalyticsResponse)
+def decision_analytics(
+    _user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return repository.decision_analytics()
 
 
 @app.get("/admin/audit-events", response_model=list[AuditEventResponse])

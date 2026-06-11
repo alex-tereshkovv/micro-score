@@ -49,7 +49,9 @@ password: password123
 Applications are stored in the local SQLite database until an admin clears them
 from the Admin tab or the local database file is removed.
 
-The MFI tab includes a Portfolio Overview with risk-band, district, and policy
-mix charts, plus a Policy Lab that compares approve/review/decline threshold
+The MFI tab includes a Portfolio Overview with risk-band, district, policy-mix,
+and analyst-decision charts, plus a Decision Audit table comparing recorded
+analyst decisions with risk bands, districts, proxy sensitivity, and model
+recommendations. The Policy Lab compares approve/review/decline threshold
 policies on scored applications. These are predicted-probability previews, not
 validated lending policies.

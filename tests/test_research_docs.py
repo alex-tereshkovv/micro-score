@@ -14,6 +14,8 @@ class ResearchDocsTests(unittest.TestCase):
             "MODEL_CARD.md",
             "IMPACT.md",
             "RESEARCH_PAPER.md",
+            "STAKEHOLDER_INTERVIEW_GUIDE.md",
+            "VALIDATION_TRACKER.md",
         ]
 
         for filename in expected_docs:
@@ -45,6 +47,22 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Not Intended Use", model_card)
         self.assertIn("Human Oversight", model_card)
         self.assertIn("Privacy Risks", model_card)
+
+    def test_validation_docs_define_safe_feedback_collection(self) -> None:
+        interview_guide = (DOCS_ROOT / "STAKEHOLDER_INTERVIEW_GUIDE.md").read_text(
+            encoding="utf-8"
+        )
+        validation_tracker = (DOCS_ROOT / "VALIDATION_TRACKER.md").read_text(
+            encoding="utf-8"
+        )
+        feedback_template = (
+            PROJECT_ROOT / "data" / "validation" / "stakeholder_feedback_template.csv"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Do Not Collect", interview_guide)
+        self.assertIn("Consent Script", interview_guide)
+        self.assertIn("Validation Milestones", validation_tracker)
+        self.assertIn("contains_personal_data", feedback_template)
 
 
 if __name__ == "__main__":

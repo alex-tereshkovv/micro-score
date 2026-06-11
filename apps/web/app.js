@@ -6,6 +6,7 @@ const state = {
   selectedApplicationId: "",
   applications: [],
   policyAnalytics: null,
+  decisionAnalytics: null,
 };
 
 const els = {
@@ -35,12 +36,14 @@ const els = {
   applicationsTable: document.querySelector("#applicationsTable"),
   scoreSelectedApplication: document.querySelector("#scoreSelectedApplication"),
   scoreDetail: document.querySelector("#scoreDetail"),
+  decisionForm: document.querySelector("#decisionForm"),
   refreshAnalytics: document.querySelector("#refreshAnalytics"),
   segmentAnalytics: document.querySelector("#segmentAnalytics"),
   refreshPolicyAnalytics: document.querySelector("#refreshPolicyAnalytics"),
   policyNote: document.querySelector("#policyNote"),
   policyAnalytics: document.querySelector("#policyAnalytics"),
   policySegments: document.querySelector("#policySegments"),
+  decisionAudit: document.querySelector("#decisionAudit"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
   clearApplications: document.querySelector("#clearApplications"),
@@ -250,6 +253,7 @@ function resetApplicationViews() {
   state.selectedApplicationId = "";
   state.applications = [];
   state.policyAnalytics = null;
+  state.decisionAnalytics = null;
 
   els.borrowerApplicationId.value = "";
   els.borrowerApplicationCard.className = "result-block empty";
@@ -260,6 +264,7 @@ function resetApplicationViews() {
 
   els.scoreDetail.className = "result-block empty";
   els.scoreDetail.textContent = "Select an application.";
+  els.decisionForm.reset();
 
   els.portfolioOverview.className = "portfolio-overview empty";
   els.portfolioOverview.textContent = "Load applications to view portfolio analytics.";
@@ -272,11 +277,14 @@ function resetApplicationViews() {
   els.policyAnalytics.textContent = "No policy analytics loaded.";
   els.policySegments.className = "table-shell empty";
   els.policySegments.textContent = "No segment policy analytics loaded.";
+  els.decisionAudit.className = "table-shell empty";
+  els.decisionAudit.textContent = "No decision audit loaded.";
 }
 
 function renderApplication(application) {
   const score = application.score_result;
   const riskClass = score ? `risk-${score.risk_band}` : "";
+  const decision = renderRecordedDecision(application.decision_result);
   return `
     <div class="metric-grid">
       <div class="metric"><span>Status</span><strong>${escapeHtml(application.status)}</strong></div>
@@ -285,7 +293,26 @@ function renderApplication(application) {
       <div class="metric"><span>Risk</span><strong class="${riskClass}">${score ? escapeHtml(score.risk_band) : "not scored"}</strong></div>
     </div>
     <p class="record-line"><strong>ID:</strong> ${escapeHtml(application.id)}</p>
+    ${decision}
     ${score ? renderScore(score) : ""}
+  `;
+}
+
+function renderRecordedDecision(decision) {
+  if (!decision) return "";
+
+  return `
+    <div class="recorded-decision decision-${escapeHtml(decision.decision)}">
+      <div>
+        <span>MFI decision</span>
+        <strong>${escapeHtml(formatPolicyName(decision.decision))}</strong>
+      </div>
+      <div>
+        <span>Policy</span>
+        <strong>${escapeHtml(formatPolicyName(decision.policy_name || "not recorded"))}</strong>
+      </div>
+      <p>${escapeHtml(decision.note || "No note recorded.")}</p>
+    </div>
   `;
 }
 
@@ -449,13 +476,14 @@ function renderApplicationsTable(applications) {
           <td>${formatMoney(application.requested_amount)}</td>
           <td>${escapeHtml(application.district || "-")}</td>
           <td>${application.score_result ? formatPercent(application.score_result.high_risk_probability) : "-"}</td>
+          <td>${application.decision_result ? escapeHtml(formatPolicyName(application.decision_result.decision)) : "-"}</td>
         </tr>
       `,
     )
     .join("");
   els.applicationsTable.innerHTML = `
     <table>
-      <thead><tr><th>Status</th><th>Borrower</th><th>Amount</th><th>District</th><th>Risk</th></tr></thead>
+      <thead><tr><th>Status</th><th>Borrower</th><th>Amount</th><th>District</th><th>Risk</th><th>Decision</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;
@@ -510,6 +538,7 @@ function renderPortfolioOverview() {
   };
   const districtRows = renderDistrictRiskRows(scored);
   const policySnapshot = renderPortfolioPolicySnapshot(state.policyAnalytics);
+  const decisionSnapshot = renderPortfolioDecisionSnapshot(state.decisionAnalytics);
 
   els.portfolioOverview.className = "portfolio-overview";
   els.portfolioOverview.innerHTML = `
@@ -535,6 +564,10 @@ function renderPortfolioOverview() {
       <section class="portfolio-card portfolio-policy-card">
         <h4>Policy mix</h4>
         ${policySnapshot}
+      </section>
+      <section class="portfolio-card portfolio-decision-card">
+        <h4>Analyst decisions</h4>
+        ${decisionSnapshot}
       </section>
     </div>
   `;
@@ -618,6 +651,39 @@ function renderPortfolioPolicySnapshot(payload) {
   `;
 }
 
+function renderPortfolioDecisionSnapshot(payload) {
+  if (!payload?.decided_application_count) {
+    return "<p class=\"empty tiny-text\">No analyst decisions recorded yet.</p>";
+  }
+
+  const rows = payload.decision_rows || [];
+  const decided = payload.decided_application_count;
+  return `
+    <div class="portfolio-policy-heading">
+      <strong>${decided} recorded</strong>
+      <span>${payload.application_count} applications</span>
+    </div>
+    <div class="decision-bars">
+      ${rows.map(renderDecisionBar).join("")}
+    </div>
+  `;
+}
+
+function renderDecisionBar(row) {
+  return `
+    <div class="decision-bar-row">
+      <div>
+        <strong class="decision-text-${escapeHtml(row.decision)}">${escapeHtml(formatPolicyName(row.decision))}</strong>
+        <span>${row.count} applications</span>
+      </div>
+      <div class="portfolio-bar">
+        <span class="decision-fill-${escapeHtml(row.decision)}" style="width: ${clampPercent(row.rate)}%"></span>
+      </div>
+      <em>${formatPercent(row.rate)}</em>
+    </div>
+  `;
+}
+
 async function refreshApplications() {
   state.applications = await apiFetch("/mfi/applications");
   if (!state.selectedApplicationId && state.applications.length) {
@@ -628,6 +694,7 @@ async function refreshApplications() {
   renderPortfolioOverview();
   await refreshAnalytics();
   await refreshPolicyAnalytics();
+  await refreshDecisionAnalytics();
 }
 
 async function scoreSelectedApplication() {
@@ -645,6 +712,36 @@ async function scoreSelectedApplication() {
   showMessage("Application scored", "ok");
 }
 
+function decisionPayload() {
+  const form = els.decisionForm;
+  return {
+    decision: form.elements.decision.value,
+    policy_name: form.elements.policy_name.value,
+    note: form.elements.note.value.trim(),
+  };
+}
+
+async function saveApplicationDecision() {
+  if (!state.selectedApplicationId) {
+    showMessage("Select an application first", "error");
+    return;
+  }
+  const selected = state.applications.find((item) => item.id === state.selectedApplicationId);
+  if (!selected?.score_result) {
+    showMessage("Score the application before saving a decision", "error");
+    return;
+  }
+
+  const updated = await apiFetch(`/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/decision`, {
+    method: "POST",
+    body: JSON.stringify(decisionPayload()),
+  });
+  state.applications = state.applications.map((item) => (item.id === updated.id ? updated : item));
+  selectApplication(updated.id);
+  await refreshDecisionAnalytics();
+  showMessage("MFI decision saved", "ok");
+}
+
 async function refreshAnalytics() {
   const rows = await apiFetch("/mfi/analytics/segments");
   renderSimpleTable(els.segmentAnalytics, rows, [
@@ -660,6 +757,13 @@ async function refreshPolicyAnalytics() {
   const payload = await apiFetch("/mfi/analytics/policies");
   state.policyAnalytics = payload;
   renderPolicyAnalytics(payload);
+}
+
+async function refreshDecisionAnalytics() {
+  const payload = await apiFetch("/mfi/analytics/decisions");
+  state.decisionAnalytics = payload;
+  renderPortfolioOverview();
+  renderDecisionAudit(payload);
 }
 
 function renderPolicyAnalytics(payload) {
@@ -690,6 +794,74 @@ function renderPolicyAnalytics(payload) {
     ["mean_high_risk_probability", "Avg risk", formatPercent],
     ["predicted_high_risk_share", "High-risk share", formatPercent],
   ]);
+}
+
+function renderDecisionAudit(payload) {
+  if (!payload?.decided_application_count) {
+    els.decisionAudit.className = "table-shell empty";
+    els.decisionAudit.textContent = "No analyst decisions recorded yet.";
+    return;
+  }
+
+  const rows = decisionAuditRows(payload);
+  renderSimpleTable(els.decisionAudit, rows, [
+    ["view", "View"],
+    ["segment", "Segment"],
+    ["decision", "Decision", formatPolicyName],
+    ["count", "Count"],
+    ["share", "Share", formatPercent],
+    ["avg_risk", "Avg risk", formatPercent],
+    ["avg_proxy_delta", "Proxy delta", formatPercent],
+  ]);
+}
+
+function decisionAuditRows(payload) {
+  const rows = [];
+  (payload.risk_rows || []).forEach((row) => {
+    rows.push({
+      view: "Risk band",
+      segment: formatPolicyName(row.risk_band),
+      decision: row.decision,
+      count: row.count,
+      share: row.rate_within_risk_band,
+      avg_risk: row.mean_high_risk_probability,
+      avg_proxy_delta: null,
+    });
+  });
+  (payload.proxy_rows || []).forEach((row) => {
+    rows.push({
+      view: "Proxy signal",
+      segment: formatPolicyName(row.proxy_sensitivity_bucket),
+      decision: row.decision,
+      count: row.count,
+      share: row.rate_within_bucket,
+      avg_risk: row.mean_high_risk_probability,
+      avg_proxy_delta: row.mean_proxy_sensitivity_delta,
+    });
+  });
+  (payload.recommendation_rows || []).forEach((row) => {
+    rows.push({
+      view: "Recommendation",
+      segment: row.recommendation_title || formatPolicyName(row.recommendation_code),
+      decision: row.decision,
+      count: row.count,
+      share: row.rate_within_recommendation,
+      avg_risk: row.mean_high_risk_probability,
+      avg_proxy_delta: null,
+    });
+  });
+  (payload.district_rows || []).forEach((row) => {
+    rows.push({
+      view: "District",
+      segment: row.district,
+      decision: row.decision,
+      count: row.count,
+      share: row.rate_within_district,
+      avg_risk: row.mean_high_risk_probability,
+      avg_proxy_delta: null,
+    });
+  });
+  return rows;
 }
 
 function renderPolicyCard(policy) {
@@ -809,6 +981,10 @@ function wireEvents() {
   });
   els.scoreSelectedApplication.addEventListener("click", () => {
     scoreSelectedApplication().catch((error) => showMessage(error.message, "error"));
+  });
+  els.decisionForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveApplicationDecision().catch((error) => showMessage(error.message, "error"));
   });
   els.refreshAnalytics.addEventListener("click", () => {
     refreshAnalytics().catch((error) => showMessage(error.message, "error"));

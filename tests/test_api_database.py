@@ -91,8 +91,94 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertTrue(any(event["action"] == "application_scored" for event in audit_events))
 
+    def test_application_decision_persists_and_records_audit_event(self) -> None:
+        self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+        self.repository.create_user("analyst@example.com", "password-hash", "mfi_analyst")
+        self.repository.create_application(
+            application_id="app-1",
+            borrower_email="borrower@example.com",
+            requested_amount=300_000,
+            purpose="inventory",
+            district="Bayanaul",
+            settlement_type="rural",
+            behavioral_signals={"loan_application_amount": 300_000},
+        )
+        self.repository.update_application_score(
+            application_id="app-1",
+            actor_email="analyst@example.com",
+            score_result={
+                "model_name": "Logistic Regression",
+                "model_version": "research-v0.1",
+                "high_risk_probability": 0.42,
+                "risk_band": "medium",
+                "proxy_sensitivity_delta": 0.24,
+                "decision_support": {
+                    "recommendation_code": "manual_review_proxy_sensitive",
+                    "title": "Manual review - proxy-sensitive score",
+                    "rationale": [],
+                    "next_steps": [],
+                },
+                "warnings": [
+                    "Risk estimate is sensitive to late_payment_count; review the thin-file scenario before deciding.",
+                ],
+            },
+        )
+
+        updated = self.repository.record_application_decision(
+            application_id="app-1",
+            actor_email="analyst@example.com",
+            decision="review",
+            policy_name="balanced_review",
+            note="Request income stability evidence.",
+        )
+        reopened = MicroScoreRepository(self.db_path)
+        application = reopened.get_application("app-1")
+        audit_events = reopened.list_audit_events()
+
+        self.assertEqual(updated["decision_result"]["decision"], "review")
+        self.assertEqual(application["decision_result"]["policy_name"], "balanced_review")
+        self.assertEqual(application["decision_result"]["actor_email"], "analyst@example.com")
+        self.assertTrue(
+            any(event["action"] == "application_decision_recorded" for event in audit_events)
+        )
+
+        analytics = reopened.decision_analytics()
+        self.assertEqual(analytics["application_count"], 1)
+        self.assertEqual(analytics["decided_application_count"], 1)
+        self.assertTrue(
+            any(row["decision"] == "review" and row["count"] == 1 for row in analytics["decision_rows"])
+        )
+        self.assertTrue(
+            any(row["policy_name"] == "balanced_review" for row in analytics["policy_rows"])
+        )
+        self.assertTrue(
+            any(
+                row["risk_band"] == "medium" and row["decision"] == "review"
+                for row in analytics["risk_rows"]
+            )
+        )
+        self.assertTrue(
+            any(
+                row["district"] == "Bayanaul" and row["decision"] == "review"
+                for row in analytics["district_rows"]
+            )
+        )
+        self.assertTrue(
+            any(
+                row["recommendation_code"] == "manual_review_proxy_sensitive"
+                for row in analytics["recommendation_rows"]
+            )
+        )
+        self.assertTrue(
+            any(
+                row["proxy_sensitivity_bucket"] == "proxy_sensitive"
+                for row in analytics["proxy_rows"]
+            )
+        )
+
     def test_clear_applications_keeps_users_and_records_audit_event(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+        self.repository.create_user("analyst@example.com", "password-hash", "mfi_analyst")
         self.repository.create_user("admin@example.com", "password-hash", "admin")
         self.repository.create_application(
             application_id="app-1",
@@ -103,12 +189,33 @@ class ApiDatabaseTests(unittest.TestCase):
             settlement_type="rural",
             behavioral_signals={"loan_application_amount": 300_000},
         )
+        self.repository.update_application_score(
+            application_id="app-1",
+            actor_email="analyst@example.com",
+            score_result={
+                "model_name": "Logistic Regression",
+                "model_version": "research-v0.1",
+                "high_risk_probability": 0.42,
+                "risk_band": "medium",
+                "warnings": [],
+            },
+        )
+        self.repository.record_application_decision(
+            application_id="app-1",
+            actor_email="analyst@example.com",
+            decision="review",
+            policy_name="balanced_review",
+            note="Request income stability evidence.",
+        )
 
         deleted_count = self.repository.clear_applications(actor_email="admin@example.com")
         audit_events = self.repository.list_audit_events()
+        analytics = self.repository.decision_analytics()
 
         self.assertEqual(deleted_count, 1)
         self.assertEqual(self.repository.list_applications(), [])
+        self.assertEqual(analytics["application_count"], 0)
+        self.assertEqual(analytics["decided_application_count"], 0)
         self.assertIsNotNone(self.repository.get_user("borrower@example.com"))
         self.assertTrue(any(event["action"] == "applications_cleared" for event in audit_events))
 

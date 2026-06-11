@@ -247,6 +247,30 @@
               <button id="scoreSelectedApplication" class="primary-button" type="button">Score</button>
             </div>
             <div id="scoreDetail" class="result-block empty">Select an application.</div>
+            <form id="decisionForm" class="mfi-decision-form">
+              <label>
+                Decision
+                <select name="decision">
+                  <option value="review">manual review</option>
+                  <option value="approve">approve</option>
+                  <option value="decline">decline</option>
+                </select>
+              </label>
+              <label>
+                Policy
+                <select name="policy_name">
+                  <option value="balanced_review">balanced review</option>
+                  <option value="lender_protective">lender protective</option>
+                  <option value="inclusion_first">inclusion first</option>
+                  <option value="starter_loan_review">starter loan review</option>
+                </select>
+              </label>
+              <label class="decision-note-field">
+                Note
+                <input name="note" type="text" maxlength="500" placeholder="review reason or next step" />
+              </label>
+              <button class="secondary-button submit-wide" type="submit">Save decision</button>
+            </form>
           </section>
 
           <section class="panel wide-panel">
@@ -275,6 +299,8 @@
             <div id="policyNote" class="policy-note">Score applications to compare policies.</div>
             <div id="policyAnalytics" class="policy-grid empty">No policy analytics loaded.</div>
             <div id="policySegments" class="table-shell empty">No segment policy analytics loaded.</div>
+            <h4 class="table-title">Decision audit</h4>
+            <div id="decisionAudit" class="table-shell empty">No decision audit loaded.</div>
           </section>
         </section>
 

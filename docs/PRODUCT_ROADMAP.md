@@ -191,6 +191,8 @@ Goal: build MFI analytics dashboard.
 - application queue
 - borrower risk detail page
 - top factors and explanations
+- analyst decision capture
+- analyst decision analytics by risk, district, proxy sensitivity, and recommendation
 - threshold analytics
 - regional/segment dashboards
 - CSV export for pilot demos
@@ -245,6 +247,7 @@ frontend and scoring review flow into a more production-like application:
 - screenshot-ready dashboard states for portfolio review
 - public demo plan: Vercel/Netlify frontend plus hosted API or Streamlit review app
 - two-minute demo video script
+- stakeholder interviews and validation tracker updates
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL

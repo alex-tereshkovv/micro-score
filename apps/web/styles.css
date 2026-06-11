@@ -567,7 +567,7 @@ label {
 
 .portfolio-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.35fr) minmax(240px, 0.9fr);
+  grid-template-columns: repeat(4, minmax(210px, 1fr));
   gap: 12px;
 }
 
@@ -660,6 +660,11 @@ label {
   align-content: start;
 }
 
+.portfolio-decision-card {
+  display: grid;
+  align-content: start;
+}
+
 .portfolio-policy-heading {
   display: flex;
   justify-content: space-between;
@@ -695,6 +700,63 @@ label {
   color: var(--ink);
 }
 
+.decision-bars {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.decision-bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.8fr) minmax(95px, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.decision-bar-row strong {
+  display: block;
+  font-size: 13px;
+}
+
+.decision-bar-row span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.decision-bar-row em {
+  color: var(--ink);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+}
+
+.decision-text-approve {
+  color: var(--green);
+}
+
+.decision-text-review {
+  color: var(--amber);
+}
+
+.decision-text-decline {
+  color: var(--red);
+}
+
+.decision-fill-approve {
+  background: var(--green);
+}
+
+.decision-fill-review {
+  background: var(--amber);
+}
+
+.decision-fill-decline {
+  background: var(--red);
+}
+
 .legend-dot {
   display: block;
   width: 9px;
@@ -722,6 +784,13 @@ label {
   margin: -4px 0 14px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.table-title {
+  margin: 16px 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
 }
 
 .policy-grid {
@@ -990,6 +1059,69 @@ label {
   padding-left: 18px;
 }
 
+.mfi-decision-form {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.65fr) minmax(140px, 0.85fr);
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.decision-note-field,
+.mfi-decision-form .submit-wide {
+  grid-column: 1 / -1;
+}
+
+.recorded-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, auto);
+  gap: 10px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.recorded-decision span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.recorded-decision strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.recorded-decision p {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.decision-approve {
+  border-left-color: var(--green);
+}
+
+.decision-review {
+  border-left-color: var(--amber);
+}
+
+.decision-decline {
+  border-left-color: var(--red);
+}
+
 .scenario-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(90px, auto);
@@ -1149,6 +1281,10 @@ tr.selected {
     grid-column: 1 / -1;
   }
 
+  .portfolio-decision-card {
+    grid-column: 1 / -1;
+  }
+
   .policy-grid {
     grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
@@ -1182,6 +1318,8 @@ tr.selected {
   .auth-form,
   .form-grid,
   .decision-columns,
+  .mfi-decision-form,
+  .recorded-decision,
   .explanation-columns,
   .explanation-summary {
     grid-template-columns: 1fr;
@@ -1204,12 +1342,14 @@ tr.selected {
   }
 
   .risk-band-row,
-  .district-risk-row {
+  .district-risk-row,
+  .decision-bar-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .risk-band-row em,
-  .district-risk-row em {
+  .district-risk-row em,
+  .decision-bar-row em {
     text-align: left;
   }
 }

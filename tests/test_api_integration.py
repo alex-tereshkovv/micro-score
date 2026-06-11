@@ -96,6 +96,20 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(scored_application["status"], "scored")
         self.assertIn(scored_application["score_result"]["risk_band"], {"low", "medium", "high"})
 
+        decision_response = self.client.post(
+            f"/mfi/applications/{application_id}/decision",
+            headers=self._headers(analyst_token),
+            json={
+                "decision": "review",
+                "policy_name": "balanced_review",
+                "note": "Request income stability evidence.",
+            },
+        )
+        self.assertEqual(decision_response.status_code, 200, decision_response.text)
+        decision_payload = decision_response.json()["decision_result"]
+        self.assertEqual(decision_payload["decision"], "review")
+        self.assertEqual(decision_payload["policy_name"], "balanced_review")
+
         analytics_response = self.client.get(
             "/mfi/analytics/segments",
             headers=self._headers(analyst_token),
@@ -119,6 +133,25 @@ class ApiIntegrationTests(unittest.TestCase):
             any(row["segment_feature"] == "gender" for row in policy_payload["segments"])
         )
 
+        decision_analytics_response = self.client.get(
+            "/mfi/analytics/decisions",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(
+            decision_analytics_response.status_code,
+            200,
+            decision_analytics_response.text,
+        )
+        decision_analytics = decision_analytics_response.json()
+        self.assertEqual(decision_analytics["decided_application_count"], 1)
+        self.assertTrue(
+            any(row["decision"] == "review" for row in decision_analytics["decision_rows"])
+        )
+        self.assertTrue(decision_analytics["risk_rows"])
+        self.assertTrue(decision_analytics["district_rows"])
+        self.assertTrue(decision_analytics["recommendation_rows"])
+        self.assertTrue(decision_analytics["proxy_rows"])
+
         admin_token = self._register("admin@example.com", "admin")
         audit_response = self.client.get(
             "/admin/audit-events",
@@ -128,12 +161,24 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(
             any(event["action"] == "application_scored" for event in audit_response.json())
         )
+        self.assertTrue(
+            any(event["action"] == "application_decision_recorded" for event in audit_response.json())
+        )
 
     def test_openapi_exposes_product_response_schemas(self) -> None:
         response = self.client.get("/openapi.json")
 
         self.assertEqual(response.status_code, 200, response.text)
         schemas = response.json()["components"]["schemas"]
+        self.assertIn("ApplicationDecisionCreate", schemas)
+        self.assertIn("ApplicationDecisionResponse", schemas)
+        self.assertIn("DecisionAnalyticsResponse", schemas)
+        self.assertIn("DecisionAnalyticsRow", schemas)
+        self.assertIn("DecisionPolicyAnalyticsRow", schemas)
+        self.assertIn("DecisionRiskAnalyticsRow", schemas)
+        self.assertIn("DecisionDistrictAnalyticsRow", schemas)
+        self.assertIn("DecisionRecommendationAnalyticsRow", schemas)
+        self.assertIn("DecisionProxyAnalyticsRow", schemas)
         self.assertIn("LoanApplicationResponse", schemas)
         self.assertIn("ScoreResultResponse", schemas)
         self.assertIn("LocalExplanationResponse", schemas)

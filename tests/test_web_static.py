@@ -37,6 +37,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="adminView"', html)
 
     def test_frontend_targets_current_api_contract(self) -> None:
+        markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         script = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
 
         expected_paths = [
@@ -45,8 +46,10 @@ class WebStaticTests(unittest.TestCase):
             "/auth/login",
             "/applications",
             "/mfi/applications",
+            "/decision",
             "/mfi/analytics/segments",
             "/mfi/analytics/policies",
+            "/mfi/analytics/decisions",
             "/admin/audit-events",
             "/admin/applications",
         ]
@@ -55,14 +58,20 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Scenario comparison", script)
         self.assertIn("Recommendation", script)
         self.assertIn("Local explanation", script)
+        self.assertIn("MFI decision", script)
+        self.assertIn("saveApplicationDecision", script)
+        self.assertIn("Analyst decisions", script)
+        self.assertIn("renderPortfolioDecisionSnapshot", script)
+        self.assertIn("Decision audit", markup)
+        self.assertIn("decisionAuditRows", script)
         self.assertIn("proxy_sensitivity_delta", script)
         self.assertIn("decision_support", script)
         self.assertIn("top_positive_factors", script)
         self.assertIn("top_protective_factors", script)
-        self.assertIn("Portfolio", (WEB_ROOT / "index.html").read_text(encoding="utf-8"))
+        self.assertIn("Portfolio", markup)
         self.assertIn("renderDistrictRiskRows", script)
         self.assertIn("renderPortfolioOverview", script)
-        self.assertIn("Policy Lab", (WEB_ROOT / "index.html").read_text(encoding="utf-8"))
+        self.assertIn("Policy Lab", markup)
         self.assertIn("renderPolicyAnalytics", script)
         self.assertIn("resetApplicationViews", script)
         self.assertIn('removeItem("microscore.lastApplicationId")', script)

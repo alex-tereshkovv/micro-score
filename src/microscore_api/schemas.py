@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 Role = Literal["borrower", "mfi_analyst", "admin"]
 RiskBand = Literal["low", "medium", "high"]
 ExplanationDirection = Literal["increases_risk", "reduces_risk"]
+ApplicationDecision = Literal["approve", "review", "decline"]
 
 
 class RegisterRequest(BaseModel):
@@ -97,6 +98,22 @@ class ScoreResultResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ApplicationDecisionCreate(BaseModel):
+    decision: ApplicationDecision
+    policy_name: str | None = None
+    note: str = Field(default="", max_length=500)
+
+
+class ApplicationDecisionResponse(BaseModel):
+    id: int
+    application_id: str
+    actor_email: str
+    decision: ApplicationDecision
+    policy_name: str | None = None
+    note: str
+    created_at: str
+
+
 class LoanApplicationResponse(BaseModel):
     id: str
     borrower_email: str
@@ -107,6 +124,7 @@ class LoanApplicationResponse(BaseModel):
     settlement_type: str | None = None
     behavioral_signals: dict[str, Any]
     score_result: ScoreResultResponse | None = None
+    decision_result: ApplicationDecisionResponse | None = None
     created_at: str
     scored_at: str | None = None
 
@@ -155,6 +173,65 @@ class PolicyAnalyticsResponse(BaseModel):
     scored_application_count: int = Field(ge=0)
     policies: list[PolicyAnalyticsRow] = Field(default_factory=list)
     segments: list[SegmentPolicyAnalyticsRow] = Field(default_factory=list)
+    note: str
+
+
+class DecisionAnalyticsRow(BaseModel):
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate: float = Field(ge=0.0, le=1.0)
+
+
+class DecisionPolicyAnalyticsRow(BaseModel):
+    policy_name: str
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate: float = Field(ge=0.0, le=1.0)
+
+
+class DecisionRiskAnalyticsRow(BaseModel):
+    risk_band: RiskBand
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate_within_risk_band: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class DecisionDistrictAnalyticsRow(BaseModel):
+    district: str
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate_within_district: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class DecisionRecommendationAnalyticsRow(BaseModel):
+    recommendation_code: str
+    recommendation_title: str
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate_within_recommendation: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class DecisionProxyAnalyticsRow(BaseModel):
+    proxy_sensitivity_bucket: str
+    decision: ApplicationDecision
+    count: int = Field(ge=0)
+    rate_within_bucket: float = Field(ge=0.0, le=1.0)
+    mean_high_risk_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    mean_proxy_sensitivity_delta: float | None = Field(default=None, ge=0.0)
+
+
+class DecisionAnalyticsResponse(BaseModel):
+    application_count: int = Field(ge=0)
+    decided_application_count: int = Field(ge=0)
+    decision_rows: list[DecisionAnalyticsRow] = Field(default_factory=list)
+    policy_rows: list[DecisionPolicyAnalyticsRow] = Field(default_factory=list)
+    risk_rows: list[DecisionRiskAnalyticsRow] = Field(default_factory=list)
+    district_rows: list[DecisionDistrictAnalyticsRow] = Field(default_factory=list)
+    recommendation_rows: list[DecisionRecommendationAnalyticsRow] = Field(default_factory=list)
+    proxy_rows: list[DecisionProxyAnalyticsRow] = Field(default_factory=list)
     note: str
 
 

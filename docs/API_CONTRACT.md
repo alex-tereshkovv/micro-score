@@ -200,6 +200,33 @@ recommendation such as manual review, proxy-sensitive review, or small starter
 loan candidate. It is deliberately not an automatic approval or decline: the
 MFI analyst still needs to review affordability, context, and policy.
 
+Record an analyst decision:
+
+```http
+POST /mfi/applications/{application_id}/decision
+```
+
+Request:
+
+```json
+{
+  "decision": "review",
+  "policy_name": "balanced_review",
+  "note": "Request income stability evidence."
+}
+```
+
+Allowed decisions:
+
+- `approve`
+- `review`
+- `decline`
+
+This endpoint requires the application to be scored first. The response is a
+`LoanApplicationResponse` with `decision_result`. This field records the human
+analyst decision, not an automatic model decision. Recording a decision also
+creates an `application_decision_recorded` audit event.
+
 `explanation` provides local additive explanation fields for the current
 Logistic Regression scoring model:
 
@@ -248,6 +275,26 @@ Important limitation: this endpoint does not know real repayment outcomes. It
 uses predicted high-risk probabilities from scored applications, so it should be
 read as a live portfolio preview, not as validated profit or default evidence.
 
+Decision analytics:
+
+```http
+GET /mfi/analytics/decisions
+```
+
+Response schema:
+
+- `DecisionAnalyticsResponse`
+- summarizes latest human MFI decisions per application
+- reports approve/review/decline counts and rates
+- reports policy/decision combinations when a policy name was recorded
+- reports decision mix by model risk band, Pavlodar district, recommendation,
+  and proxy-sensitivity bucket
+
+This endpoint is about analyst workflow, not model performance. It helps show
+how human decisions compare with model risk, regional context, proxy warnings,
+and model review recommendations. It still does not know whether a loan was
+repaid, so it must not be read as validated credit-performance evidence.
+
 ## Admin Flow
 
 Audit events:
@@ -269,6 +316,7 @@ Current audited actions:
 - `user_registered`
 - `application_created`
 - `application_scored`
+- `application_decision_recorded`
 - `applications_cleared`
 
 ## Persistence

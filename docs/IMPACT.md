@@ -31,6 +31,10 @@ industrial, peri-urban, and rural contexts.
 
 ## Stakeholder Feedback Log
 
+Use `docs/STAKEHOLDER_INTERVIEW_GUIDE.md` for consent-based interview prompts
+and `docs/VALIDATION_TRACKER.md` to track which project claims have local
+evidence.
+
 | Date | Stakeholder | Feedback | Project response |
 | --- | --- | --- | --- |
 | Pending | Local borrower | Not yet interviewed | Prepare consent-based interview questions. |
@@ -38,6 +42,9 @@ industrial, peri-urban, and rural contexts.
 | Pending | Data/privacy reviewer | Not yet reviewed | Prepare data statement and model card for critique. |
 
 ## Interview Questions To Start With
+
+The full interview protocol is in `docs/STAKEHOLDER_INTERVIEW_GUIDE.md`. The
+short starter questions are:
 
 Borrowers:
 

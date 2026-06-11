@@ -25,6 +25,8 @@ in Pavlodar, Kazakhstan.
 - [Model card](docs/MODEL_CARD.md)
 - [Data statement](docs/DATA_STATEMENT.md)
 - [Impact plan](docs/IMPACT.md)
+- [Stakeholder interview guide](docs/STAKEHOLDER_INTERVIEW_GUIDE.md)
+- [Validation tracker](docs/VALIDATION_TRACKER.md)
 - [Methodology](docs/METHODOLOGY.md)
 - [Product roadmap](docs/PRODUCT_ROADMAP.md)
 - [API contract](docs/API_CONTRACT.md)
@@ -335,8 +337,10 @@ Current API scope:
 - `GET /applications/{application_id}`
 - `GET /mfi/applications`
 - `POST /mfi/applications/{application_id}/score`
+- `POST /mfi/applications/{application_id}/decision`
 - `GET /mfi/analytics/segments`
 - `GET /mfi/analytics/policies`
+- `GET /mfi/analytics/decisions`
 - `GET /admin/audit-events`
 - `DELETE /admin/applications`
 
@@ -350,10 +354,10 @@ The database path can be changed with `MICROSCORE_API_DB_PATH`. Runtime database
 files are ignored by Git; only `data/app/.gitkeep` is tracked.
 
 The API flow is covered by integration tests: borrower registration,
-application submission, MFI scoring, segment analytics, policy analytics, and
-admin audit events.
+application submission, MFI scoring, analyst decision capture, decision audit
+analytics, segment analytics, policy analytics, and admin audit events.
 OpenAPI now exposes typed response schemas for applications, score results,
-segment analytics, policy analytics, and audit events.
+segment analytics, policy analytics, decision analytics, and audit events.
 
 Loan applications persist in SQLite until an admin clears them or the local
 database file is removed. The current demo values use the synthetic dataset's
@@ -385,7 +389,9 @@ connects to the local API and supports:
 - application status lookup
 - MFI application queue
 - application scoring
-- portfolio overview with risk-band, district, and policy-mix charts
+- MFI analyst decision capture
+- portfolio overview with risk-band, district, policy-mix, and decision charts
+- decision audit by risk band, district, proxy sensitivity, and recommendation
 - segment analytics
 - Policy Lab for approve/review/decline threshold trade-offs
 - admin audit trail
