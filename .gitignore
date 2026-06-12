@@ -9,6 +9,8 @@ dist/
 data/interim/*
 data/processed/*
 data/app/*
+data/external/benchmarks/**/raw/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 !data/app/.gitkeep
+!data/external/benchmarks/**/raw/.gitkeep

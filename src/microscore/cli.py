@@ -7,6 +7,11 @@ from pathlib import Path
 
 from .ablation import run_ablation_study
 from .audit import run_audit
+from .benchmark import (
+    DEFAULT_BENCHMARK_REPORTS_DIR,
+    DEFAULT_UCI_DEFAULT_DATA_PATH,
+    run_uci_default_benchmark,
+)
 from .decision import run_decision_analysis
 from .error_analysis import run_error_analysis
 from .modeling import (
@@ -76,6 +81,23 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_REPORTS_DIR,
         help="Directory for generated research artifacts.",
     )
+    parser.add_argument(
+        "--benchmark",
+        choices=("uci-default",),
+        help="Run a public benchmark experiment instead of the synthetic MicroScore dataset.",
+    )
+    parser.add_argument(
+        "--benchmark-data",
+        type=Path,
+        default=DEFAULT_UCI_DEFAULT_DATA_PATH,
+        help="Path to the local UCI Default of Credit Card Clients CSV/XLS file.",
+    )
+    parser.add_argument(
+        "--benchmark-reports-dir",
+        type=Path,
+        default=DEFAULT_BENCHMARK_REPORTS_DIR,
+        help="Directory for generated public benchmark artifacts.",
+    )
     return parser.parse_args()
 
 
@@ -87,6 +109,16 @@ def _print_artifact_paths(paths: tuple[Path, ...]) -> None:
 
 def main() -> int:
     args = parse_args()
+
+    if args.benchmark == "uci-default":
+        artifacts = run_uci_default_benchmark(
+            args.benchmark_data,
+            output_dir=args.benchmark_reports_dir,
+        )
+        print("\nBenchmark artifacts written")
+        for path in artifacts.files:
+            print(path)
+        return 0
 
     if args.reports and not any(
         (

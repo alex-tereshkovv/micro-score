@@ -19,6 +19,7 @@ measured financial-access data.
 | Data source | Current use | Evidence status | Notes |
 | --- | --- | --- | --- |
 | Synthetic borrower-level credit-risk dataset | Train and test baseline ML models | Synthetic | Useful for engineering and audit design; not proof of real-world performance. |
+| UCI Default of Credit Card Clients | Public benchmark validation | Evidence-based public benchmark | Real credit-card default data from Taiwan; useful for pipeline validation, not local Kazakhstan deployment evidence. |
 | Pavlodar district/city names | Regional simulation and segment analysis | Evidence-based | Based on public administrative structure. |
 | Pavlodar population and urban/rural context | Sampling weights and local motivation | Evidence-based | Should be refreshed from official statistics before publication. |
 | District-level 2023 population estimates | Sampling weights | Secondary public source | Current CSV uses CityPopulation.de tables that cite Kazakhstan statistics; replace with direct official tables when available. |
@@ -68,6 +69,9 @@ measured financial-access data.
   Kazakhstan statistical authorities for administrative population estimates.
   This should be treated as a bridge, not the final official source.
   https://www.citypopulation.de/en/kazakhstan/admin/12__pavlodar/
+- UCI Default of Credit Card Clients: public benchmark dataset for credit-card
+  default prediction.
+  https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients
 
 ## Why Real Borrower Data Is Not Used Yet
 

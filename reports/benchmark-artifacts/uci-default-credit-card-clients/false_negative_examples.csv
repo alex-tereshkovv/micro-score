@@ -1,0 +1,26 @@
+row_index,model,customer_id,limit_balance,sex,education,marriage,age,payment_status_sep,payment_status_aug,payment_status_jul,bill_amount_sep,payment_amount_sep,actual_credit_risk,predicted_credit_risk,high_risk_probability,threshold,probability_margin_from_threshold,error_type,decision_meaning
+982,Logistic Regression,983,500000,male,graduate_school,single,36,-2,-2,-2,45106,81690,1,0,0.0524,0.5,0.4476,false_negative,High-risk borrower could be missed by the model.
+28993,Logistic Regression,28994,480000,female,graduate_school,married,39,0,0,0,98569,10620,1,0,0.0534,0.5,0.4466,false_negative,High-risk borrower could be missed by the model.
+10432,Logistic Regression,10433,500000,male,graduate_school,single,49,-2,-2,-2,478030,205,1,0,0.0682,0.5,0.4318,false_negative,High-risk borrower could be missed by the model.
+13401,Logistic Regression,13402,420000,female,high_school,single,27,-2,-2,-1,1486,2679,1,0,0.069,0.5,0.431,false_negative,High-risk borrower could be missed by the model.
+22256,Logistic Regression,22257,500000,female,high_school,single,29,-2,-2,-2,5024,802,1,0,0.113,0.5,0.387,false_negative,High-risk borrower could be missed by the model.
+16195,Logistic Regression,16196,400000,female,high_school,single,35,-2,-2,-2,1432,8132,1,0,0.1194,0.5,0.3806,false_negative,High-risk borrower could be missed by the model.
+5286,Logistic Regression,5287,520000,female,graduate_school,single,33,0,0,0,485298,22000,1,0,0.1268,0.5,0.3732,false_negative,High-risk borrower could be missed by the model.
+19250,Logistic Regression,19251,400000,female,university,single,30,-2,-2,-2,-38,10446,1,0,0.1268,0.5,0.3732,false_negative,High-risk borrower could be missed by the model.
+10649,Logistic Regression,10650,400000,female,graduate_school,single,27,-2,-2,-2,5457,4460,1,0,0.1276,0.5,0.3724,false_negative,High-risk borrower could be missed by the model.
+28908,Logistic Regression,28909,400000,female,university,single,41,-2,-2,-2,43672,678,1,0,0.1329,0.5,0.3671,false_negative,High-risk borrower could be missed by the model.
+10164,Logistic Regression,10165,120000,female,high_school,single,50,0,-1,0,149540,125000,1,0,0.1359,0.5,0.3641,false_negative,High-risk borrower could be missed by the model.
+23092,Logistic Regression,23093,470000,female,university,single,33,-2,-2,-2,0,0,1,0,0.1378,0.5,0.3622,false_negative,High-risk borrower could be missed by the model.
+15877,Logistic Regression,15878,350000,female,high_school,single,28,-2,-2,-2,0,0,1,0,0.1421,0.5,0.3579,false_negative,High-risk borrower could be missed by the model.
+15548,Logistic Regression,15549,450000,male,university,single,36,-2,-2,-2,8012,4021,1,0,0.1426,0.5,0.3574,false_negative,High-risk borrower could be missed by the model.
+2907,Logistic Regression,2908,500000,male,university,married,38,0,0,0,499231,22600,1,0,0.1449,0.5,0.3551,false_negative,High-risk borrower could be missed by the model.
+22710,Logistic Regression,22711,360000,female,high_school,single,34,-2,-2,-2,0,0,1,0,0.1458,0.5,0.3542,false_negative,High-risk borrower could be missed by the model.
+18898,Logistic Regression,18899,140000,female,other,single,28,0,0,-1,108018,1000,1,0,0.1475,0.5,0.3525,false_negative,High-risk borrower could be missed by the model.
+12627,Logistic Regression,12628,340000,female,university,single,32,-2,-2,-2,0,0,1,0,0.15,0.5,0.35,false_negative,High-risk borrower could be missed by the model.
+1004,Logistic Regression,1005,150000,female,high_school,single,30,-2,-2,-2,456,9664,1,0,0.1525,0.5,0.3475,false_negative,High-risk borrower could be missed by the model.
+7265,Logistic Regression,7266,360000,female,high_school,single,42,-2,-2,-2,0,0,1,0,0.1527,0.5,0.3473,false_negative,High-risk borrower could be missed by the model.
+28926,Logistic Regression,28927,360000,female,university,single,35,-2,-2,-2,0,0,1,0,0.1548,0.5,0.3452,false_negative,High-risk borrower could be missed by the model.
+24856,Logistic Regression,24857,210000,male,university,single,47,-2,-2,-2,-163,0,1,0,0.1587,0.5,0.3413,false_negative,High-risk borrower could be missed by the model.
+18573,Logistic Regression,18574,250000,female,university,single,24,-2,-2,-1,0,0,1,0,0.1605,0.5,0.3395,false_negative,High-risk borrower could be missed by the model.
+23431,Logistic Regression,23432,360000,female,graduate_school,single,29,-2,-2,-2,0,0,1,0,0.161,0.5,0.339,false_negative,High-risk borrower could be missed by the model.
+23399,Logistic Regression,23400,240000,female,high_school,single,35,-2,-2,-2,0,0,1,0,0.1622,0.5,0.3378,false_negative,High-risk borrower could be missed by the model.

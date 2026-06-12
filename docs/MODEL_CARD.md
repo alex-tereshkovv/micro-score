@@ -45,6 +45,10 @@ loans, and late-payment count.
 The Pavlodar regional layer is a transparent scaffold. Some fields are based on
 public context; others are hypotheses that require validation.
 
+The separate public benchmark uses UCI Default of Credit Card Clients. That
+dataset is real public credit-card default data from Taiwan, not Pavlodar
+microfinance data.
+
 See [DATA_STATEMENT.md](DATA_STATEMENT.md).
 
 ## Current Metrics
@@ -77,6 +81,16 @@ Current ablation study:
 
 The ablation workflow also includes a Dummy Classifier baseline and Brier score
 for probability-quality review.
+
+Current public benchmark:
+
+| Dataset | Model | ROC-AUC | Brier score | Notes |
+| --- | --- | ---: | ---: | --- |
+| UCI Default of Credit Card Clients | Logistic Regression | 0.710 | 0.209 | Real public credit-card benchmark. |
+| UCI Default of Credit Card Clients | Random Forest | 0.775 | 0.159 | Best current public benchmark result. |
+
+This benchmark validates the pipeline on public credit-risk data, not on
+Kazakhstan MFI borrowers.
 
 Current error analysis at threshold `0.50`:
 
@@ -170,6 +184,8 @@ and opaque third-party data.
 ## Limitations
 
 - Synthetic borrower-level data.
+- Public benchmark is from Taiwan credit-card data, not Kazakhstan microfinance
+  data.
 - No real MFI repayment validation yet.
 - Regional access indices are hypotheses.
 - No deployed public demo yet.

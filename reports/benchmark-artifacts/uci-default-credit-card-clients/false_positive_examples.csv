@@ -1,0 +1,26 @@
+row_index,model,customer_id,limit_balance,sex,education,marriage,age,payment_status_sep,payment_status_aug,payment_status_jul,bill_amount_sep,payment_amount_sep,actual_credit_risk,predicted_credit_risk,high_risk_probability,threshold,probability_margin_from_threshold,error_type,decision_meaning
+8656,Logistic Regression,8657,30000,male,high_school,single,46,6,5,4,33134,0,0,1,0.9842,0.5,0.4842,false_positive,Good borrower could be wrongly flagged as high risk.
+21362,Logistic Regression,21363,20000,male,university,single,56,5,4,3,19977,0,0,1,0.9727,0.5,0.4727,false_positive,Good borrower could be wrongly flagged as high risk.
+20737,Logistic Regression,20738,20000,male,high_school,single,24,5,4,3,21151,0,0,1,0.9644,0.5,0.4644,false_positive,Good borrower could be wrongly flagged as high risk.
+17778,Logistic Regression,17779,60000,female,university,married,59,4,4,4,54506,4000,0,1,0.9586,0.5,0.4586,false_positive,Good borrower could be wrongly flagged as high risk.
+9521,Logistic Regression,9522,220000,male,university,married,39,5,4,3,187665,0,0,1,0.9474,0.5,0.4474,false_positive,Good borrower could be wrongly flagged as high risk.
+12154,Logistic Regression,12155,70000,female,graduate_school,married,35,4,4,3,77021,0,0,1,0.946,0.5,0.446,false_positive,Good borrower could be wrongly flagged as high risk.
+16571,Logistic Regression,16572,10000,male,university,single,25,4,3,3,5365,600,0,1,0.9416,0.5,0.4416,false_positive,Good borrower could be wrongly flagged as high risk.
+1521,Logistic Regression,1522,60000,male,university,single,40,3,3,5,9744,1500,0,1,0.925,0.5,0.425,false_positive,Good borrower could be wrongly flagged as high risk.
+11104,Logistic Regression,11105,30000,female,university,single,23,4,3,2,28607,0,0,1,0.9233,0.5,0.4233,false_positive,Good borrower could be wrongly flagged as high risk.
+5592,Logistic Regression,5593,30000,male,university,married,49,3,2,2,26319,1800,0,1,0.9123,0.5,0.4123,false_positive,Good borrower could be wrongly flagged as high risk.
+28747,Logistic Regression,28748,50000,female,university,married,28,3,2,2,2400,0,0,1,0.9082,0.5,0.4082,false_positive,Good borrower could be wrongly flagged as high risk.
+4432,Logistic Regression,4433,30000,female,high_school,other,42,3,3,2,27669,0,0,1,0.9011,0.5,0.4011,false_positive,Good borrower could be wrongly flagged as high risk.
+9671,Logistic Regression,9672,170000,male,graduate_school,single,48,2,2,7,2400,0,0,1,0.8998,0.5,0.3998,false_positive,Good borrower could be wrongly flagged as high risk.
+28893,Logistic Regression,28894,30000,female,university,married,41,3,2,2,1660,428,0,1,0.8904,0.5,0.3904,false_positive,Good borrower could be wrongly flagged as high risk.
+8608,Logistic Regression,8609,30000,male,university,single,32,3,2,2,31895,0,0,1,0.8891,0.5,0.3891,false_positive,Good borrower could be wrongly flagged as high risk.
+16768,Logistic Regression,16769,50000,male,university,single,35,3,2,2,150,0,0,1,0.889,0.5,0.389,false_positive,Good borrower could be wrongly flagged as high risk.
+26880,Logistic Regression,26881,50000,male,graduate_school,single,39,3,3,2,65766,0,0,1,0.8871,0.5,0.3871,false_positive,Good borrower could be wrongly flagged as high risk.
+15088,Logistic Regression,15089,20000,male,university,married,37,3,2,0,20334,0,0,1,0.8869,0.5,0.3869,false_positive,Good borrower could be wrongly flagged as high risk.
+10023,Logistic Regression,10024,50000,female,university,married,39,3,2,2,5171,0,0,1,0.8858,0.5,0.3858,false_positive,Good borrower could be wrongly flagged as high risk.
+4141,Logistic Regression,4142,50000,female,high_school,married,42,3,2,2,34542,1000,0,1,0.8813,0.5,0.3813,false_positive,Good borrower could be wrongly flagged as high risk.
+11844,Logistic Regression,11845,30000,female,graduate_school,single,24,2,2,6,1800,0,0,1,0.8765,0.5,0.3765,false_positive,Good borrower could be wrongly flagged as high risk.
+4338,Logistic Regression,4339,150000,female,university,married,50,3,2,0,3227,0,0,1,0.8762,0.5,0.3762,false_positive,Good borrower could be wrongly flagged as high risk.
+26394,Logistic Regression,26395,30000,female,high_school,married,30,3,2,2,29508,1900,0,1,0.8756,0.5,0.3756,false_positive,Good borrower could be wrongly flagged as high risk.
+20224,Logistic Regression,20225,50000,female,high_school,married,52,3,2,0,49534,0,0,1,0.8708,0.5,0.3708,false_positive,Good borrower could be wrongly flagged as high risk.
+15752,Logistic Regression,15753,30000,female,university,single,22,3,2,2,200,0,0,1,0.8697,0.5,0.3697,false_positive,Good borrower could be wrongly flagged as high risk.

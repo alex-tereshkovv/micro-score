@@ -8,10 +8,10 @@ combines machine-learning baselines, leakage checks, proxy-risk analysis,
 regional simulation, threshold analysis, and a small FastAPI/web product
 prototype. Current results show that the full synthetic-data model can achieve
 moderate ROC-AUC, but much of that performance depends on `late_payment_count`,
-a strong repayment-history proxy. When that feature is removed, model ranking
-falls to near-random performance. The project therefore treats the current
-system as a research and decision-support prototype, not a validated lending
-model.
+a strong repayment-history proxy. A separate UCI public benchmark now tests the
+same pipeline on real public credit-card default data, where Random Forest
+reaches ROC-AUC about `0.775`. The project therefore treats the current system
+as a research and decision-support prototype, not a validated lending model.
 
 ## 1. Introduction
 
@@ -52,6 +52,11 @@ spending, loan amount, open loans, and late-payment count.
 
 The regional layer uses public context and explicit assumptions. Evidence-based
 fields and assumptions are separated in `docs/DATA_STATEMENT.md`.
+
+The project also includes a separate public benchmark track using UCI Default
+of Credit Card Clients. This benchmark is not local to Kazakhstan, but it allows
+the same modeling, calibration, feature-importance, and error-analysis workflow
+to be tested on a real public credit-risk dataset.
 
 ## 5. Methodology
 
@@ -136,6 +141,19 @@ local repayment and behavioral data before claiming predictive validity.
 
 ### Research Finding 4
 
+The public UCI benchmark runs successfully as a separate Experiment B:
+
+| Model | ROC-AUC | Brier score | F1 |
+| --- | ---: | ---: | ---: |
+| Logistic Regression | 0.710 | 0.209 | 0.465 |
+| Random Forest | 0.775 | 0.159 | 0.541 |
+
+This strengthens the project because the modeling pipeline is no longer tested
+only on synthetic data. However, it remains a Taiwan credit-card benchmark and
+does not validate Pavlodar microfinance deployment.
+
+### Research Finding 5
+
 Error analysis shows an important failure mode. At a `0.50` threshold, the
 Logistic Regression baseline has:
 
@@ -149,7 +167,7 @@ consistent with the ablation result: when repayment-history proxy information
 is absent, the current synthetic data does not provide enough independent
 behavioral signal to identify all high-risk borrowers.
 
-### Research Finding 5
+### Research Finding 6
 
 Three-zone threshold policies make the access-vs-risk trade-off concrete:
 
@@ -218,6 +236,8 @@ The project includes:
 
 - Borrower-level data is synthetic.
 - Regional features are partly assumptions.
+- Public benchmark metrics come from Taiwan credit-card data, not Kazakhstan
+  microfinance data.
 - No real MFI validation yet.
 - No public deployed demo yet.
 - No SHAP explanations yet for nonlinear/tree model variants.
@@ -227,6 +247,8 @@ The project includes:
 ## 13. Future Work
 
 - Replace assumptions with official and measured local indicators.
+- Compare synthetic Pavlodar and UCI benchmark failure modes in the research
+  paper and model card.
 - Add SHAP or TreeSHAP explanations for nonlinear/tree model variants.
 - Track generated report artifacts over model versions.
 - Expand false-positive and false-negative case analysis with stakeholder

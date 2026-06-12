@@ -250,6 +250,7 @@ def run_error_analysis(
     model_name: str = "Logistic Regression",
     target: str = TARGET_COLUMN,
     drop_columns: tuple[str, ...] = DEFAULT_DROP_COLUMNS,
+    engineer_features: bool = True,
     random_state: int = RANDOM_STATE,
     test_size: float = 0.2,
     threshold: float = 0.5,
@@ -264,7 +265,12 @@ def run_error_analysis(
         raise ValueError("threshold must be between 0 and 1")
 
     source_frame = frame.copy() if frame is not None else load_dataset(data_path)
-    X, y = make_model_frame(source_frame, target=target, drop_columns=drop_columns)
+    X, y = make_model_frame(
+        source_frame,
+        target=target,
+        drop_columns=drop_columns,
+        engineer_features=engineer_features,
+    )
 
     X_train, X_test, y_train, y_test, _idx_train, idx_test = train_test_split(
         X,

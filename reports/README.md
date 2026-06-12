@@ -15,6 +15,12 @@ Default output:
 reports/research-artifacts/
 ```
 
+Public benchmark output:
+
+```text
+reports/benchmark-artifacts/uci-default-credit-card-clients/
+```
+
 Expected files:
 
 - `SUMMARY.md`
@@ -37,3 +43,7 @@ Expected files:
 These files are generated from synthetic borrower-level data. They are useful
 for research review and portfolio presentation, but they should not be treated
 as validation for real lending decisions.
+
+Benchmark artifacts are generated from public datasets such as UCI Default of
+Credit Card Clients. They validate the modeling pipeline on real public
+credit-risk data, but they do not validate Pavlodar MFI deployment.

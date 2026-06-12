@@ -1,0 +1,21 @@
+model,bin,n,mean_predicted_probability,actual_high_risk_rate,calibration_error
+Logistic Regression,"(-0.001, 0.1]",77,0.0651,0.0519,0.0132
+Logistic Regression,"(0.1, 0.2]",485,0.1655,0.1299,0.0356
+Logistic Regression,"(0.2, 0.3]",648,0.2528,0.1281,0.1247
+Logistic Regression,"(0.3, 0.4]",1062,0.3504,0.1347,0.2157
+Logistic Regression,"(0.4, 0.5]",1450,0.455,0.1352,0.3199
+Logistic Regression,"(0.5, 0.6]",1220,0.5409,0.2033,0.3377
+Logistic Regression,"(0.6, 0.7]",332,0.6502,0.3735,0.2767
+Logistic Regression,"(0.7, 0.8]",443,0.749,0.5892,0.1598
+Logistic Regression,"(0.8, 0.9]",228,0.837,0.7105,0.1265
+Logistic Regression,"(0.9, 1.0]",55,0.9324,0.7818,0.1506
+Random Forest,"(-0.001, 0.1]",321,0.07,0.0405,0.0295
+Random Forest,"(0.1, 0.2]",1201,0.1524,0.0733,0.0791
+Random Forest,"(0.2, 0.3]",1554,0.2508,0.1293,0.1214
+Random Forest,"(0.3, 0.4]",1026,0.3449,0.1745,0.1705
+Random Forest,"(0.4, 0.5]",472,0.4439,0.2161,0.2278
+Random Forest,"(0.5, 0.6]",341,0.5478,0.3314,0.2164
+Random Forest,"(0.6, 0.7]",336,0.6492,0.4315,0.2177
+Random Forest,"(0.7, 0.8]",333,0.7512,0.5646,0.1867
+Random Forest,"(0.8, 0.9]",346,0.8477,0.685,0.1627
+Random Forest,"(0.9, 1.0]",70,0.9326,0.8714,0.0612

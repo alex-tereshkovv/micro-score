@@ -1,0 +1,10 @@
+segment_feature,segment_value,n,actual_high_risk_rate,predicted_high_risk_rate,mean_high_risk_probability,false_positive_count,false_negative_count,false_positive_rate,false_negative_rate
+education,other,80,0.0625,0.0125,0.1957,1,5,0.0133,1.0
+education,graduate_school,2130,0.1901,0.2953,0.4176,405,181,0.2348,0.4469
+education,high_school,1014,0.2574,0.431,0.4775,284,108,0.3772,0.4138
+education,university,2774,0.2365,0.4366,0.4833,750,195,0.3541,0.2973
+marriage,single,3158,0.2049,0.3144,0.4405,616,270,0.2453,0.4173
+marriage,married,2767,0.2414,0.4471,0.4709,785,216,0.374,0.3234
+marriage,other,68,0.1765,0.7059,0.5171,39,3,0.6964,0.25
+sex,female,3598,0.2129,0.3255,0.4382,715,310,0.2525,0.4047
+sex,male,2402,0.2336,0.4609,0.4805,725,179,0.3938,0.3191

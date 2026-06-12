@@ -1,0 +1,23 @@
+{
+  "project": "MicroScore",
+  "benchmark": "UCI Default of Credit Card Clients",
+  "source": "https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients",
+  "rows": 30000,
+  "target": "credit_risk",
+  "random_state": 42,
+  "test_size": 0.2,
+  "n_bins": 10,
+  "files": [
+    "SUMMARY.md",
+    "manifest.json",
+    "model_metrics.csv",
+    "calibration_bins.csv",
+    "top_features.csv",
+    "error_analysis_summary.csv",
+    "segment_error_analysis.csv",
+    "false_positive_examples.csv",
+    "false_negative_examples.csv",
+    "calibration_curve.png"
+  ],
+  "data_warning": "Public Taiwan credit-card default benchmark; not Pavlodar MFI data and not evidence of Kazakhstan deployment readiness."
+}
