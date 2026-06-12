@@ -12,7 +12,7 @@ in Pavlodar, Kazakhstan.
 | Borrower focus | Thin-file and underserved borrowers |
 | Product | FastAPI API + static web prototype |
 | Models | Logistic Regression, Random Forest |
-| Current demo | Local demo at `http://127.0.0.1:5173` |
+| Current demo | One-click local demo with `Start-MicroScore.cmd` |
 | Public demo | Planned next |
 | Main finding | Synthetic-data performance depends heavily on `late_payment_count` |
 | Key limitation | Borrower-level data is synthetic, not real MFI data |
@@ -64,10 +64,10 @@ lending.
 
 ## Demo Status
 
-MicroScore currently runs locally. The next portfolio upgrade is a public demo:
-either a GitHub Pages static demo with mock data, a Streamlit/Hugging Face
-Spaces app, or a hosted FastAPI demo. The plan is documented in
-[docs/PUBLIC_DEMO_PLAN.md](docs/PUBLIC_DEMO_PLAN.md).
+MicroScore currently has a one-click local demo launcher for Windows. The next
+portfolio upgrade is a public demo: either a GitHub Pages static demo with mock
+data, a Streamlit/Hugging Face Spaces app, or a hosted FastAPI demo. The plan is
+documented in [docs/PUBLIC_DEMO_PLAN.md](docs/PUBLIC_DEMO_PLAN.md).
 
 ## Local Quick Start
 
@@ -75,12 +75,12 @@ Install dependencies:
 
 ```powershell
 # Windows
-.venv\Scripts\python -m pip install -e ".[notebook]"
+.venv\Scripts\python -m pip install -r requirements.txt
 ```
 
 ```bash
 # macOS/Linux
-.venv/bin/python -m pip install -e ".[notebook]"
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 Run the research pipeline:
@@ -98,12 +98,20 @@ Run the research pipeline:
 Run the local product demo:
 
 ```powershell
+# Windows, one command
+.\Start-MicroScore.cmd
+```
+
+The launcher seeds demo data, starts the API and web UI, opens the browser, and
+stops both local servers when the launcher window is closed.
+
+Manual fallback:
+
+```powershell
 # Windows terminal 1
 .venv\Scripts\python -m microscore_api.seed
 .venv\Scripts\python -m uvicorn microscore_api.main:app --host 127.0.0.1 --port 8010 --reload
-```
 
-```powershell
 # Windows terminal 2
 .venv\Scripts\python -m http.server 5173 --bind 127.0.0.1 --directory apps\web
 ```
@@ -119,8 +127,8 @@ Run the local product demo:
 .venv/bin/python -m http.server 5173 --bind 127.0.0.1 --directory apps/web
 ```
 
-Open `http://127.0.0.1:5173` and set API base to
-`http://127.0.0.1:8010`.
+Open `http://127.0.0.1:5173` for manual fallback. The web UI auto-detects the
+local API on common development ports.
 
 Demo accounts use password `password123`:
 

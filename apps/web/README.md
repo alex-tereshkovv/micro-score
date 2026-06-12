@@ -14,21 +14,37 @@ apps/web/assets/micro-score.png
 
 ## Run
 
-From the project root, start the API:
+From the project root, double-click:
+
+```text
+Start-MicroScore.cmd
+```
+
+Or run:
+
+```powershell
+.\Start-MicroScore.cmd
+```
+
+The launcher seeds demo data, starts the API, starts the static web UI, and
+opens the browser automatically. Close the launcher window to stop the local
+servers.
+
+Manual fallback for development:
 
 ```powershell
 .venv\Scripts\python -m microscore_api.seed
-.venv\Scripts\python -m uvicorn microscore_api.main:app --reload
+.venv\Scripts\python -m uvicorn microscore_api.main:app --host 127.0.0.1 --port 8010 --reload
 ```
 
 The seed command creates the main demo accounts and a scored 20-application
 Pavlodar-region application portfolio, so the MFI tab is populated as soon as
 the API starts.
 
-In another PowerShell window, start the web UI:
+In another terminal, start the web UI:
 
 ```powershell
-.venv\Scripts\python -m http.server 5173 --directory apps\web
+.venv\Scripts\python -m http.server 5173 --bind 127.0.0.1 --directory apps\web
 ```
 
 Open:

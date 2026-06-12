@@ -12,6 +12,7 @@ WEB_ROOT = PROJECT_ROOT / "apps" / "web"
 
 class WebStaticTests(unittest.TestCase):
     def test_frontend_files_are_present(self) -> None:
+        self.assertTrue((PROJECT_ROOT / "Start-MicroScore.cmd").exists())
         self.assertTrue((WEB_ROOT / "index.html").exists())
         self.assertTrue((WEB_ROOT / "styles.css").exists())
         self.assertTrue((WEB_ROOT / "app.js").exists())
@@ -21,6 +22,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertTrue((WEB_ROOT / "assets" / "apple-touch-icon.png").exists())
         self.assertTrue((WEB_ROOT / "assets" / "microscore-mark.svg").exists())
         self.assertTrue((WEB_ROOT / "assets" / "micro-score.png").exists())
+        self.assertTrue((WEB_ROOT / "assets" / "micro-score-lockup.png").exists())
 
     def test_html_loads_styles_and_script(self) -> None:
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
@@ -30,11 +32,22 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('href="./assets/favicon-32.png"', html)
         self.assertIn('href="./assets/apple-touch-icon.png"', html)
         self.assertIn('href="./assets/micro-score.png"', html)
+        self.assertIn('src="./assets/micro-score-lockup.png?v=20260612-full"', html)
         self.assertIn('src="./assets/microscore-mark.svg"', html)
-        self.assertIn('src="./app.js"', html)
+        self.assertIn('src="./app.js?v=20260612-routes"', html)
+        self.assertIn("window.history.replaceState", html)
+        self.assertIn('id="authScreen"', html)
+        self.assertIn('id="appShell"', html)
+        self.assertIn('hidden', html)
         self.assertIn('id="borrowerView"', html)
         self.assertIn('id="mfiView"', html)
         self.assertIn('id="adminView"', html)
+
+    def test_hidden_screens_are_not_scrollable_before_login(self) -> None:
+        styles = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("[hidden]", styles)
+        self.assertIn("display: none !important;", styles)
 
     def test_frontend_targets_current_api_contract(self) -> None:
         markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
@@ -86,6 +99,34 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("renderPolicyAnalytics", script)
         self.assertIn("resetApplicationViews", script)
         self.assertIn('removeItem("microscore.lastApplicationId")', script)
+        self.assertIn("API_BASE_CANDIDATES", script)
+        self.assertIn("enterDemoWorkspace", script)
+        self.assertIn("API settings", markup)
+        self.assertIn("roleAllowedViews", script)
+        self.assertIn("configureRoleNavigation", script)
+        self.assertIn("setAppMode", script)
+        self.assertIn("routeToView", script)
+        self.assertIn("viewToRoute", script)
+        self.assertIn("roleDefaultRoutes", script)
+        self.assertIn("applyRoute", script)
+        self.assertIn("replaceRoute", script)
+        self.assertIn("hashchange", script)
+        self.assertIn("#/login", script)
+        self.assertIn("#/borrower", script)
+        self.assertIn("#/mfi", script)
+        self.assertIn("#/admin", script)
+        self.assertIn('data-roles="borrower"', markup)
+        self.assertIn('data-roles="mfi_analyst admin"', markup)
+        self.assertIn('data-roles="admin"', markup)
+
+    def test_one_click_launcher_is_documented(self) -> None:
+        root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        web_readme = (WEB_ROOT / "README.md").read_text(encoding="utf-8")
+        command_file = (PROJECT_ROOT / "Start-MicroScore.cmd").read_text(encoding="utf-8")
+
+        self.assertIn("Start-MicroScore.cmd", root_readme)
+        self.assertIn("Start-MicroScore.cmd", web_readme)
+        self.assertIn("microscore_api.dev", command_file)
 
 
 if __name__ == "__main__":

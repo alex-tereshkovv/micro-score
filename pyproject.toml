@@ -29,6 +29,7 @@ app = [
 [project.scripts]
 microscore-train = "microscore.cli:main"
 microscore-seed-api = "microscore_api.seed:main"
+microscore-web = "microscore_api.dev:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

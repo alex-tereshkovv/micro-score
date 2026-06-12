@@ -1,5 +1,20 @@
+const DEFAULT_API_BASE = "http://127.0.0.1:8010";
+const API_BASE_CANDIDATES = [
+  "http://127.0.0.1:8010",
+  "http://127.0.0.1:8011",
+  "http://127.0.0.1:8012",
+  "http://127.0.0.1:8000",
+];
+const queryApiBase = new URLSearchParams(window.location.search).get("api");
+
+function normalizeApiBase(value) {
+  return String(value || "").trim().replace(/\/$/, "");
+}
+
 const state = {
-  apiBase: localStorage.getItem("microscore.apiBase") || "http://127.0.0.1:8000",
+  apiBase: normalizeApiBase(
+    queryApiBase || localStorage.getItem("microscore.apiBase") || DEFAULT_API_BASE,
+  ),
   token: localStorage.getItem("microscore.token") || "",
   role: localStorage.getItem("microscore.role") || "",
   email: localStorage.getItem("microscore.email") || "",
@@ -10,12 +25,15 @@ const state = {
 };
 
 const els = {
+  authScreen: document.querySelector("#authScreen"),
+  appShell: document.querySelector("#appShell"),
   apiBase: document.querySelector("#apiBase"),
   apiStatus: document.querySelector("#apiStatus"),
   checkApiButton: document.querySelector("#checkApiButton"),
   roleTabs: document.querySelectorAll(".role-tab"),
   views: document.querySelectorAll(".view-grid"),
   viewTitle: document.querySelector("#viewTitle"),
+  workspaceRoleLabel: document.querySelector("#workspaceRoleLabel"),
   authForm: document.querySelector("#authForm"),
   registerButton: document.querySelector("#registerButton"),
   email: document.querySelector("#email"),
@@ -58,6 +76,42 @@ const viewTitles = {
   adminView: "Admin workspace",
 };
 
+const roleDefaultViews = {
+  borrower: "borrowerView",
+  mfi_analyst: "mfiView",
+  admin: "adminView",
+};
+
+const roleLabels = {
+  borrower: "Borrower portal",
+  mfi_analyst: "MFI analyst console",
+  admin: "Admin console",
+};
+
+const roleAllowedViews = {
+  borrower: ["borrowerView"],
+  mfi_analyst: ["mfiView"],
+  admin: ["adminView", "mfiView"],
+};
+
+const routeToView = {
+  "#/borrower": "borrowerView",
+  "#/mfi": "mfiView",
+  "#/admin": "adminView",
+};
+
+const viewToRoute = {
+  borrowerView: "#/borrower",
+  mfiView: "#/mfi",
+  adminView: "#/admin",
+};
+
+const roleDefaultRoutes = {
+  borrower: "#/borrower",
+  mfi_analyst: "#/mfi",
+  admin: "#/admin",
+};
+
 const demoApplication = {
   requested_amount: 3000,
   purpose: "working capital",
@@ -89,15 +143,150 @@ function clearSession() {
   state.email = "";
   saveSession();
   updateSessionStrip();
+  navigateToRoute("#/login");
 }
 
 function updateSessionStrip() {
   if (state.token) {
     els.sessionRole.textContent = `${state.role} - ${state.email}`;
     els.sessionRole.classList.remove("muted");
+    els.workspaceRoleLabel.textContent = roleLabels[state.role] || "Personal workspace";
   } else {
     els.sessionRole.textContent = "No session";
     els.sessionRole.classList.add("muted");
+    els.workspaceRoleLabel.textContent = "Personal workspace";
+  }
+}
+
+function currentAllowedViews() {
+  return roleAllowedViews[state.role] || [];
+}
+
+function configureRoleNavigation() {
+  const allowedViews = currentAllowedViews();
+  els.roleTabs.forEach((tab) => {
+    const roles = String(tab.dataset.roles || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    tab.hidden = !roles.includes(state.role);
+  });
+  els.views.forEach((view) => {
+    view.hidden = !allowedViews.includes(view.id);
+  });
+}
+
+function currentRoute() {
+  return window.location.hash || "#/login";
+}
+
+function routeForRole(role) {
+  return roleDefaultRoutes[role] || "#/borrower";
+}
+
+function viewForRoute(route) {
+  return routeToView[route] || null;
+}
+
+function routeUrl(route) {
+  return `${window.location.pathname}${window.location.search}${route}`;
+}
+
+function replaceRoute(route) {
+  window.history.replaceState(null, "", routeUrl(route));
+}
+
+function navigateToRoute(route) {
+  if (window.location.hash === route) {
+    applyRoute();
+    return;
+  }
+  window.location.hash = route;
+}
+
+function navigateToRole(role) {
+  navigateToRoute(routeForRole(role));
+}
+
+function navigateToView(viewId) {
+  const route = viewToRoute[viewId];
+  if (route) navigateToRoute(route);
+}
+
+function applyRoute() {
+  const signedIn = Boolean(state.token);
+
+  if (!signedIn) {
+    if (window.location.hash !== "#/login") replaceRoute("#/login");
+    setAppMode();
+    return;
+  }
+
+  configureRoleNavigation();
+  const allowedViews = currentAllowedViews();
+  const fallbackView = roleDefaultViews[state.role] || allowedViews[0] || "borrowerView";
+  const requestedView = viewForRoute(currentRoute());
+  const targetView = requestedView && allowedViews.includes(requestedView)
+    ? requestedView
+    : fallbackView;
+  const targetRoute = viewToRoute[targetView];
+
+  if (targetRoute && currentRoute() !== targetRoute) {
+    replaceRoute(targetRoute);
+  }
+
+  setAppMode(targetView);
+}
+
+function setAppMode(targetView = null) {
+  const signedIn = Boolean(state.token);
+  document.body.classList.toggle("logged-in", signedIn);
+  document.body.classList.toggle("logged-out", !signedIn);
+  updateSessionStrip();
+
+  if (signedIn) {
+    configureRoleNavigation();
+    switchView(targetView || roleDefaultViews[state.role] || currentAllowedViews()[0] || "borrowerView", {
+      updateRoute: false,
+    });
+    showAppPage();
+  } else {
+    showAuthPage();
+  }
+}
+
+function showAppPage() {
+  const shouldAnimate = els.appShell.hidden;
+  els.appShell.hidden = false;
+  if (shouldAnimate) {
+    els.appShell.classList.add("page-enter");
+    if (!els.authScreen.hidden) {
+      els.authScreen.classList.add("page-exit");
+    }
+    window.scrollTo(0, 0);
+    window.setTimeout(() => {
+      els.authScreen.hidden = true;
+      els.authScreen.classList.remove("page-exit");
+      els.appShell.classList.remove("page-enter");
+    }, 280);
+  } else {
+    els.authScreen.hidden = true;
+  }
+}
+
+function showAuthPage() {
+  const shouldAnimate = !els.appShell.hidden;
+  els.authScreen.hidden = false;
+  if (shouldAnimate) {
+    els.authScreen.classList.add("page-enter");
+    els.appShell.classList.add("page-exit");
+    window.scrollTo(0, 0);
+    window.setTimeout(() => {
+      els.appShell.hidden = true;
+      els.appShell.classList.remove("page-exit");
+      els.authScreen.classList.remove("page-enter");
+    }, 280);
+  } else {
+    els.appShell.hidden = true;
   }
 }
 
@@ -185,24 +374,49 @@ function downloadBlob(blob, filename) {
 }
 
 async function checkApi() {
-  state.apiBase = els.apiBase.value.trim().replace(/\/$/, "");
-  saveSession();
+  const requestedBase = normalizeApiBase(els.apiBase.value) || state.apiBase || DEFAULT_API_BASE;
+  const candidates = Array.from(new Set([requestedBase, ...API_BASE_CANDIDATES]));
   els.apiStatus.textContent = "Checking API...";
   els.apiStatus.className = "status-line neutral";
-  try {
-    const health = await apiFetch("/health", { headers: {} });
-    els.apiStatus.textContent = `${health.status} - ${health.service}`;
-    els.apiStatus.className = "status-line ok";
-  } catch (error) {
-    els.apiStatus.textContent = `Offline - ${error.message}`;
-    els.apiStatus.className = "status-line error";
+
+  for (const base of candidates) {
+    try {
+      const health = await fetchHealth(base);
+      state.apiBase = base;
+      els.apiBase.value = base;
+      saveSession();
+      els.apiStatus.textContent = `${health.status} - ${health.service}`;
+      els.apiStatus.className = "status-line ok";
+      return true;
+    } catch (_error) {
+      // Try the next local development port.
+    }
   }
+
+  state.apiBase = requestedBase;
+  els.apiBase.value = requestedBase;
+  saveSession();
+  els.apiStatus.textContent = "Offline - start MicroScore and retry";
+  els.apiStatus.className = "status-line error";
+  return false;
 }
 
-function switchView(viewId) {
-  els.views.forEach((view) => view.classList.toggle("active-view", view.id === viewId));
-  els.roleTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.view === viewId));
-  els.viewTitle.textContent = viewTitles[viewId];
+async function fetchHealth(apiBase) {
+  const response = await fetch(`${apiBase}/health`);
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(data?.detail || response.statusText);
+  return data;
+}
+
+function switchView(viewId, options = {}) {
+  const { updateRoute = true } = options;
+  const allowedViews = currentAllowedViews();
+  const targetView = allowedViews.includes(viewId) ? viewId : allowedViews[0] || viewId;
+  els.views.forEach((view) => view.classList.toggle("active-view", view.id === targetView));
+  els.roleTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.view === targetView));
+  els.viewTitle.textContent = viewTitles[targetView] || "Workspace";
+  if (updateRoute) navigateToView(targetView);
 }
 
 async function authenticate(mode) {
@@ -222,14 +436,34 @@ async function authenticate(mode) {
   state.role = auth.role;
   state.email = payload.email;
   saveSession();
-  updateSessionStrip();
+  navigateToRole(auth.role);
   showMessage(`Signed in as ${auth.role}`, "ok");
+  return auth;
 }
 
 function fillDemoCredentials(email, role) {
   els.email.value = email;
   els.password.value = "password123";
   els.role.value = role;
+}
+
+async function enterDemoWorkspace(email, role) {
+  fillDemoCredentials(email, role);
+  const online = await checkApi();
+  if (!online) {
+    showMessage("Start MicroScore first, then try demo entry again", "error");
+    return;
+  }
+  await authenticate("login");
+  await loadRoleWorkspace(role);
+}
+
+async function loadRoleWorkspace(role) {
+  if (role === "mfi_analyst") {
+    await refreshApplications();
+  } else if (role === "admin") {
+    await refreshAudit();
+  }
 }
 
 function formNumber(form, name) {
@@ -1135,6 +1369,7 @@ function renderSimpleTable(container, rows, columns) {
 
 function wireEvents() {
   els.apiBase.value = state.apiBase;
+  window.addEventListener("hashchange", applyRoute);
   els.checkApiButton.addEventListener("click", () => checkApi());
   els.apiBase.addEventListener("change", () => checkApi());
   els.roleTabs.forEach((tab) => {
@@ -1142,17 +1377,24 @@ function wireEvents() {
   });
   els.authForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    authenticate("login").catch((error) => showMessage(error.message, "error"));
+    authenticate("login")
+      .then((auth) => loadRoleWorkspace(auth.role))
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.registerButton.addEventListener("click", () => {
-    authenticate("register").catch((error) => showMessage(error.message, "error"));
+    authenticate("register")
+      .then((auth) => loadRoleWorkspace(auth.role))
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.logoutButton.addEventListener("click", () => {
     clearSession();
     showMessage("Signed out", "info");
   });
   els.demoButtons.forEach((button) => {
-    button.addEventListener("click", () => fillDemoCredentials(button.dataset.demo, button.dataset.role));
+    button.addEventListener("click", () => {
+      enterDemoWorkspace(button.dataset.demo, button.dataset.role)
+        .catch((error) => showMessage(error.message, "error"));
+    });
   });
   els.fillDemoApplication.addEventListener("click", () => fillApplicationForm(demoApplication));
   els.applicationForm.addEventListener("submit", (event) => {
@@ -1195,7 +1437,7 @@ function wireEvents() {
 }
 
 function restoreState() {
-  updateSessionStrip();
+  applyRoute();
   fillApplicationForm(demoApplication);
   const lastApplicationId = localStorage.getItem("microscore.lastApplicationId");
   if (lastApplicationId) els.borrowerApplicationId.value = lastApplicationId;
