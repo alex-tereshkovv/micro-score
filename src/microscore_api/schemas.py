@@ -10,6 +10,7 @@ Role = Literal["borrower", "mfi_analyst", "admin"]
 RiskBand = Literal["low", "medium", "high"]
 ExplanationDirection = Literal["increases_risk", "reduces_risk"]
 ApplicationDecision = Literal["approve", "review", "decline"]
+ReviewChecklistStatus = Literal["required", "suggested", "complete"]
 
 
 class RegisterRequest(BaseModel):
@@ -114,6 +115,15 @@ class ApplicationDecisionResponse(BaseModel):
     created_at: str
 
 
+class ApplicationTimelineEventResponse(BaseModel):
+    id: int
+    action: str
+    title: str
+    actor_email: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+
+
 class LoanApplicationResponse(BaseModel):
     id: str
     borrower_email: str
@@ -127,6 +137,50 @@ class LoanApplicationResponse(BaseModel):
     decision_result: ApplicationDecisionResponse | None = None
     created_at: str
     scored_at: str | None = None
+
+
+class ReviewPacketApplicationSummary(BaseModel):
+    id: str
+    borrower_email: str
+    status: str
+    requested_amount: float
+    purpose: str
+    district: str | None = None
+    settlement_type: str | None = None
+    created_at: str
+    scored_at: str | None = None
+
+
+class ReviewPacketModelSummary(BaseModel):
+    model_name: str
+    model_version: str
+    risk_band: RiskBand
+    high_risk_probability: float = Field(ge=0.0, le=1.0)
+    proxy_sensitivity_delta: float | None = Field(default=None, ge=0.0)
+    missing_feature_count: int = Field(default=0, ge=0)
+
+
+class ReviewChecklistItem(BaseModel):
+    code: str
+    title: str
+    status: ReviewChecklistStatus
+    evidence: str | None = None
+
+
+class ApplicationReviewPacketResponse(BaseModel):
+    application_id: str
+    generated_at: str
+    application: ReviewPacketApplicationSummary
+    model_summary: ReviewPacketModelSummary | None = None
+    decision_support: DecisionSupportResponse | None = None
+    analyst_decision: ApplicationDecisionResponse | None = None
+    timeline_events: list[ApplicationTimelineEventResponse] = Field(default_factory=list)
+    scenario_scores: list[ScenarioScoreResponse] = Field(default_factory=list)
+    top_risk_factors: list[ScoreFactor] = Field(default_factory=list)
+    top_protective_factors: list[ScoreFactor] = Field(default_factory=list)
+    governance_flags: list[str] = Field(default_factory=list)
+    checklist: list[ReviewChecklistItem] = Field(default_factory=list)
+    audit_note: str
 
 
 class SegmentAnalyticsRow(BaseModel):

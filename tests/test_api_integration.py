@@ -110,6 +110,35 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(decision_payload["decision"], "review")
         self.assertEqual(decision_payload["policy_name"], "balanced_review")
 
+        timeline_response = self.client.get(
+            f"/applications/{application_id}/timeline",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(timeline_response.status_code, 200, timeline_response.text)
+        timeline = timeline_response.json()
+        self.assertEqual(
+            [event["action"] for event in timeline],
+            [
+                "application_created",
+                "application_scored",
+                "application_decision_recorded",
+            ],
+        )
+        self.assertTrue(all(event["title"] for event in timeline))
+
+        review_packet_response = self.client.get(
+            f"/mfi/applications/{application_id}/review-packet",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(review_packet_response.status_code, 200, review_packet_response.text)
+        review_packet = review_packet_response.json()
+        self.assertEqual(review_packet["application_id"], application_id)
+        self.assertEqual(review_packet["application"]["borrower_email"], "borrower@example.com")
+        self.assertEqual(review_packet["analyst_decision"]["decision"], "review")
+        self.assertEqual(len(review_packet["timeline_events"]), 3)
+        self.assertTrue(review_packet["checklist"])
+        self.assertIn("audit_note", review_packet)
+
         analytics_response = self.client.get(
             "/mfi/analytics/segments",
             headers=self._headers(analyst_token),
@@ -152,6 +181,19 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(decision_analytics["recommendation_rows"])
         self.assertTrue(decision_analytics["proxy_rows"])
 
+        export_response = self.client.get(
+            "/mfi/applications/export.csv",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(export_response.status_code, 200, export_response.text)
+        self.assertIn("text/csv", export_response.headers["content-type"])
+        self.assertIn("microscore-applications.csv", export_response.headers["content-disposition"])
+        csv_text = export_response.text
+        self.assertIn("application_id,borrower_email,status", csv_text)
+        self.assertIn(application_id, csv_text)
+        self.assertIn("borrower@example.com", csv_text)
+        self.assertIn("balanced_review", csv_text)
+
         admin_token = self._register("admin@example.com", "admin")
         audit_response = self.client.get(
             "/admin/audit-events",
@@ -172,6 +214,11 @@ class ApiIntegrationTests(unittest.TestCase):
         schemas = response.json()["components"]["schemas"]
         self.assertIn("ApplicationDecisionCreate", schemas)
         self.assertIn("ApplicationDecisionResponse", schemas)
+        self.assertIn("ApplicationTimelineEventResponse", schemas)
+        self.assertIn("ApplicationReviewPacketResponse", schemas)
+        self.assertIn("ReviewPacketApplicationSummary", schemas)
+        self.assertIn("ReviewPacketModelSummary", schemas)
+        self.assertIn("ReviewChecklistItem", schemas)
         self.assertIn("DecisionAnalyticsResponse", schemas)
         self.assertIn("DecisionAnalyticsRow", schemas)
         self.assertIn("DecisionPolicyAnalyticsRow", schemas)

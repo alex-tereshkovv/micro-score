@@ -143,6 +143,8 @@ class ApiDatabaseTests(unittest.TestCase):
         )
 
         analytics = reopened.decision_analytics()
+        timeline = reopened.list_application_timeline("app-1")
+
         self.assertEqual(analytics["application_count"], 1)
         self.assertEqual(analytics["decided_application_count"], 1)
         self.assertTrue(
@@ -174,6 +176,14 @@ class ApiDatabaseTests(unittest.TestCase):
                 row["proxy_sensitivity_bucket"] == "proxy_sensitive"
                 for row in analytics["proxy_rows"]
             )
+        )
+        self.assertEqual(
+            [event["action"] for event in timeline],
+            [
+                "application_created",
+                "application_scored",
+                "application_decision_recorded",
+            ],
         )
 
     def test_clear_applications_keeps_users_and_records_audit_event(self) -> None:

@@ -45,8 +45,11 @@ class WebStaticTests(unittest.TestCase):
             "/auth/register",
             "/auth/login",
             "/applications",
+            "/timeline",
             "/mfi/applications",
+            "/mfi/applications/export.csv",
             "/decision",
+            "/review-packet",
             "/mfi/analytics/segments",
             "/mfi/analytics/policies",
             "/mfi/analytics/decisions",
@@ -60,6 +63,14 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Local explanation", script)
         self.assertIn("MFI decision", script)
         self.assertIn("saveApplicationDecision", script)
+        self.assertIn("Review packet", markup)
+        self.assertIn("loadReviewPacket", script)
+        self.assertIn("renderReviewPacket", script)
+        self.assertIn("Application timeline", script)
+        self.assertIn("renderApplicationTimeline", script)
+        self.assertIn("Export CSV", markup)
+        self.assertIn("exportApplicationsCsv", script)
+        self.assertIn("microscore-applications.csv", script)
         self.assertIn("Analyst decisions", script)
         self.assertIn("renderPortfolioDecisionSnapshot", script)
         self.assertIn("Decision audit", markup)

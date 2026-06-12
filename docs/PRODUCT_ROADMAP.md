@@ -30,12 +30,13 @@ Borrower side:
 - borrower profile
 - loan application form
 - financial-behavior questionnaire
-- application submission status
+- application submission status and timeline
 
 MFI side:
 
 - secure analyst login
 - application list
+- application timeline/status history
 - borrower-level risk summary
 - model probability and risk band
 - top contributing factors
@@ -190,8 +191,10 @@ Goal: build MFI analytics dashboard.
 - analyst login
 - application queue
 - borrower risk detail page
+- application timeline/status history
 - top factors and explanations
 - analyst decision capture
+- review packet with governance flags and human-review checklist
 - analyst decision analytics by risk, district, proxy sensitivity, and recommendation
 - threshold analytics
 - regional/segment dashboards
@@ -231,8 +234,10 @@ SQLite persistence for users, sessions, applications, score results, and audit
 events. The API also has demo seed data, typed response schemas, an API contract
 document, integration tests for the complete borrower/MFI/admin flow, dual
 standard/thin-file scoring, decision-support recommendations, and a static web
-prototype in `apps/web/`. The MFI workspace now includes a Policy Lab that
-compares approve/review/decline threshold policies on scored applications. The
+prototype in `apps/web/`. The MFI workspace now includes application timeline
+views, review packets, portfolio CSV export, decision audit analytics, and a
+Policy Lab that compares approve/review/decline threshold policies on scored
+applications. The
 project also now generates reproducible research artifacts under
 `reports/research-artifacts/`: model metrics, ablation results, calibration
 bins, calibration/ablation plots, and example local explanations.

@@ -684,6 +684,26 @@ class MicroScoreRepository:
             events.append(event)
         return events
 
+    def list_application_timeline(self, application_id: str) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM audit_events
+                WHERE entity_type = 'loan_application'
+                  AND entity_id = ?
+                ORDER BY id ASC
+                """,
+                (application_id,),
+            ).fetchall()
+
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            event = dict(row)
+            event["details"] = _json_loads(event.pop("details_json"))
+            events.append(event)
+        return events
+
     def _application_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         application = dict(row)
         application["behavioral_signals"] = _json_loads(

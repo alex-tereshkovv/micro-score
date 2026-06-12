@@ -231,9 +231,12 @@
                 <p class="eyebrow">MFI</p>
                 <h3 id="mfi-title">Application queue</h3>
               </div>
-              <button id="refreshApplications" class="icon-button" type="button" title="Refresh queue">
-                <span aria-hidden="true">&#8635;</span>
-              </button>
+              <div class="button-row">
+                <button id="exportApplications" class="secondary-button" type="button">Export CSV</button>
+                <button id="refreshApplications" class="icon-button" type="button" title="Refresh queue">
+                  <span aria-hidden="true">&#8635;</span>
+                </button>
+              </div>
             </div>
             <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
           </section>
@@ -244,9 +247,13 @@
                 <p class="eyebrow">Risk</p>
                 <h3>Score detail</h3>
               </div>
-              <button id="scoreSelectedApplication" class="primary-button" type="button">Score</button>
+              <div class="button-row">
+                <button id="loadReviewPacket" class="secondary-button" type="button">Review packet</button>
+                <button id="scoreSelectedApplication" class="primary-button" type="button">Score</button>
+              </div>
             </div>
             <div id="scoreDetail" class="result-block empty">Select an application.</div>
+            <div id="reviewPacket" class="result-block empty">Open a review packet.</div>
             <form id="decisionForm" class="mfi-decision-form">
               <label>
                 Decision

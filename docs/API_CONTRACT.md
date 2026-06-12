@@ -156,6 +156,22 @@ Response schema:
 - `LoanApplicationResponse`
 - includes `score_result: null` until an MFI analyst scores the application
 
+Application timeline:
+
+```http
+GET /applications/{application_id}/timeline
+```
+
+Response schema:
+
+- `ApplicationTimelineEventResponse`
+- chronological events for one application
+- currently includes application submission, scoring, and recorded analyst
+  decisions when those events exist
+
+Borrowers can only access timelines for their own applications. MFI/admin users
+can access timelines for the review queue.
+
 ## MFI Analyst Flow
 
 List applications:
@@ -163,6 +179,17 @@ List applications:
 ```http
 GET /mfi/applications
 ```
+
+Export application portfolio:
+
+```http
+GET /mfi/applications/export.csv
+```
+
+This returns a CSV file for MFI analyst review. It includes application fields,
+model risk fields, recommendation fields, latest analyst decision fields, and
+governance flags. It is intended for pilot demos and internal review, not for
+sharing real borrower data without consent and privacy controls.
 
 Score an application:
 
@@ -226,6 +253,27 @@ This endpoint requires the application to be scored first. The response is a
 `LoanApplicationResponse` with `decision_result`. This field records the human
 analyst decision, not an automatic model decision. Recording a decision also
 creates an `application_decision_recorded` audit event.
+
+Open an analyst review packet:
+
+```http
+GET /mfi/applications/{application_id}/review-packet
+```
+
+Response schema:
+
+- `ApplicationReviewPacketResponse`
+- application summary
+- model risk summary
+- scenario scores and local explanation factors
+- latest analyst decision, if recorded
+- application timeline events
+- governance flags such as proxy-sensitive score or missing model features
+- review checklist items for human oversight
+
+The review packet is designed as an internal MFI review aid. It summarizes what
+the model and analyst workflow currently know, but it is not a legal credit
+decision record and does not include validated repayment outcomes.
 
 `explanation` provides local additive explanation fields for the current
 Logistic Regression scoring model:

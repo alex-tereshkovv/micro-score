@@ -33,9 +33,12 @@ const els = {
   borrowerApplicationCard: document.querySelector("#borrowerApplicationCard"),
   portfolioOverview: document.querySelector("#portfolioOverview"),
   refreshApplications: document.querySelector("#refreshApplications"),
+  exportApplications: document.querySelector("#exportApplications"),
   applicationsTable: document.querySelector("#applicationsTable"),
   scoreSelectedApplication: document.querySelector("#scoreSelectedApplication"),
+  loadReviewPacket: document.querySelector("#loadReviewPacket"),
   scoreDetail: document.querySelector("#scoreDetail"),
+  reviewPacket: document.querySelector("#reviewPacket"),
   decisionForm: document.querySelector("#decisionForm"),
   refreshAnalytics: document.querySelector("#refreshAnalytics"),
   segmentAnalytics: document.querySelector("#segmentAnalytics"),
@@ -159,6 +162,28 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
+async function apiBlob(path) {
+  const headers = {};
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const response = await fetch(`${state.apiBase}${path}`, { headers });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Request failed: ${response.status}`);
+  }
+  return response.blob();
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function checkApi() {
   state.apiBase = els.apiBase.value.trim().replace(/\/$/, "");
   saveSession();
@@ -264,6 +289,8 @@ function resetApplicationViews() {
 
   els.scoreDetail.className = "result-block empty";
   els.scoreDetail.textContent = "Select an application.";
+  els.reviewPacket.className = "result-block empty";
+  els.reviewPacket.textContent = "Open a review packet.";
   els.decisionForm.reset();
 
   els.portfolioOverview.className = "portfolio-overview empty";
@@ -285,6 +312,7 @@ function renderApplication(application) {
   const score = application.score_result;
   const riskClass = score ? `risk-${score.risk_band}` : "";
   const decision = renderRecordedDecision(application.decision_result);
+  const timeline = renderApplicationTimeline(application.timeline_events);
   return `
     <div class="metric-grid">
       <div class="metric"><span>Status</span><strong>${escapeHtml(application.status)}</strong></div>
@@ -295,7 +323,48 @@ function renderApplication(application) {
     <p class="record-line"><strong>ID:</strong> ${escapeHtml(application.id)}</p>
     ${decision}
     ${score ? renderScore(score) : ""}
+    ${timeline}
   `;
+}
+
+function renderApplicationTimeline(events) {
+  if (!events?.length) return "";
+
+  const rows = events
+    .map(
+      (event) => `
+        <li>
+          <div>
+            <strong>${escapeHtml(event.title || formatPolicyName(event.action))}</strong>
+            <span>${escapeHtml(event.actor_email || "system")}</span>
+          </div>
+          <em>${escapeHtml(event.created_at)}</em>
+          ${renderTimelineDetails(event.details)}
+        </li>
+      `,
+    )
+    .join("");
+  return `
+    <div class="timeline-block">
+      <h4>Application timeline</h4>
+      <ol>${rows}</ol>
+    </div>
+  `;
+}
+
+function renderTimelineDetails(details) {
+  const entries = Object.entries(details || {});
+  if (!entries.length) return "";
+  const text = entries
+    .map(([key, value]) => `${formatPolicyName(key)}: ${formatTimelineValue(value)}`)
+    .join(" · ");
+  return `<p>${escapeHtml(text)}</p>`;
+}
+
+function formatTimelineValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return formatMoney(value);
+  return formatPolicyName(value);
 }
 
 function renderRecordedDecision(decision) {
@@ -444,8 +513,9 @@ async function submitApplication(event) {
     body: JSON.stringify(applicationPayload()),
   });
   rememberApplication(application.id);
+  const applicationWithTimeline = await attachApplicationTimeline(application);
   els.borrowerApplicationCard.classList.remove("empty");
-  els.borrowerApplicationCard.innerHTML = renderApplication(application);
+  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
   showMessage("Application submitted", "ok");
 }
 
@@ -456,8 +526,14 @@ async function loadBorrowerApplication() {
     return;
   }
   const application = await apiFetch(`/applications/${encodeURIComponent(id)}`);
+  const applicationWithTimeline = await attachApplicationTimeline(application);
   els.borrowerApplicationCard.classList.remove("empty");
-  els.borrowerApplicationCard.innerHTML = renderApplication(application);
+  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
+}
+
+async function attachApplicationTimeline(application) {
+  const timeline = await apiFetch(`/applications/${encodeURIComponent(application.id)}/timeline`);
+  return { ...application, timeline_events: timeline };
 }
 
 function renderApplicationsTable(applications) {
@@ -497,6 +573,23 @@ function selectApplication(applicationId) {
   const application = state.applications.find((item) => item.id === applicationId);
   renderApplicationsTable(state.applications);
   els.scoreDetail.classList.remove("empty");
+  els.scoreDetail.innerHTML = application ? renderApplication(application) : "Select an application.";
+  els.reviewPacket.className = "result-block empty";
+  els.reviewPacket.textContent = "Open a review packet.";
+  if (application) {
+    loadSelectedApplicationTimeline(application.id).catch((error) =>
+      showMessage(error.message, "error"),
+    );
+  }
+}
+
+async function loadSelectedApplicationTimeline(applicationId) {
+  const timeline = await apiFetch(`/applications/${encodeURIComponent(applicationId)}/timeline`);
+  state.applications = state.applications.map((item) =>
+    item.id === applicationId ? { ...item, timeline_events: timeline } : item,
+  );
+  if (state.selectedApplicationId !== applicationId) return;
+  const application = state.applications.find((item) => item.id === applicationId);
   els.scoreDetail.innerHTML = application ? renderApplication(application) : "Select an application.";
 }
 
@@ -697,6 +790,12 @@ async function refreshApplications() {
   await refreshDecisionAnalytics();
 }
 
+async function exportApplicationsCsv() {
+  const blob = await apiBlob("/mfi/applications/export.csv");
+  downloadBlob(blob, "microscore-applications.csv");
+  showMessage("Portfolio CSV exported", "ok");
+}
+
 async function scoreSelectedApplication() {
   if (!state.selectedApplicationId) {
     showMessage("Select an application first", "error");
@@ -710,6 +809,94 @@ async function scoreSelectedApplication() {
   await refreshAnalytics();
   await refreshPolicyAnalytics();
   showMessage("Application scored", "ok");
+}
+
+async function loadReviewPacket() {
+  if (!state.selectedApplicationId) {
+    showMessage("Select an application first", "error");
+    return;
+  }
+
+  const packet = await apiFetch(
+    `/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/review-packet`,
+  );
+  els.reviewPacket.classList.remove("empty");
+  els.reviewPacket.innerHTML = renderReviewPacket(packet);
+}
+
+function renderReviewPacket(packet) {
+  const model = packet.model_summary;
+  const decision = packet.analyst_decision;
+  const flags = (packet.governance_flags || [])
+    .map((flag) => `<span>${escapeHtml(formatPolicyName(flag))}</span>`)
+    .join("");
+  const checklist = (packet.checklist || [])
+    .map(
+      (item) => `
+        <li class="checklist-${escapeHtml(item.status)}">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(formatPolicyName(item.status))}${item.evidence ? ` · ${escapeHtml(item.evidence)}` : ""}</span>
+        </li>
+      `,
+    )
+    .join("");
+  const riskFactors = renderPacketFactors(packet.top_risk_factors, "Raises risk");
+  const protectiveFactors = renderPacketFactors(packet.top_protective_factors, "Reduces risk");
+  const timeline = renderApplicationTimeline(packet.timeline_events);
+
+  return `
+    <div class="review-packet">
+      <div class="packet-heading">
+        <div>
+          <span>Review packet</span>
+          <strong>${escapeHtml(packet.application_id)}</strong>
+        </div>
+        <em>${escapeHtml(packet.generated_at)}</em>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><span>Risk</span><strong class="${model ? `risk-${escapeHtml(model.risk_band)}` : ""}">${model ? escapeHtml(model.risk_band) : "not scored"}</strong></div>
+        <div class="metric"><span>Probability</span><strong>${model ? formatPercent(model.high_risk_probability) : "-"}</strong></div>
+        <div class="metric"><span>Proxy delta</span><strong>${model ? formatPercent(model.proxy_sensitivity_delta) : "-"}</strong></div>
+        <div class="metric"><span>Decision</span><strong>${decision ? escapeHtml(formatPolicyName(decision.decision)) : "not recorded"}</strong></div>
+      </div>
+      <div class="packet-flags">${flags || "<span>No governance flags</span>"}</div>
+      <div class="packet-columns">
+        <section>
+          <h4>Checklist</h4>
+          <ul class="packet-checklist">${checklist}</ul>
+        </section>
+        <section>
+          <h4>Factors</h4>
+          ${riskFactors}
+          ${protectiveFactors}
+        </section>
+      </div>
+      ${timeline}
+      <p class="packet-note">${escapeHtml(packet.audit_note)}</p>
+    </div>
+  `;
+}
+
+function renderPacketFactors(factors, title) {
+  if (!factors?.length) {
+    return `<div class="packet-factor-group"><strong>${escapeHtml(title)}</strong><p class="tiny-text">No factors available.</p></div>`;
+  }
+  const rows = factors
+    .map(
+      (factor) => `
+        <li>
+          <span>${escapeHtml(factor.label || factor.feature)}</span>
+          <strong>${Number(factor.value || 0).toFixed(3)}</strong>
+        </li>
+      `,
+    )
+    .join("");
+  return `
+    <div class="packet-factor-group">
+      <strong>${escapeHtml(title)}</strong>
+      <ul>${rows}</ul>
+    </div>
+  `;
 }
 
 function decisionPayload() {
@@ -739,6 +926,7 @@ async function saveApplicationDecision() {
   state.applications = state.applications.map((item) => (item.id === updated.id ? updated : item));
   selectApplication(updated.id);
   await refreshDecisionAnalytics();
+  await loadReviewPacket();
   showMessage("MFI decision saved", "ok");
 }
 
@@ -979,8 +1167,14 @@ function wireEvents() {
   els.refreshApplications.addEventListener("click", () => {
     refreshApplications().catch((error) => showMessage(error.message, "error"));
   });
+  els.exportApplications.addEventListener("click", () => {
+    exportApplicationsCsv().catch((error) => showMessage(error.message, "error"));
+  });
   els.scoreSelectedApplication.addEventListener("click", () => {
     scoreSelectedApplication().catch((error) => showMessage(error.message, "error"));
+  });
+  els.loadReviewPacket.addEventListener("click", () => {
+    loadReviewPacket().catch((error) => showMessage(error.message, "error"));
   });
   els.decisionForm.addEventListener("submit", (event) => {
     event.preventDefault();

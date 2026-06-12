@@ -335,9 +335,12 @@ Current API scope:
 - `GET /me`
 - `POST /applications`
 - `GET /applications/{application_id}`
+- `GET /applications/{application_id}/timeline`
 - `GET /mfi/applications`
+- `GET /mfi/applications/export.csv`
 - `POST /mfi/applications/{application_id}/score`
 - `POST /mfi/applications/{application_id}/decision`
+- `GET /mfi/applications/{application_id}/review-packet`
 - `GET /mfi/analytics/segments`
 - `GET /mfi/analytics/policies`
 - `GET /mfi/analytics/decisions`
@@ -354,10 +357,12 @@ The database path can be changed with `MICROSCORE_API_DB_PATH`. Runtime database
 files are ignored by Git; only `data/app/.gitkeep` is tracked.
 
 The API flow is covered by integration tests: borrower registration,
-application submission, MFI scoring, analyst decision capture, decision audit
-analytics, segment analytics, policy analytics, and admin audit events.
+application submission, application timeline, MFI scoring, analyst decision
+capture, review packets, portfolio CSV export, decision audit analytics,
+segment analytics, policy analytics, and admin audit events.
 OpenAPI now exposes typed response schemas for applications, score results,
-segment analytics, policy analytics, decision analytics, and audit events.
+review packets, segment analytics, policy analytics, decision analytics, and
+audit events.
 
 Loan applications persist in SQLite until an admin clears them or the local
 database file is removed. The current demo values use the synthetic dataset's
@@ -387,9 +392,12 @@ connects to the local API and supports:
 - borrower login/register
 - borrower loan application form
 - application status lookup
+- application timeline for borrower and MFI review
 - MFI application queue
+- MFI portfolio CSV export
 - application scoring
 - MFI analyst decision capture
+- MFI review packet with governance flags and checklist items
 - portfolio overview with risk-band, district, policy-mix, and decision charts
 - decision audit by risk band, district, proxy sensitivity, and recommendation
 - segment analytics
