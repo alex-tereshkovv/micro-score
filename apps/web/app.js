@@ -5,7 +5,14 @@ const API_BASE_CANDIDATES = [
   "http://127.0.0.1:8012",
   "http://127.0.0.1:8000",
 ];
-const queryApiBase = new URLSearchParams(window.location.search).get("api");
+const queryParams = new URLSearchParams(window.location.search);
+const queryApiBase = queryParams.get("api");
+const queryDemoMode = queryParams.get("demo");
+const forceStaticDemo = queryDemoMode === "static";
+const LOCAL_HOSTNAMES = new Set(["", "localhost", "127.0.0.1", "0.0.0.0", "::1"]);
+const hostedStaticPage = !LOCAL_HOSTNAMES.has(window.location.hostname);
+// A 15-point proxy swing is enough to make an analyst slow down. Real pilot data should get the final vote here.
+const HIGH_PROXY_SENSITIVITY_DELTA = 0.15;
 
 function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/$/, "");
@@ -18,6 +25,7 @@ const state = {
   token: localStorage.getItem("microscore.token") || "",
   role: localStorage.getItem("microscore.role") || "",
   email: localStorage.getItem("microscore.email") || "",
+  demoMode: forceStaticDemo || hostedStaticPage || localStorage.getItem("microscore.demoMode") === "static",
   selectedApplicationId: "",
   applications: [],
   policyAnalytics: null,
@@ -29,6 +37,8 @@ const els = {
   appShell: document.querySelector("#appShell"),
   apiBase: document.querySelector("#apiBase"),
   apiStatus: document.querySelector("#apiStatus"),
+  connectionTitle: document.querySelector("#connection-title"),
+  apiSettings: document.querySelector(".api-settings"),
   checkApiButton: document.querySelector("#checkApiButton"),
   roleTabs: document.querySelectorAll(".role-tab"),
   views: document.querySelectorAll(".view-grid"),
@@ -39,12 +49,15 @@ const els = {
   email: document.querySelector("#email"),
   password: document.querySelector("#password"),
   role: document.querySelector("#role"),
+  demoModePill: document.querySelector("#demoModePill"),
+  resetDemoData: document.querySelector("#resetDemoData"),
   sessionRole: document.querySelector("#sessionRole"),
   logoutButton: document.querySelector("#logoutButton"),
   messageArea: document.querySelector("#messageArea"),
   demoButtons: document.querySelectorAll("[data-demo]"),
   applicationForm: document.querySelector("#applicationForm"),
   fillDemoApplication: document.querySelector("#fillDemoApplication"),
+  borrowerConsent: document.querySelector("#borrowerConsent"),
   borrowerApplicationId: document.querySelector("#borrowerApplicationId"),
   loadBorrowerApplication: document.querySelector("#loadBorrowerApplication"),
   refreshBorrowerApplication: document.querySelector("#refreshBorrowerApplication"),
@@ -135,6 +148,11 @@ function saveSession() {
   localStorage.setItem("microscore.token", state.token);
   localStorage.setItem("microscore.role", state.role);
   localStorage.setItem("microscore.email", state.email);
+  if (state.demoMode) {
+    localStorage.setItem("microscore.demoMode", "static");
+  } else {
+    localStorage.removeItem("microscore.demoMode");
+  }
 }
 
 function clearSession() {
@@ -147,6 +165,9 @@ function clearSession() {
 }
 
 function updateSessionStrip() {
+  els.demoModePill.hidden = !state.demoMode;
+  els.resetDemoData.hidden = !state.demoMode;
+  syncConnectionPanel();
   if (state.token) {
     els.sessionRole.textContent = `${state.role} - ${state.email}`;
     els.sessionRole.classList.remove("muted");
@@ -156,6 +177,15 @@ function updateSessionStrip() {
     els.sessionRole.classList.add("muted");
     els.workspaceRoleLabel.textContent = "Personal workspace";
   }
+}
+
+function syncConnectionPanel() {
+  const demoMode = Boolean(state.demoMode);
+  els.connectionTitle.textContent = demoMode ? "Demo system" : "Local system";
+  els.apiSettings.hidden = demoMode;
+  els.checkApiButton.title = demoMode ? "Check demo system" : "Check API";
+  // Public demos should feel like a product, not like we accidentally left the localhost plumbing on the table.
+  els.checkApiButton.setAttribute("aria-label", els.checkApiButton.title);
 }
 
 function currentAllowedViews() {
@@ -331,16 +361,29 @@ function clampPercent(value) {
 }
 
 async function apiFetch(path, options = {}) {
+  if (state.demoMode && hasStaticDemoApi()) {
+    return staticDemoFetch(path, options);
+  }
+
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
-  const response = await fetch(`${state.apiBase}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${state.apiBase}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    if (hasStaticDemoApi()) {
+      activateStaticDemo("Static demo mode - API offline");
+      return staticDemoFetch(path, options);
+    }
+    throw error;
+  }
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -352,9 +395,22 @@ async function apiFetch(path, options = {}) {
 }
 
 async function apiBlob(path) {
+  if (state.demoMode && hasStaticDemoApi()) {
+    return window.MicroScoreMockApi.blob(path, { token: state.token, role: state.role, email: state.email });
+  }
+
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(`${state.apiBase}${path}`, { headers });
+  let response;
+  try {
+    response = await fetch(`${state.apiBase}${path}`, { headers });
+  } catch (error) {
+    if (hasStaticDemoApi()) {
+      activateStaticDemo("Static demo mode - API offline");
+      return window.MicroScoreMockApi.blob(path, { token: state.token, role: state.role, email: state.email });
+    }
+    throw error;
+  }
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed: ${response.status}`);
@@ -373,7 +429,33 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function hasStaticDemoApi() {
+  return Boolean(window.MicroScoreMockApi);
+}
+
+function staticDemoFetch(path, options = {}) {
+  return window.MicroScoreMockApi.request(path, options, {
+    token: state.token,
+    role: state.role,
+    email: state.email,
+  });
+}
+
+function activateStaticDemo(statusText = "Static demo mode - synthetic data only") {
+  if (!hasStaticDemoApi()) return false;
+  state.demoMode = true;
+  saveSession();
+  syncConnectionPanel();
+  els.apiStatus.textContent = statusText;
+  els.apiStatus.className = "status-line neutral";
+  return true;
+}
+
 async function checkApi() {
+  if (forceStaticDemo && activateStaticDemo()) {
+    return true;
+  }
+
   const requestedBase = normalizeApiBase(els.apiBase.value) || state.apiBase || DEFAULT_API_BASE;
   const candidates = Array.from(new Set([requestedBase, ...API_BASE_CANDIDATES]));
   els.apiStatus.textContent = "Checking API...";
@@ -382,9 +464,11 @@ async function checkApi() {
   for (const base of candidates) {
     try {
       const health = await fetchHealth(base);
+      state.demoMode = false;
       state.apiBase = base;
       els.apiBase.value = base;
       saveSession();
+      syncConnectionPanel();
       els.apiStatus.textContent = `${health.status} - ${health.service}`;
       els.apiStatus.className = "status-line ok";
       return true;
@@ -396,6 +480,9 @@ async function checkApi() {
   state.apiBase = requestedBase;
   els.apiBase.value = requestedBase;
   saveSession();
+  if (activateStaticDemo("Static demo mode - API offline")) {
+    return true;
+  }
   els.apiStatus.textContent = "Offline - start MicroScore and retry";
   els.apiStatus.className = "status-line error";
   return false;
@@ -466,6 +553,20 @@ async function loadRoleWorkspace(role) {
   }
 }
 
+async function resetStaticDemoData() {
+  if (!state.demoMode || !window.MicroScoreMockApi) return;
+
+  window.MicroScoreMockApi.resetDemo();
+  resetApplicationViews();
+  fillApplicationForm(demoApplication);
+
+  if (state.token) {
+    await loadRoleWorkspace(state.role);
+  }
+
+  showMessage("Static demo data reset", "ok");
+}
+
 function formNumber(form, name) {
   const raw = form.elements[name].value;
   return raw === "" ? undefined : Number(raw);
@@ -477,6 +578,10 @@ function fillApplicationForm(values) {
       els.applicationForm.elements[name].value = value;
     }
   });
+}
+
+function borrowerConsentAcknowledged() {
+  return Boolean(els.borrowerConsent?.checked);
 }
 
 function applicationPayload() {
@@ -507,6 +612,40 @@ function rememberApplication(id) {
   els.borrowerApplicationId.value = id;
 }
 
+function renderStateBlock(type, title, body) {
+  const spinner = type === "loading" ? "<span class=\"state-spinner\" aria-hidden=\"true\"></span>" : "";
+  return `
+    <div class="state-block state-${escapeHtml(type)}" role="status">
+      ${spinner}
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(body)}</span>
+    </div>
+  `;
+}
+
+function setPanelState(container, baseClass, type, title, body) {
+  const emptyClass = type === "empty" ? " empty" : "";
+  container.className = `${baseClass}${emptyClass} state-host state-host-${type}`;
+  container.innerHTML = renderStateBlock(type, title, body);
+}
+
+async function withButtonBusy(button, busyText, task) {
+  if (!button) return task();
+
+  const readyText = button.textContent;
+  button.disabled = true;
+  button.classList.add("is-busy");
+  if (busyText) button.textContent = busyText;
+
+  try {
+    return await task();
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+    button.textContent = readyText;
+  }
+}
+
 function resetApplicationViews() {
   localStorage.removeItem("microscore.lastApplicationId");
   state.selectedApplicationId = "";
@@ -515,31 +654,77 @@ function resetApplicationViews() {
   state.decisionAnalytics = null;
 
   els.borrowerApplicationId.value = "";
-  els.borrowerApplicationCard.className = "result-block empty";
-  els.borrowerApplicationCard.textContent = "No application selected.";
+  els.borrowerConsent.checked = false;
+  setPanelState(
+    els.borrowerApplicationCard,
+    "result-block",
+    "empty",
+    "No application selected",
+    "Submit or load an application to view its status.",
+  );
 
-  els.applicationsTable.className = "table-shell empty";
-  els.applicationsTable.textContent = "No applications loaded.";
+  setPanelState(
+    els.applicationsTable,
+    "table-shell",
+    "empty",
+    "No applications loaded",
+    "Refresh the queue or submit a borrower demo application.",
+  );
 
-  els.scoreDetail.className = "result-block empty";
-  els.scoreDetail.textContent = "Select an application.";
-  els.reviewPacket.className = "result-block empty";
-  els.reviewPacket.textContent = "Open a review packet.";
+  setPanelState(
+    els.scoreDetail,
+    "result-block",
+    "empty",
+    "Select an application",
+    "Choose a queue row to inspect score detail and timeline.",
+  );
+  setPanelState(
+    els.reviewPacket,
+    "result-block",
+    "empty",
+    "Open a review packet",
+    "Score an application, then open its governance packet.",
+  );
   els.decisionForm.reset();
 
-  els.portfolioOverview.className = "portfolio-overview empty";
-  els.portfolioOverview.textContent = "Load applications to view portfolio analytics.";
+  setPanelState(
+    els.portfolioOverview,
+    "portfolio-overview",
+    "empty",
+    "Portfolio not loaded",
+    "Load applications to view risk, district, policy, and decision analytics.",
+  );
 
-  els.segmentAnalytics.className = "table-shell empty";
-  els.segmentAnalytics.textContent = "No segment analytics loaded.";
+  setPanelState(
+    els.segmentAnalytics,
+    "table-shell",
+    "empty",
+    "No segment analytics loaded",
+    "Refresh analytics after applications are scored.",
+  );
 
   els.policyNote.textContent = "Score applications to compare policies.";
-  els.policyAnalytics.className = "policy-grid empty";
-  els.policyAnalytics.textContent = "No policy analytics loaded.";
-  els.policySegments.className = "table-shell empty";
-  els.policySegments.textContent = "No segment policy analytics loaded.";
-  els.decisionAudit.className = "table-shell empty";
-  els.decisionAudit.textContent = "No decision audit loaded.";
+  setPanelState(
+    els.policyAnalytics,
+    "policy-grid",
+    "empty",
+    "No policy analytics loaded",
+    "Score applications to compare approval strategies.",
+  );
+  setPanelState(
+    els.policySegments,
+    "table-shell",
+    "empty",
+    "No segment policy analytics loaded",
+    "Policy segments appear after scoring.",
+  );
+  setPanelState(
+    els.decisionAudit,
+    "table-shell",
+    "empty",
+    "No decision audit loaded",
+    "Recorded analyst decisions will appear here.",
+  );
 }
 
 function renderApplication(application) {
@@ -624,6 +809,7 @@ function renderScore(score) {
     .map((warning) => `<li>${escapeHtml(warning)}</li>`)
     .join("");
   const scenarios = renderScenarioScores(score);
+  const modelUseNotice = renderModelUseNotice(score);
   const decisionSupport = renderDecisionSupport(score.decision_support);
   const explanation = renderLocalExplanation(score.explanation, score.top_model_factors);
   return `
@@ -632,10 +818,38 @@ function renderScore(score) {
       <div class="metric"><span>Model</span><strong>${escapeHtml(score.model_version)}</strong></div>
       <div class="metric"><span>Proxy sensitivity</span><strong>${formatPercent(score.proxy_sensitivity_delta)}</strong></div>
     </div>
+    ${modelUseNotice}
     ${decisionSupport}
     ${scenarios}
     ${explanation}
     <ul class="warning-list">${warnings}</ul>
+  `;
+}
+
+function renderModelUseNotice(model) {
+  if (!model) {
+    return `
+      <aside class="model-use-notice notice-neutral" aria-label="Model use notice">
+        <strong>Not scored yet</strong>
+        <span>Score the application before using the review packet for a decision.</span>
+      </aside>
+    `;
+  }
+
+  const proxyDelta = Number(model.proxy_sensitivity_delta || 0);
+  const highProxySensitivity = proxyDelta >= HIGH_PROXY_SENSITIVITY_DELTA;
+  const noticeClass = highProxySensitivity ? "notice-caution" : "notice-neutral";
+  const title = highProxySensitivity ? "Manual review required" : "Decision-support only";
+  const body = highProxySensitivity
+    ? `Proxy sensitivity is ${formatPercent(proxyDelta)}. Treat this as a research signal and verify affordability, income stability, and borrower context before any action.`
+    : "Use this score as one input in a human review; the demo is synthetic and not validated for real lending decisions.";
+
+  // Keep this warning in the product surface, not only in docs. Future us may forget; auditors have annoyingly good memories.
+  return `
+    <aside class="model-use-notice ${noticeClass}" aria-label="Model use notice">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(body)}</span>
+    </aside>
   `;
 }
 
@@ -742,6 +956,11 @@ function renderScenarioScores(score) {
 
 async function submitApplication(event) {
   event.preventDefault();
+  if (!borrowerConsentAcknowledged()) {
+    showMessage("Confirm demo data consent before submitting", "error");
+    els.borrowerConsent.focus();
+    return;
+  }
   const application = await apiFetch("/applications", {
     method: "POST",
     body: JSON.stringify(applicationPayload()),
@@ -772,8 +991,13 @@ async function attachApplicationTimeline(application) {
 
 function renderApplicationsTable(applications) {
   if (!applications.length) {
-    els.applicationsTable.className = "table-shell empty";
-    els.applicationsTable.textContent = "No applications loaded.";
+    setPanelState(
+      els.applicationsTable,
+      "table-shell",
+      "empty",
+      "No applications loaded",
+      "Submit a borrower demo application or reset static demo data.",
+    );
     return;
   }
   els.applicationsTable.className = "table-shell";
@@ -807,9 +1031,25 @@ function selectApplication(applicationId) {
   const application = state.applications.find((item) => item.id === applicationId);
   renderApplicationsTable(state.applications);
   els.scoreDetail.classList.remove("empty");
-  els.scoreDetail.innerHTML = application ? renderApplication(application) : "Select an application.";
-  els.reviewPacket.className = "result-block empty";
-  els.reviewPacket.textContent = "Open a review packet.";
+  if (application) {
+    els.scoreDetail.className = "result-block";
+    els.scoreDetail.innerHTML = renderApplication(application);
+  } else {
+    setPanelState(
+      els.scoreDetail,
+      "result-block",
+      "empty",
+      "Select an application",
+      "Choose a queue row to inspect score detail and timeline.",
+    );
+  }
+  setPanelState(
+    els.reviewPacket,
+    "result-block",
+    "empty",
+    "Open a review packet",
+    "Score an application, then open its governance packet.",
+  );
   if (application) {
     loadSelectedApplicationTimeline(application.id).catch((error) =>
       showMessage(error.message, "error"),
@@ -824,7 +1064,10 @@ async function loadSelectedApplicationTimeline(applicationId) {
   );
   if (state.selectedApplicationId !== applicationId) return;
   const application = state.applications.find((item) => item.id === applicationId);
-  els.scoreDetail.innerHTML = application ? renderApplication(application) : "Select an application.";
+  if (application) {
+    els.scoreDetail.className = "result-block";
+    els.scoreDetail.innerHTML = renderApplication(application);
+  }
 }
 
 function scoredApplications(applications) {
@@ -846,8 +1089,13 @@ function countBy(items, getKey) {
 
 function renderPortfolioOverview() {
   if (!state.applications.length) {
-    els.portfolioOverview.className = "portfolio-overview empty";
-    els.portfolioOverview.textContent = "Load applications to view portfolio analytics.";
+    setPanelState(
+      els.portfolioOverview,
+      "portfolio-overview",
+      "empty",
+      "Portfolio not loaded",
+      "Load applications to view risk, district, policy, and decision analytics.",
+    );
     return;
   }
 
@@ -1012,16 +1260,59 @@ function renderDecisionBar(row) {
 }
 
 async function refreshApplications() {
-  state.applications = await apiFetch("/mfi/applications");
-  if (!state.selectedApplicationId && state.applications.length) {
-    state.selectedApplicationId = state.applications[0].id;
-  }
-  renderApplicationsTable(state.applications);
-  if (state.selectedApplicationId) selectApplication(state.selectedApplicationId);
-  renderPortfolioOverview();
-  await refreshAnalytics();
-  await refreshPolicyAnalytics();
-  await refreshDecisionAnalytics();
+  return withButtonBusy(els.refreshApplications, "", async () => {
+    setPanelState(
+      els.applicationsTable,
+      "table-shell",
+      "loading",
+      "Loading application queue",
+      "Fetching the latest borrower applications.",
+    );
+    setPanelState(
+      els.portfolioOverview,
+      "portfolio-overview",
+      "loading",
+      "Refreshing portfolio",
+      "Updating risk, district, policy, and decision summaries.",
+    );
+
+    try {
+      state.applications = await apiFetch("/mfi/applications");
+    } catch (error) {
+      setPanelState(
+        els.applicationsTable,
+        "table-shell",
+        "error",
+        "Queue unavailable",
+        error.message || "The application queue could not be loaded.",
+      );
+      setPanelState(
+        els.portfolioOverview,
+        "portfolio-overview",
+        "error",
+        "Portfolio unavailable",
+        "Analytics will appear after the queue loads successfully.",
+      );
+      throw error;
+    }
+
+    if (!state.selectedApplicationId && state.applications.length) {
+      state.selectedApplicationId = state.applications[0].id;
+    }
+    renderApplicationsTable(state.applications);
+    if (state.selectedApplicationId) selectApplication(state.selectedApplicationId);
+    renderPortfolioOverview();
+
+    const analyticsResults = await Promise.allSettled([
+      refreshAnalytics(),
+      refreshPolicyAnalytics(),
+      refreshDecisionAnalytics(),
+    ]);
+    const failedAnalytics = analyticsResults.find((result) => result.status === "rejected");
+    if (failedAnalytics) {
+      showMessage(failedAnalytics.reason?.message || "Some analytics could not be refreshed", "error");
+    }
+  });
 }
 
 async function exportApplicationsCsv() {
@@ -1035,14 +1326,35 @@ async function scoreSelectedApplication() {
     showMessage("Select an application first", "error");
     return;
   }
-  const scored = await apiFetch(`/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/score`, {
-    method: "POST",
+
+  await withButtonBusy(els.scoreSelectedApplication, "Scoring...", async () => {
+    setPanelState(
+      els.scoreDetail,
+      "result-block",
+      "loading",
+      "Scoring application",
+      "Running the model and preparing explanations.",
+    );
+    try {
+      const scored = await apiFetch(`/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/score`, {
+        method: "POST",
+      });
+      state.applications = state.applications.map((item) => (item.id === scored.id ? scored : item));
+      selectApplication(scored.id);
+      await refreshAnalytics();
+      await refreshPolicyAnalytics();
+      showMessage("Application scored", "ok");
+    } catch (error) {
+      setPanelState(
+        els.scoreDetail,
+        "result-block",
+        "error",
+        "Scoring failed",
+        error.message || "The selected application could not be scored.",
+      );
+      throw error;
+    }
   });
-  state.applications = state.applications.map((item) => (item.id === scored.id ? scored : item));
-  selectApplication(scored.id);
-  await refreshAnalytics();
-  await refreshPolicyAnalytics();
-  showMessage("Application scored", "ok");
 }
 
 async function loadReviewPacket() {
@@ -1051,11 +1363,31 @@ async function loadReviewPacket() {
     return;
   }
 
-  const packet = await apiFetch(
-    `/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/review-packet`,
-  );
-  els.reviewPacket.classList.remove("empty");
-  els.reviewPacket.innerHTML = renderReviewPacket(packet);
+  await withButtonBusy(els.loadReviewPacket, "Opening...", async () => {
+    setPanelState(
+      els.reviewPacket,
+      "result-block",
+      "loading",
+      "Opening review packet",
+      "Collecting governance flags, factors, and timeline events.",
+    );
+    try {
+      const packet = await apiFetch(
+        `/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/review-packet`,
+      );
+      els.reviewPacket.className = "result-block";
+      els.reviewPacket.innerHTML = renderReviewPacket(packet);
+    } catch (error) {
+      setPanelState(
+        els.reviewPacket,
+        "result-block",
+        "error",
+        "Review packet unavailable",
+        error.message || "The review packet could not be opened.",
+      );
+      throw error;
+    }
+  });
 }
 
 function renderReviewPacket(packet) {
@@ -1076,6 +1408,7 @@ function renderReviewPacket(packet) {
     .join("");
   const riskFactors = renderPacketFactors(packet.top_risk_factors, "Raises risk");
   const protectiveFactors = renderPacketFactors(packet.top_protective_factors, "Reduces risk");
+  const modelUseNotice = renderModelUseNotice(model);
   const timeline = renderApplicationTimeline(packet.timeline_events);
 
   return `
@@ -1093,6 +1426,7 @@ function renderReviewPacket(packet) {
         <div class="metric"><span>Proxy delta</span><strong>${model ? formatPercent(model.proxy_sensitivity_delta) : "-"}</strong></div>
         <div class="metric"><span>Decision</span><strong>${decision ? escapeHtml(formatPolicyName(decision.decision)) : "not recorded"}</strong></div>
       </div>
+      ${modelUseNotice}
       <div class="packet-flags">${flags || "<span>No governance flags</span>"}</div>
       <div class="packet-columns">
         <section>
@@ -1165,27 +1499,97 @@ async function saveApplicationDecision() {
 }
 
 async function refreshAnalytics() {
-  const rows = await apiFetch("/mfi/analytics/segments");
-  renderSimpleTable(els.segmentAnalytics, rows, [
-    ["segment_feature", "Segment"],
-    ["segment_value", "Value"],
-    ["n", "N"],
-    ["avg_high_risk_probability", "Avg risk", formatPercent],
-    ["high_risk_share", "High-risk share", formatPercent],
-  ]);
+  setPanelState(
+    els.segmentAnalytics,
+    "table-shell",
+    "loading",
+    "Refreshing segment audit",
+    "Checking risk by borrower and regional segments.",
+  );
+  try {
+    const rows = await apiFetch("/mfi/analytics/segments");
+    renderSimpleTable(els.segmentAnalytics, rows, [
+      ["segment_feature", "Segment"],
+      ["segment_value", "Value"],
+      ["n", "N"],
+      ["avg_high_risk_probability", "Avg risk", formatPercent],
+      ["high_risk_share", "High-risk share", formatPercent],
+    ]);
+  } catch (error) {
+    setPanelState(
+      els.segmentAnalytics,
+      "table-shell",
+      "error",
+      "Segment audit unavailable",
+      error.message || "Segment analytics could not be loaded.",
+    );
+    throw error;
+  }
 }
 
 async function refreshPolicyAnalytics() {
-  const payload = await apiFetch("/mfi/analytics/policies");
-  state.policyAnalytics = payload;
-  renderPolicyAnalytics(payload);
+  els.policyNote.textContent = "Refreshing policy analytics...";
+  setPanelState(
+    els.policyAnalytics,
+    "policy-grid",
+    "loading",
+    "Refreshing policy lab",
+    "Comparing approve, review, and decline strategies.",
+  );
+  setPanelState(
+    els.policySegments,
+    "table-shell",
+    "loading",
+    "Refreshing policy segments",
+    "Checking how strategies behave across segments.",
+  );
+  try {
+    const payload = await apiFetch("/mfi/analytics/policies");
+    state.policyAnalytics = payload;
+    renderPolicyAnalytics(payload);
+  } catch (error) {
+    els.policyNote.textContent = "Policy analytics unavailable.";
+    setPanelState(
+      els.policyAnalytics,
+      "policy-grid",
+      "error",
+      "Policy lab unavailable",
+      error.message || "Policy analytics could not be loaded.",
+    );
+    setPanelState(
+      els.policySegments,
+      "table-shell",
+      "error",
+      "Policy segments unavailable",
+      "Retry after applications are loaded and scored.",
+    );
+    throw error;
+  }
 }
 
 async function refreshDecisionAnalytics() {
-  const payload = await apiFetch("/mfi/analytics/decisions");
-  state.decisionAnalytics = payload;
-  renderPortfolioOverview();
-  renderDecisionAudit(payload);
+  setPanelState(
+    els.decisionAudit,
+    "table-shell",
+    "loading",
+    "Refreshing decision audit",
+    "Comparing analyst decisions with risk bands and proxy signals.",
+  );
+  try {
+    const payload = await apiFetch("/mfi/analytics/decisions");
+    state.decisionAnalytics = payload;
+    renderPortfolioOverview();
+    renderDecisionAudit(payload);
+  } catch (error) {
+    setPanelState(
+      els.decisionAudit,
+      "table-shell",
+      "error",
+      "Decision audit unavailable",
+      error.message || "Decision analytics could not be loaded.",
+    );
+    throw error;
+  }
 }
 
 function renderPolicyAnalytics(payload) {
@@ -1193,10 +1597,20 @@ function renderPolicyAnalytics(payload) {
   renderPortfolioOverview();
 
   if (!payload.scored_application_count) {
-    els.policyAnalytics.className = "policy-grid empty";
-    els.policyAnalytics.textContent = "Score applications to compare policies.";
-    els.policySegments.className = "table-shell empty";
-    els.policySegments.textContent = "No segment policy analytics loaded.";
+    setPanelState(
+      els.policyAnalytics,
+      "policy-grid",
+      "empty",
+      "Score applications to compare policies",
+      "The Policy Lab needs scored applications before it can compare strategies.",
+    );
+    setPanelState(
+      els.policySegments,
+      "table-shell",
+      "empty",
+      "No segment policy analytics loaded",
+      "Policy segment rows appear after applications are scored.",
+    );
     return;
   }
 
@@ -1220,8 +1634,13 @@ function renderPolicyAnalytics(payload) {
 
 function renderDecisionAudit(payload) {
   if (!payload?.decided_application_count) {
-    els.decisionAudit.className = "table-shell empty";
-    els.decisionAudit.textContent = "No analyst decisions recorded yet.";
+    setPanelState(
+      els.decisionAudit,
+      "table-shell",
+      "empty",
+      "No analyst decisions recorded",
+      "Save an MFI decision to populate the audit table.",
+    );
     return;
   }
 
@@ -1347,8 +1766,13 @@ async function clearApplications() {
 
 function renderSimpleTable(container, rows, columns) {
   if (!rows.length) {
-    container.className = "table-shell empty";
-    container.textContent = "No records loaded.";
+    setPanelState(
+      container,
+      "table-shell",
+      "empty",
+      "No records loaded",
+      "There is nothing to show for this view yet.",
+    );
     return;
   }
   container.className = "table-shell";
@@ -1390,13 +1814,19 @@ function wireEvents() {
     clearSession();
     showMessage("Signed out", "info");
   });
+  els.resetDemoData.addEventListener("click", () => {
+    resetStaticDemoData().catch((error) => showMessage(error.message, "error"));
+  });
   els.demoButtons.forEach((button) => {
     button.addEventListener("click", () => {
       enterDemoWorkspace(button.dataset.demo, button.dataset.role)
         .catch((error) => showMessage(error.message, "error"));
     });
   });
-  els.fillDemoApplication.addEventListener("click", () => fillApplicationForm(demoApplication));
+  els.fillDemoApplication.addEventListener("click", () => {
+    fillApplicationForm(demoApplication);
+    els.borrowerConsent.checked = true;
+  });
   els.applicationForm.addEventListener("submit", (event) => {
     submitApplication(event).catch((error) => showMessage(error.message, "error"));
   });

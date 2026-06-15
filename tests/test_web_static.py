@@ -8,6 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 WEB_ROOT = PROJECT_ROOT / "apps" / "web"
+PAGES_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "pages.yml"
 
 
 class WebStaticTests(unittest.TestCase):
@@ -16,6 +17,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertTrue((WEB_ROOT / "index.html").exists())
         self.assertTrue((WEB_ROOT / "styles.css").exists())
         self.assertTrue((WEB_ROOT / "app.js").exists())
+        self.assertTrue((WEB_ROOT / "mock-api.js").exists())
+        self.assertTrue((WEB_ROOT / ".nojekyll").exists())
         self.assertTrue((WEB_ROOT / "README.md").exists())
         self.assertTrue((WEB_ROOT / "assets" / "favicon.svg").exists())
         self.assertTrue((WEB_ROOT / "assets" / "favicon-32.png").exists())
@@ -34,10 +37,25 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('href="./assets/micro-score.png"', html)
         self.assertIn('src="./assets/micro-score-lockup.png?v=20260612-full"', html)
         self.assertIn('src="./assets/microscore-mark.svg"', html)
-        self.assertIn('src="./app.js?v=20260612-routes"', html)
+        self.assertIn('src="./mock-api.js?v=20260613-static-demo"', html)
+        self.assertIn('src="./app.js?v=20260613-static-demo"', html)
         self.assertIn("window.history.replaceState", html)
+        self.assertIn("synthetic demo data only", html)
         self.assertIn('id="authScreen"', html)
         self.assertIn('id="appShell"', html)
+        self.assertIn('id="connection-title"', html)
+        self.assertIn('class="api-settings"', html)
+        self.assertIn('aria-label="Check API"', html)
+        self.assertIn('id="demoModePill"', html)
+        self.assertIn('id="resetDemoData"', html)
+        self.assertIn('class="reviewer-snapshot"', html)
+        self.assertIn("Research + product prototype", html)
+        self.assertIn("Synthetic Pavlodar demo", html)
+        self.assertIn("Human review support", html)
+        self.assertIn("password123", html)
+        self.assertIn('id="borrowerConsent"', html)
+        self.assertIn("synthetic-data demo", html)
+        self.assertIn("real borrower", html)
         self.assertIn('hidden', html)
         self.assertIn('id="borrowerView"', html)
         self.assertIn('id="mfiView"', html)
@@ -48,10 +66,14 @@ class WebStaticTests(unittest.TestCase):
 
         self.assertIn("[hidden]", styles)
         self.assertIn("display: none !important;", styles)
+        self.assertIn(".reviewer-snapshot", styles)
+        self.assertIn(".consent-panel", styles)
+        self.assertIn("accent-color: var(--teal);", styles)
 
     def test_frontend_targets_current_api_contract(self) -> None:
         markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         script = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
+        mock_script = (WEB_ROOT / "mock-api.js").read_text(encoding="utf-8")
 
         expected_paths = [
             "/health",
@@ -89,6 +111,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Decision audit", markup)
         self.assertIn("decisionAuditRows", script)
         self.assertIn("proxy_sensitivity_delta", script)
+        self.assertIn("HIGH_PROXY_SENSITIVITY_DELTA", script)
+        self.assertIn("renderModelUseNotice", script)
+        self.assertIn("Decision-support only", script)
+        self.assertIn("Manual review required", script)
+        self.assertIn("not validated for real lending decisions", script)
         self.assertIn("decision_support", script)
         self.assertIn("top_positive_factors", script)
         self.assertIn("top_protective_factors", script)
@@ -98,8 +125,43 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Policy Lab", markup)
         self.assertIn("renderPolicyAnalytics", script)
         self.assertIn("resetApplicationViews", script)
+        self.assertIn("renderStateBlock", script)
+        self.assertIn("setPanelState", script)
+        self.assertIn("withButtonBusy", script)
+        self.assertIn("Loading application queue", script)
+        self.assertIn("Queue unavailable", script)
+        self.assertIn("Scoring application", script)
+        self.assertIn("Review packet unavailable", script)
+        self.assertIn("Refreshing policy lab", script)
+        self.assertIn("Decision audit unavailable", script)
         self.assertIn('removeItem("microscore.lastApplicationId")', script)
         self.assertIn("API_BASE_CANDIDATES", script)
+        self.assertIn("MicroScoreMockApi", script)
+        self.assertIn("MicroScoreMockApi", mock_script)
+        self.assertIn("Static demo mode", script)
+        self.assertIn("forceStaticDemo", script)
+        self.assertIn("hostedStaticPage", script)
+        self.assertIn("LOCAL_HOSTNAMES", script)
+        self.assertIn("syncConnectionPanel", script)
+        self.assertIn("Demo system", script)
+        self.assertIn("Local system", script)
+        self.assertIn("apiSettings.hidden = demoMode", script)
+        self.assertIn("localhost plumbing", script)
+        self.assertIn("resetStaticDemoData", script)
+        self.assertIn("resetDemo", script)
+        self.assertIn("borrowerConsent", script)
+        self.assertIn("borrowerConsentAcknowledged", script)
+        self.assertIn("Confirm demo data consent", script)
+        styles = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".model-use-notice", styles)
+        self.assertIn(".notice-caution", styles)
+        self.assertIn(".state-block", styles)
+        self.assertIn(".state-spinner", styles)
+        self.assertIn("@keyframes stateSpin", styles)
+        self.assertIn("button:disabled", styles)
+        self.assertIn("/mfi/applications/export.csv", mock_script)
+        self.assertIn("/mfi/analytics/policies", mock_script)
+        self.assertIn("/admin/applications", mock_script)
         self.assertIn("enterDemoWorkspace", script)
         self.assertIn("API settings", markup)
         self.assertIn("roleAllowedViews", script)
@@ -127,6 +189,22 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Start-MicroScore.cmd", root_readme)
         self.assertIn("Start-MicroScore.cmd", web_readme)
         self.assertIn("microscore_api.dev", command_file)
+
+    def test_static_demo_deployment_is_configured(self) -> None:
+        workflow = PAGES_WORKFLOW.read_text(encoding="utf-8")
+        deployment_doc = (PROJECT_ROOT / "docs" / "STATIC_DEMO_DEPLOYMENT.md").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("actions/configure-pages@v5", workflow)
+        self.assertIn("actions/upload-pages-artifact@v4", workflow)
+        self.assertIn("actions/deploy-pages@v4", workflow)
+        self.assertIn("pages: write", workflow)
+        self.assertIn("id-token: write", workflow)
+        self.assertIn("path: apps/web", workflow)
+        self.assertIn("GitHub Pages", deployment_doc)
+        self.assertIn("mock-api.js", deployment_doc)
+        self.assertIn("synthetic", deployment_doc)
 
 
 if __name__ == "__main__":

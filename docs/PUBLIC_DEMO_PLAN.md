@@ -1,8 +1,9 @@
 # Public Demo Plan
 
-MicroScore is currently a local FastAPI + static web prototype. For admissions
-and portfolio review, the project needs a clickable public demo that can be
-opened without cloning the repository.
+MicroScore is currently a local FastAPI + static web prototype with a static
+frontend demo mode. The repository now includes a GitHub Pages workflow for the
+static demo. The next step is to enable GitHub Pages in the repository settings
+and publish the public URL.
 
 ## Goal
 
@@ -26,9 +27,12 @@ Start with a static or simplified demo before deploying the full backend.
 
 Best first step because it is simple and stable.
 
-- Use mocked JSON data exported from the local demo database.
-- Host only the frontend interaction on GitHub Pages.
-- Disable real login and label accounts as demo personas.
+- Status: local static demo mode implemented with `apps/web/mock-api.js`.
+- Deployment workflow: `.github/workflows/pages.yml`.
+- Setup instructions: `docs/STATIC_DEMO_DEPLOYMENT.md`.
+- Use synthetic in-browser demo data.
+- Host only the frontend interaction on GitHub Pages or Vercel.
+- Label accounts as demo personas and keep the synthetic-data warning visible.
 - Show portfolio overview, review packet, decision audit, and CSV export sample.
 
 Trade-off: not a real backend, but very easy for a reviewer to open.
@@ -57,8 +61,12 @@ Trade-off: closest to product, but more deployment/security work.
 
 ## Reviewer Asset Checklist
 
-- Live Demo: planned
+- Live Demo: static mode implemented locally; GitHub Pages workflow ready
 - Demo Video: planned
+- Demo walkthrough: `docs/DEMO_WALKTHROUGH.md`
+- Demo video script: `docs/DEMO_VIDEO_SCRIPT.md`
+- Screenshot checklist: `docs/SCREENSHOT_CHECKLIST.md`
+- Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Research Paper PDF: planned
 - GitHub README: should stay short and link to detailed docs
 - Demo data: synthetic/demo only

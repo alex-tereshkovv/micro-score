@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run unit and integration tests
+        run: python -m unittest discover -s tests
+
+      - name: Check Python syntax
+        run: python -m compileall src/microscore src/microscore_api src/train_model.py tests
+
+      - name: Run research smoke test
+        run: python src/train_model.py --data data/raw/credit_risk_dataset.csv --top-features 8
+
+      - name: Run regional decision smoke test
+        run: python -m microscore --regional --decision --top-features 4
+
+      - name: Check frontend JavaScript syntax
+        run: |
+          node --check apps/web/app.js
+          node --check apps/web/mock-api.js
+          node --check scripts/static-demo-smoke.js
+
+      - name: Run static demo smoke test
+        run: node scripts/static-demo-smoke.js

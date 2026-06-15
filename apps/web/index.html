@@ -41,8 +41,26 @@
             <h2>Choose your workspace</h2>
             <p>
               Sign in as a borrower, MFI analyst, or admin. Each role opens its own
-              MicroScore workspace.
+              MicroScore workspace with synthetic demo data only.
             </p>
+            <dl class="reviewer-snapshot" aria-label="Reviewer snapshot">
+              <div>
+                <dt>Status</dt>
+                <dd>Research + product prototype</dd>
+              </div>
+              <div>
+                <dt>Data</dt>
+                <dd>Synthetic Pavlodar demo</dd>
+              </div>
+              <div>
+                <dt>Decision use</dt>
+                <dd>Human review support</dd>
+              </div>
+              <div>
+                <dt>Demo password</dt>
+                <dd>password123</dd>
+              </div>
+            </dl>
           </section>
 
           <section class="auth-entry" aria-label="Sign in">
@@ -103,7 +121,7 @@
         <section class="connection-panel" aria-labelledby="connection-title">
           <div class="connection-heading">
             <h2 id="connection-title">Local system</h2>
-            <button id="checkApiButton" class="icon-button" type="button" title="Check API">
+            <button id="checkApiButton" class="icon-button" type="button" title="Check API" aria-label="Check API">
               <span aria-hidden="true">&#8635;</span>
             </button>
           </div>
@@ -129,7 +147,9 @@
             <h2 id="viewTitle">Borrower workspace</h2>
           </div>
           <div class="session-strip">
+            <span id="demoModePill" class="pill demo-pill" hidden>Static demo</span>
             <span id="sessionRole" class="pill muted">No session</span>
+            <button id="resetDemoData" class="secondary-button compact-button" type="button" hidden>Reset demo</button>
             <button id="logoutButton" class="secondary-button" type="button">Sign out</button>
           </div>
         </header>
@@ -233,6 +253,13 @@
                   </select>
                 </label>
               </div>
+              <label class="consent-panel">
+                <input id="borrowerConsent" name="borrower_consent" type="checkbox" required />
+                <span>
+                  I understand this is a synthetic-data demo and I will not enter real borrower
+                  names, IINs, phone numbers, addresses, bank records, or other personal identifiers.
+                </span>
+              </label>
               <button class="primary-button submit-wide" type="submit">Submit application</button>
             </form>
           </section>
@@ -374,6 +401,7 @@
       </main>
     </div>
 
-    <script src="./app.js?v=20260612-routes"></script>
+    <script src="./mock-api.js?v=20260613-static-demo"></script>
+    <script src="./app.js?v=20260613-static-demo"></script>
   </body>
 </html>

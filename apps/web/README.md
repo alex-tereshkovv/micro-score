@@ -1,6 +1,8 @@
 # MicroScore Web Prototype
 
-Static browser frontend for the MicroScore API prototype.
+Static browser frontend for the MicroScore API prototype. It can run against
+the local FastAPI backend or in static demo mode with synthetic in-browser
+data.
 
 Brand assets live at:
 
@@ -10,6 +12,7 @@ apps/web/assets/favicon-32.png
 apps/web/assets/apple-touch-icon.png
 apps/web/assets/microscore-mark.svg
 apps/web/assets/micro-score.png
+apps/web/assets/micro-score-lockup.png
 ```
 
 ## Run
@@ -52,6 +55,15 @@ Open:
 ```text
 http://127.0.0.1:5173
 ```
+
+Static demo mode without FastAPI:
+
+```text
+http://127.0.0.1:5173?demo=static
+```
+
+Static demo mode uses `mock-api.js` and synthetic data only. It is designed for
+a future GitHub Pages/Vercel portfolio demo, not for real borrower data.
 
 Demo accounts:
 

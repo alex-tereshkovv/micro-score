@@ -1,5 +1,7 @@
 # MicroScore
 
+![CI](https://github.com/alex-tereshkovv/micro-score/actions/workflows/ci.yml/badge.svg)
+
 Interpretable alternative credit-risk scoring prototype for thin-file borrowers
 in Pavlodar, Kazakhstan.
 
@@ -12,8 +14,9 @@ in Pavlodar, Kazakhstan.
 | Borrower focus | Thin-file and underserved borrowers |
 | Product | FastAPI API + static web prototype |
 | Models | Logistic Regression, Random Forest |
-| Current demo | One-click local demo with `Start-MicroScore.cmd` |
-| Public demo | Planned next |
+| Current demo | One-click local demo + static web demo mode |
+| Public demo | GitHub Pages workflow ready for static demo hosting |
+| Quality gate | GitHub Actions CI for tests, smoke checks, and static demo |
 | Main finding | Synthetic-data performance depends heavily on `late_payment_count` |
 | Key limitation | Borrower-level data is synthetic, not real MFI data |
 | Public benchmark | UCI Default of Credit Card Clients: RF ROC-AUC `0.775` |
@@ -21,8 +24,8 @@ in Pavlodar, Kazakhstan.
 
 ## Reviewer Assets
 
-- Live Demo: planned in `docs/PUBLIC_DEMO_PLAN.md`
-- Demo Video: planned
+- Live Demo: static frontend mode is ready; public hosting planned in `docs/PUBLIC_DEMO_PLAN.md`
+- Demo Video: planned; script in [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
 - Research Paper PDF: planned
 - Research paper draft: [docs/RESEARCH_PAPER.md](docs/RESEARCH_PAPER.md)
 - Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
@@ -30,6 +33,11 @@ in Pavlodar, Kazakhstan.
 - Benchmark pipeline: [docs/BENCHMARK_DATASETS.md](docs/BENCHMARK_DATASETS.md)
 - API contract: [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
 - Product roadmap: [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md)
+- Static demo deployment: [docs/STATIC_DEMO_DEPLOYMENT.md](docs/STATIC_DEMO_DEPLOYMENT.md)
+- Engineering quality: [docs/ENGINEERING_QUALITY.md](docs/ENGINEERING_QUALITY.md)
+- Demo walkthrough: [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md)
+- Screenshot checklist: [docs/SCREENSHOT_CHECKLIST.md](docs/SCREENSHOT_CHECKLIST.md)
+- Release checklist: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
 
 ## Why This Matters
 
@@ -64,10 +72,11 @@ lending.
 
 ## Demo Status
 
-MicroScore currently has a one-click local demo launcher for Windows. The next
-portfolio upgrade is a public demo: either a GitHub Pages static demo with mock
-data, a Streamlit/Hugging Face Spaces app, or a hosted FastAPI demo. The plan is
-documented in [docs/PUBLIC_DEMO_PLAN.md](docs/PUBLIC_DEMO_PLAN.md).
+MicroScore currently has a one-click local demo launcher for Windows and a
+static frontend demo mode for portfolio hosting. The static mode uses synthetic
+mock data in the browser only; it is not a lending service and does not collect
+real borrower data. A GitHub Pages workflow is included; deployment steps are
+documented in [docs/STATIC_DEMO_DEPLOYMENT.md](docs/STATIC_DEMO_DEPLOYMENT.md).
 
 ## Local Quick Start
 
@@ -130,6 +139,9 @@ Manual fallback:
 Open `http://127.0.0.1:5173` for manual fallback. The web UI auto-detects the
 local API on common development ports.
 
+Static frontend demo mode: `http://127.0.0.1:5173?demo=static`. This mode
+works without FastAPI by using a synthetic in-browser demo portfolio.
+
 Demo accounts use password `password123`:
 
 - `borrower@test.com`
@@ -177,6 +189,7 @@ borrower geography. Public-context assumptions and sources are documented in
 # After placing the UCI file under data\external\benchmarks\...
 .venv\Scripts\python -m microscore --benchmark uci-default
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1
+node scripts\static-demo-smoke.js
 ```
 
 ```bash
