@@ -5,6 +5,16 @@
 Interpretable alternative credit-risk scoring prototype for thin-file borrowers
 in Pavlodar, Kazakhstan.
 
+## Try The Live Demo
+
+Open the public static demo: https://alex-tereshkovv.github.io/micro-score/
+
+Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`.
+Password: `password123`.
+
+The public demo uses synthetic in-browser data only. It is not a lending
+service and does not collect real borrower data.
+
 ## Snapshot
 
 | Field | Status |
@@ -73,13 +83,11 @@ lending.
 
 ## Demo Status
 
-MicroScore has a one-click local demo launcher for Windows and a public static
-demo on GitHub Pages: https://alex-tereshkovv.github.io/micro-score/. The
-static mode uses synthetic mock data in the browser only; it is not a lending
-service and does not collect real borrower data. Deployment notes are in
+MicroScore has a public GitHub Pages demo and a one-click local launcher for
+development. Deployment notes are in
 [docs/STATIC_DEMO_DEPLOYMENT.md](docs/STATIC_DEMO_DEPLOYMENT.md).
 
-## Local Quick Start
+## Developer Quick Start (Optional)
 
 Install dependencies:
 

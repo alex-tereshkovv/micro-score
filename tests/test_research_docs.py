@@ -33,6 +33,8 @@ class ResearchDocsTests(unittest.TestCase):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("## Snapshot", readme)
+        self.assertIn("## Try The Live Demo", readme)
+        self.assertIn("## Developer Quick Start (Optional)", readme)
         self.assertIn("Interpretable alternative credit-risk scoring prototype", readme)
         self.assertIn("Public demo", readme)
         self.assertIn("https://alex-tereshkovv.github.io/micro-score/", readme)
