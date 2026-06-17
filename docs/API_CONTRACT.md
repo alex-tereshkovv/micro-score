@@ -46,6 +46,28 @@ Open the frontend:
 http://127.0.0.1:5173
 ```
 
+## Pilot Governance Contract
+
+Pilot-readiness contract:
+
+```http
+GET /governance/pilot-readiness
+```
+
+This public read-only endpoint describes the minimum-data plan for a future
+supervised Pavlodar pilot. It returns:
+
+- data classes that may be collected in a pilot;
+- whether each class is a model input, audit-only field, or not used by the
+  model;
+- forbidden data such as IINs, raw bank statements, precise geolocation, and
+  biometric data;
+- validation questions for an MFI partner;
+- first-pilot success criteria.
+
+The endpoint does not expose borrower data. It exists so the API contract makes
+MicroScore's privacy boundary explicit.
+
 ## Roles
 
 - `borrower`: can create and view own loan applications.

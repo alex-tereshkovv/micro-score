@@ -301,3 +301,20 @@ class AuditEventResponse(BaseModel):
 
 class ClearApplicationsResponse(BaseModel):
     deleted_count: int = Field(ge=0)
+
+
+class PilotDataClassRow(BaseModel):
+    data_class: str
+    collect_in_pilot: str
+    model_use: str
+    notes: str
+
+
+class PilotReadinessResponse(BaseModel):
+    status: str
+    region: str
+    privacy_note: str
+    data_classes: list[PilotDataClassRow] = Field(default_factory=list)
+    forbidden_data: list[str] = Field(default_factory=list)
+    validation_questions: list[str] = Field(default_factory=list)
+    first_pilot_success_criteria: list[str] = Field(default_factory=list)

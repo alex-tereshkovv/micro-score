@@ -43,6 +43,7 @@ from .schemas import (
     HealthResponse,
     LoanApplicationResponse,
     LoginRequest,
+    PilotReadinessResponse,
     PolicyAnalyticsResponse,
     RegisterRequest,
     SegmentAnalyticsRow,
@@ -287,6 +288,80 @@ PORTFOLIO_EXPORT_FIELDS = (
     "governance_flags",
 )
 
+# Boring on purpose: this is the guardrail that keeps a future pilot from
+# quietly turning into "please upload every private thing you have".
+PILOT_DATA_CLASSES = [
+    {
+        "data_class": "Internal borrower id",
+        "collect_in_pilot": "yes",
+        "model_use": "no",
+        "notes": "Use a random pilot id, not an IIN or passport number.",
+    },
+    {
+        "data_class": "District and settlement type",
+        "collect_in_pilot": "yes",
+        "model_use": "yes, with caution",
+        "notes": "Needed to validate Pavlodar regional assumptions.",
+    },
+    {
+        "data_class": "Income and debt bands",
+        "collect_in_pilot": "yes",
+        "model_use": "yes",
+        "notes": "Prefer bands over exact values in the first supervised pilot.",
+    },
+    {
+        "data_class": "Late payment count",
+        "collect_in_pilot": "yes",
+        "model_use": "yes, flagged",
+        "notes": "Strong proxy feature; every report must audit its influence.",
+    },
+    {
+        "data_class": "Digital banking activity",
+        "collect_in_pilot": "yes",
+        "model_use": "yes",
+        "notes": "Use summarized counts or bands, not raw transaction logs.",
+    },
+    {
+        "data_class": "Gender",
+        "collect_in_pilot": "optional",
+        "model_use": "audit only",
+        "notes": "Use for fairness review, not as a model input by default.",
+    },
+    {
+        "data_class": "Employment type",
+        "collect_in_pilot": "yes",
+        "model_use": "yes and audit",
+        "notes": "Useful for segment stability and fairness checks.",
+    },
+]
+
+FORBIDDEN_PILOT_DATA = [
+    "IINs, passport numbers, or national ID images",
+    "raw bank statements",
+    "raw card transaction descriptions",
+    "precise geolocation",
+    "social media contacts or phone-book data",
+    "device fingerprinting",
+    "photos, biometric data, or voice recordings",
+]
+
+PILOT_VALIDATION_QUESTIONS = [
+    "Which fields can an MFI provide legally and ethically?",
+    "Which fields are already available in summarized form?",
+    "Which fields require explicit borrower consent?",
+    "Does late_payment_count remain a dominant proxy on real data?",
+    "Which segments show higher false positive or false negative rates?",
+]
+
+PILOT_SUCCESS_CRITERIA = [
+    "consented, minimal, non-invasive data collection",
+    "no use of direct identity fields as model features",
+    "reproducible model and feature-schema versioning",
+    "calibrated probability review, not only ROC-AUC",
+    "segment/fairness reporting by gender, employment type, and district",
+    "analyst feedback on whether explanations are understandable",
+]
+
 
 def _portfolio_export_csv(applications: list[dict[str, Any]]) -> str:
     output = StringIO()
@@ -331,6 +406,23 @@ def health(repository: MicroScoreRepository = Depends(get_repository)) -> Health
         "status": "ok",
         "service": "microscore-api",
         "database": str(repository.db_path),
+    }
+
+
+@app.get("/governance/pilot-readiness", response_model=PilotReadinessResponse)
+def pilot_readiness() -> PilotReadinessResponse:
+    return {
+        "status": "planning_only",
+        "region": "Pavlodar region, Kazakhstan",
+        "privacy_note": (
+            "MicroScore is not running a real borrower pilot yet. This contract "
+            "defines a future minimum-data pilot and explicitly excludes direct "
+            "identity fields from model inputs."
+        ),
+        "data_classes": PILOT_DATA_CLASSES,
+        "forbidden_data": FORBIDDEN_PILOT_DATA,
+        "validation_questions": PILOT_VALIDATION_QUESTIONS,
+        "first_pilot_success_criteria": PILOT_SUCCESS_CRITERIA,
     }
 
 

@@ -38,12 +38,12 @@ service and does not collect real borrower data.
 - Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password `password123`
 - Demo Video: planned; script in [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
 - Research Paper PDF: planned
-- Research paper draft: [docs/RESEARCH_PAPER.md](docs/RESEARCH_PAPER.md)
+- Research paper draft + reviewer brief: [docs/RESEARCH_PAPER.md](docs/RESEARCH_PAPER.md), [docs/ADMISSIONS_REVIEWER_BRIEF.md](docs/ADMISSIONS_REVIEWER_BRIEF.md)
 - Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
-- Data statement: [docs/DATA_STATEMENT.md](docs/DATA_STATEMENT.md)
+- Data statement + pilot schema: [docs/DATA_STATEMENT.md](docs/DATA_STATEMENT.md), [docs/PILOT_DATA_SCHEMA.md](docs/PILOT_DATA_SCHEMA.md)
 - Benchmark pipeline: [docs/BENCHMARK_DATASETS.md](docs/BENCHMARK_DATASETS.md)
 - API contract: [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
-- Product roadmap: [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md)
+- Product architecture + roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md)
 - Static demo deployment: [docs/STATIC_DEMO_DEPLOYMENT.md](docs/STATIC_DEMO_DEPLOYMENT.md)
 - Engineering quality: [docs/ENGINEERING_QUALITY.md](docs/ENGINEERING_QUALITY.md)
 - Demo walkthrough: [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md)

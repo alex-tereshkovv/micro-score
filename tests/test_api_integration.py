@@ -237,6 +237,35 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("SegmentPolicyAnalyticsRow", schemas)
         self.assertIn("AuditEventResponse", schemas)
         self.assertIn("ClearApplicationsResponse", schemas)
+        self.assertIn("PilotReadinessResponse", schemas)
+        self.assertIn("PilotDataClassRow", schemas)
+
+    def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
+        response = self.client.get("/governance/pilot-readiness")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "planning_only")
+        self.assertIn("Pavlodar", payload["region"])
+        self.assertIn("minimum-data pilot", payload["privacy_note"])
+        self.assertTrue(
+            any(row["data_class"] == "Late payment count" for row in payload["data_classes"])
+        )
+        self.assertTrue(
+            any(row["model_use"] == "audit only" for row in payload["data_classes"])
+        )
+        self.assertTrue(
+            any("raw bank statements" in item for item in payload["forbidden_data"])
+        )
+        self.assertTrue(
+            any("late_payment_count" in item for item in payload["validation_questions"])
+        )
+        self.assertTrue(
+            any(
+                "segment/fairness reporting" in item
+                for item in payload["first_pilot_success_criteria"]
+            )
+        )
 
     def test_cors_headers_allow_local_frontend(self) -> None:
         response = self.client.get(

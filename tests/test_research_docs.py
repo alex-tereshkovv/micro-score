@@ -10,6 +10,8 @@ DOCS_ROOT = PROJECT_ROOT / "docs"
 class ResearchDocsTests(unittest.TestCase):
     def test_research_governance_docs_exist(self) -> None:
         expected_docs = [
+            "ADMISSIONS_REVIEWER_BRIEF.md",
+            "ARCHITECTURE.md",
             "BENCHMARK_DATASETS.md",
             "DATA_STATEMENT.md",
             "DEMO_VIDEO_SCRIPT.md",
@@ -17,6 +19,7 @@ class ResearchDocsTests(unittest.TestCase):
             "ENGINEERING_QUALITY.md",
             "MODEL_CARD.md",
             "IMPACT.md",
+            "PILOT_DATA_SCHEMA.md",
             "PUBLIC_DEMO_PLAN.md",
             "RELEASE_CHECKLIST.md",
             "RESEARCH_PAPER.md",
@@ -41,6 +44,9 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("borrower@test.com", readme)
         self.assertIn("password123", readme)
         self.assertIn("DEMO_VIDEO_SCRIPT.md", readme)
+        self.assertIn("ADMISSIONS_REVIEWER_BRIEF.md", readme)
+        self.assertIn("ARCHITECTURE.md", readme)
+        self.assertIn("PILOT_DATA_SCHEMA.md", readme)
         self.assertIn("SCREENSHOT_CHECKLIST.md", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
@@ -147,6 +153,47 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Score Detail + Model-Use Notice", screenshot_checklist)
         self.assertIn("No real borrower data", screenshot_checklist)
         self.assertTrue((DOCS_ROOT / "assets" / "screenshots" / ".gitkeep").exists())
+
+    def test_reviewer_brief_and_architecture_define_product_story(self) -> None:
+        reviewer_brief = (DOCS_ROOT / "ADMISSIONS_REVIEWER_BRIEF.md").read_text(
+            encoding="utf-8",
+        )
+        architecture = (DOCS_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+
+        self.assertIn("https://alex-tereshkovv.github.io/micro-score/", reviewer_brief)
+        self.assertIn("Pavlodar", reviewer_brief)
+        self.assertIn("synthetic", reviewer_brief)
+        self.assertIn("not automatic lending", reviewer_brief)
+        self.assertIn("thin-file", reviewer_brief)
+        self.assertIn("What Not To Claim", reviewer_brief)
+        self.assertIn("Human-in-the-loop", reviewer_brief)
+        self.assertIn("flowchart LR", architecture)
+        self.assertIn("Borrower", architecture)
+        self.assertIn("MFI analyst", architecture)
+        self.assertIn("Admin", architecture)
+        self.assertIn("FastAPI", architecture)
+        self.assertIn("GitHub Pages", architecture)
+        self.assertIn("public demo mode", architecture)
+        self.assertIn("Privacy Boundary", architecture)
+
+    def test_pilot_data_schema_sets_privacy_boundaries(self) -> None:
+        pilot_schema = (DOCS_ROOT / "PILOT_DATA_SCHEMA.md").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("minimum data", pilot_schema)
+        self.assertIn("GET /governance/pilot-readiness", pilot_schema)
+        self.assertIn("future supervised pilot", pilot_schema)
+        self.assertIn("Collect only what is needed", pilot_schema)
+        self.assertIn("Keep personal identifiers separate", pilot_schema)
+        self.assertIn("gender", pilot_schema)
+        self.assertIn("employment_type", pilot_schema)
+        self.assertIn("district", pilot_schema)
+        self.assertIn("late_payment_count_12m", pilot_schema)
+        self.assertIn("Do not collect", pilot_schema)
+        self.assertIn("IINs", pilot_schema)
+        self.assertIn("raw bank statements", pilot_schema)
+        self.assertIn("segment/fairness reporting", pilot_schema)
 
 
 if __name__ == "__main__":
