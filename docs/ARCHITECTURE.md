@@ -16,7 +16,9 @@ flowchart LR
     Web -->|"local product mode"| FastAPI["FastAPI backend\nmicroscore_api"]
 
     FastAPI --> SQLite["SQLite demo database\ndata/app"]
+    SQLite --> Registry["Model registry\nactive + candidate versions"]
     FastAPI --> Scoring["Scoring service\nmicroscore package"]
+    Registry --> Scoring
     Scoring --> Reports["Research reports\nreports/research-artifacts"]
 
     Research["Research CLI\npython -m microscore --reports"] --> Scoring
@@ -85,6 +87,11 @@ Main local components:
   analytics, with global visibility reserved for admins;
 - dynamic organization discovery for borrower routing and admin staff
   provisioning;
+- persistent model registry with candidate/active/inactive lifecycle states,
+  deterministic runtime configuration, activation audit events, and immutable
+  score provenance snapshots;
+- stale-score detection in review packets after an administrator activates a
+  newer model version;
 - SQLite demo database generated under `data/app/`;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
@@ -114,11 +121,15 @@ It supports:
 
 1. A borrower submits an application with financial and behavioral fields.
 2. The app stores or simulates the application depending on runtime mode.
-3. The scoring layer creates a probability, risk band, explanation, and warning
-   flags.
-4. The analyst reviews the result together with model-use notices and policy
+3. The API resolves the single active model registry record and builds the
+   deterministic scoring runtime from its version and random state.
+4. The scoring layer creates a probability, risk band, explanation, warnings,
+   and an immutable governance snapshot.
+5. The analyst reviews the result together with model-use notices and policy
    context.
-5. Admin/audit views record demo actions so decisions remain inspectable.
+6. A later model activation marks older scores as stale without rewriting their
+   original provenance.
+7. Admin/audit views record demo actions so decisions remain inspectable.
 
 ## Privacy Boundary
 
@@ -144,8 +155,9 @@ while the research is still pre-pilot.
 - No production authentication provider yet.
 - No PostgreSQL deployment yet.
 - No real MFI borrower data yet.
-- No production monitoring or model drift tracking yet.
-- No validated Pavlodar pilot-data schema yet.
+- No signed external model-artifact store or production drift monitoring yet.
+- The pilot-data schema is defined, but it has not been validated with a real
+  Pavlodar MFI dataset.
 
 These gaps are intentional next milestones. The current architecture keeps the
 project honest: public demo for accessibility, local API for product realism,

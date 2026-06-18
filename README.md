@@ -2,8 +2,7 @@
 
 ![CI](https://github.com/alex-tereshkovv/micro-score/actions/workflows/ci.yml/badge.svg)
 
-Interpretable alternative credit-risk scoring prototype for thin-file borrowers
-in Pavlodar, Kazakhstan.
+Interpretable alternative credit-risk scoring prototype for thin-file borrowers in Pavlodar, Kazakhstan.
 
 ## Try The Live Demo
 
@@ -12,8 +11,7 @@ Open the public static demo: https://alex-tereshkovv.github.io/micro-score/
 Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`.
 Password: `password123`.
 
-The public demo uses synthetic in-browser data only. It is not a lending
-service and does not collect real borrower data.
+The public demo uses synthetic in-browser data only. It is not a lending service and does not collect real borrower data.
 
 ## Snapshot
 
@@ -27,6 +25,7 @@ service and does not collect real borrower data.
 | Current demo | One-click local demo + GitHub Pages static demo |
 | Public demo | https://alex-tereshkovv.github.io/micro-score/ |
 | Quality gate | GitHub Actions CI for tests, smoke checks, and static demo |
+| Model governance | Persistent active/candidate registry with stale-score detection |
 | Main finding | Synthetic-data performance depends heavily on `late_payment_count` |
 | Key limitation | Borrower-level data is synthetic, not real MFI data |
 | Public benchmark | UCI Default of Credit Card Clients: RF ROC-AUC `0.775` |
@@ -171,6 +170,7 @@ The web prototype supports:
 - MFI review packet with governance flags and checklist items
 - decision audit by risk band, district, proxy sensitivity, and recommendation
 - Policy Lab for approve/review/decline threshold trade-offs
+- model registry with audited activation, immutable provenance, and stale-score re-checks
 - admin audit trail and application clearing
 
 ## Research Scope

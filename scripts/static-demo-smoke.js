@@ -147,6 +147,42 @@ async function main() {
     throw new Error("Expected staff provisioning audit event");
   }
 
+  const modelVersionsBefore = await api.request("/admin/model-versions", {}, adminSession);
+  const activeBefore = modelVersionsBefore.find((model) => model.is_active);
+  const candidate = modelVersionsBefore.find((model) => model.lifecycle_status === "candidate");
+  if (activeBefore?.version !== "static-demo-v1" || !candidate) {
+    throw new Error("Expected active and candidate model registry entries");
+  }
+  await api.request(
+    `/admin/model-versions/${encodeURIComponent(candidate.version)}/activate`,
+    { method: "POST" },
+    adminSession,
+  );
+  const stalePacket = await api.request(
+    `/mfi/applications/${scored.id}/review-packet`,
+    {},
+    session,
+  );
+  if (!stalePacket.governance_flags.includes("stale_model_version")) {
+    throw new Error("Expected previous score to be stale after model activation");
+  }
+  const rescored = await api.request(
+    `/mfi/applications/${scored.id}/score`,
+    { method: "POST" },
+    session,
+  );
+  if (rescored.score_result.model_version !== candidate.version) {
+    throw new Error("Expected scoring to use the newly active model version");
+  }
+  const currentPacket = await api.request(
+    `/mfi/applications/${scored.id}/review-packet`,
+    {},
+    session,
+  );
+  if (currentPacket.governance_flags.includes("stale_model_version")) {
+    throw new Error("Expected re-scored application to use the current active model");
+  }
+
   await api.request(
     "/admin/organizations",
     {
@@ -293,7 +329,9 @@ async function main() {
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,
-      staff_provisioning: true,
+    staff_provisioning: true,
+    model_registry: true,
+    active_model: rescored.score_result.model_version,
       tenant_isolation: true,
       logout_guard: true,
       reset_applications: resetApplications.length,

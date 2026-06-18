@@ -230,14 +230,16 @@ dashboard, risk scoring, and analytics.
 ## Near-Term Next Step
 
 The first backend scaffold now exists in `src/microscore_api/`, and it now uses
-SQLite persistence for users, sessions, applications, score results, and audit
-events. The API also has demo seed data, typed response schemas, an API contract
+SQLite persistence for users, sessions, applications, score results, model
+versions, and audit events. The API also has demo seed data, typed response schemas, an API contract
 document, integration tests for the complete borrower/MFI/admin flow, dual
 standard/thin-file scoring, decision-support recommendations, and a static web
 prototype in `apps/web/`. The MFI workspace now includes application timeline
 views, review packets, portfolio CSV export, decision audit analytics, and a
 Policy Lab that compares approve/review/decline threshold policies on scored
-applications. The
+applications. Model governance now includes candidate registration, atomic
+activation, immutable score provenance, and stale-score warnings in analyst
+review packets. The
 project also now generates reproducible research artifacts under
 `reports/research-artifacts/`: model metrics, ablation results, calibration
 bins, calibration/ablation plots, and example local explanations.

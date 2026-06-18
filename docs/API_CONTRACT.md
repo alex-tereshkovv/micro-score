@@ -300,6 +300,17 @@ can access timelines for the review queue.
 
 ## MFI Analyst Flow
 
+Inspect the deployed scoring model:
+
+```http
+GET /mfi/model-status
+```
+
+The response states whether scoring is currently allowed and returns the active
+model registry record: version, feature schema, training-data label, random
+state, validation metrics, recorded limitations, and activation time. This is
+decision-support metadata, not evidence that the model is production-ready.
+
 List applications:
 
 ```http
@@ -328,12 +339,19 @@ Score response includes:
 - `high_risk_probability`
 - `risk_band`
 - `model_version`
+- `model_governance`
 - `proxy_sensitivity_delta`
 - `scenario_scores`
 - `decision_support`
 - `explanation`
 - `top_model_factors`
 - `warnings`
+
+`model_governance` is an immutable governance snapshot copied from the active registry
+record at scoring time. It includes the feature-schema version, training-data
+label, random state, activation time, lifecycle status, and limitations. A
+later model activation therefore does not rewrite the provenance of an older
+score.
 
 Important current warning: `late_payment_count` is treated as a strong proxy
 feature in the synthetic dataset.
@@ -394,12 +412,18 @@ Response schema:
 - scenario scores and local explanation factors
 - latest analyst decision, if recorded
 - application timeline events
-- governance flags such as proxy-sensitive score or missing model features
+- governance flags such as proxy-sensitive score, missing model features, or
+  `stale_model_version`
 - review checklist items for human oversight
 
 The review packet is designed as an internal MFI review aid. It summarizes what
 the model and analyst workflow currently know, but it is not a legal credit
 decision record and does not include validated repayment outcomes.
+
+When the stored score version differs from the currently active registry
+version, the packet sets `model_summary.is_current_active` to `false`, adds a
+`stale_model_version` flag, and requires re-scoring in the human-review
+checklist.
 
 `explanation` provides local additive explanation fields for the current
 Logistic Regression scoring model:
@@ -471,6 +495,46 @@ repaid, so it must not be read as validated credit-performance evidence.
 
 ## Admin Flow
 
+List registered model versions:
+
+```http
+GET /admin/model-versions
+```
+
+Register a candidate configuration:
+
+```http
+POST /admin/model-versions
+```
+
+```json
+{
+  "version": "research-v0.2",
+  "model_name": "Logistic Regression",
+  "feature_schema_version": "behavioral-v2",
+  "training_data_label": "synthetic-credit-risk-v2",
+  "random_state": 77,
+  "metrics": {"roc_auc": 0.82, "brier_score": 0.18},
+  "limitations": [
+    "Synthetic validation only.",
+    "Human review is required."
+  ]
+}
+```
+
+Activate a registered version:
+
+```http
+POST /admin/model-versions/{version}/activate
+```
+
+Activation is atomic: the previous active version becomes `inactive` and the
+target becomes the only active runtime. Registration and activation create
+`model_version_registered` and `model_version_activated` audit events. In this
+prototype each registered Logistic Regression version is trained
+deterministically from its stored random state; production deployment should
+replace this with signed, immutable model artifacts.
+
 Audit events:
 
 ```http
@@ -491,6 +555,11 @@ Current audited actions:
 - `application_created`
 - `application_scored`
 - `application_decision_recorded`
+- `model_version_registered`
+- `model_version_activated`
+- `staff_user_created`
+- `organization_created`
+- `user_logged_out`
 - `applications_cleared`
 
 ## Persistence
@@ -508,6 +577,10 @@ $env:MICROSCORE_API_DB_PATH = "C:\path\to\microscore.sqlite3"
 ```
 
 Runtime database files are intentionally ignored by Git.
+The SQLite schema persists organizations, users, expiring sessions,
+applications, analyst decisions, audit events, and `model_versions`. Existing
+development databases receive the model registry through an idempotent startup
+migration and are seeded with `research-v0.1` as the initial active version.
 
 ## Prototype Data Scale
 

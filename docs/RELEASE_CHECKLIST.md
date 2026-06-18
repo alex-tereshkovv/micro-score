@@ -41,6 +41,8 @@ git diff --check
 - Static demo warning is visible.
 - Borrower submission requires the synthetic-data consent checkbox.
 - MFI score detail and review packet show the model-use notice.
+- Admin model registry shows exactly one active version.
+- Activating a candidate marks older review packets as stale until re-scored.
 - Demo accounts use synthetic data only.
 - No real borrower names, phone numbers, IINs, addresses, or bank records are
   present.

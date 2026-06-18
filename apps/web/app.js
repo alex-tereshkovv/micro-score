@@ -32,6 +32,7 @@ const state = {
   policyAnalytics: null,
   decisionAnalytics: null,
   organizations: [],
+  activeModel: null,
 };
 
 const els = {
@@ -90,6 +91,10 @@ const els = {
   organizationDirectory: document.querySelector("#organizationDirectory"),
   refreshOrganizations: document.querySelector("#refreshOrganizations"),
   clearApplications: document.querySelector("#clearApplications"),
+  modelStatusPill: document.querySelector("#modelStatusPill"),
+  modelVersionForm: document.querySelector("#modelVersionForm"),
+  modelVersionRegistry: document.querySelector("#modelVersionRegistry"),
+  refreshModelVersions: document.querySelector("#refreshModelVersions"),
 };
 
 const viewTitles = {
@@ -587,9 +592,15 @@ async function enterDemoWorkspace(email, role) {
 
 async function loadRoleWorkspace(role) {
   if (role === "mfi_analyst") {
-    await refreshApplications();
+    await Promise.all([refreshApplications(), refreshModelStatus()]);
   } else if (role === "admin") {
-    await Promise.all([refreshAudit(), refreshStaffUsers(), refreshOrganizations()]);
+    await Promise.all([
+      refreshAudit(),
+      refreshStaffUsers(),
+      refreshOrganizations(),
+      refreshModelVersions(),
+      refreshModelStatus(),
+    ]);
   }
 }
 
@@ -1805,6 +1816,105 @@ async function refreshStaffUsers() {
   ]);
 }
 
+async function refreshModelStatus() {
+  const payload = await apiFetch("/mfi/model-status");
+  state.activeModel = payload.active_model || null;
+  if (!els.modelStatusPill) return payload;
+  if (payload.scoring_allowed && payload.active_model) {
+    els.modelStatusPill.className = "pill status-scored";
+    els.modelStatusPill.textContent = `Active model: ${payload.active_model.version}`;
+    els.modelStatusPill.title = payload.note || "";
+  } else {
+    els.modelStatusPill.className = "pill status-declined";
+    els.modelStatusPill.textContent = "Scoring disabled";
+    els.modelStatusPill.title = payload.note || "";
+  }
+  return payload;
+}
+
+function renderModelVersions(rows) {
+  if (!rows.length) {
+    els.modelVersionRegistry.className = "model-version-grid empty";
+    els.modelVersionRegistry.textContent = "No model versions registered.";
+    return;
+  }
+  els.modelVersionRegistry.className = "model-version-grid";
+  els.modelVersionRegistry.innerHTML = rows
+    .map((model) => {
+      const metrics = Object.entries(model.metrics || {})
+        .map(([key, value]) => `${formatPolicyName(key)}: ${typeof value === "number" ? value.toFixed(4) : value}`)
+        .join(" / ");
+      const limitations = (model.limitations || [])
+        .map((item) => `<li>${escapeHtml(item)}</li>`)
+        .join("");
+      const action = model.is_active
+        ? `<span class="pill status-approved">Active runtime</span>`
+        : `<button class="secondary-button activate-model-button" type="button" data-model-version="${escapeHtml(model.version)}">Activate</button>`;
+      return `
+        <article class="model-version-card ${model.is_active ? "active-model" : ""}">
+          <div class="model-version-heading">
+            <div>
+              <span>${escapeHtml(formatPolicyName(model.lifecycle_status))}</span>
+              <strong>${escapeHtml(model.version)}</strong>
+            </div>
+            ${action}
+          </div>
+          <div class="model-version-meta">
+            <span>${escapeHtml(model.feature_schema_version)}</span>
+            <span>seed ${escapeHtml(model.random_state)}</span>
+          </div>
+          <strong>${escapeHtml(model.training_data_label)}</strong>
+          <span class="tiny-text">${escapeHtml(metrics || "Metrics not recorded")}</span>
+          <ul class="model-version-limitations">${limitations}</ul>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function refreshModelVersions() {
+  const rows = await apiFetch("/admin/model-versions");
+  renderModelVersions(rows);
+  return rows;
+}
+
+async function createModelVersion(event) {
+  event.preventDefault();
+  const form = els.modelVersionForm;
+  const rocAuc = formNumber(form, "roc_auc");
+  const brierScore = formNumber(form, "brier_score");
+  const metrics = {};
+  if (rocAuc !== undefined) metrics.roc_auc = rocAuc;
+  if (brierScore !== undefined) metrics.brier_score = brierScore;
+  const created = await apiFetch("/admin/model-versions", {
+    method: "POST",
+    body: JSON.stringify({
+      version: form.elements.version.value.trim(),
+      model_name: "Logistic Regression",
+      feature_schema_version: form.elements.feature_schema_version.value.trim(),
+      training_data_label: form.elements.training_data_label.value.trim(),
+      random_state: Number(form.elements.random_state.value),
+      metrics,
+      limitations: form.elements.limitations.value
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    }),
+  });
+  form.elements.version.value = "";
+  await Promise.all([refreshModelVersions(), refreshAudit()]);
+  showMessage(`Registered model candidate ${created.version}`, "ok");
+}
+
+async function activateModelVersion(version) {
+  const activated = await apiFetch(
+    `/admin/model-versions/${encodeURIComponent(version)}/activate`,
+    { method: "POST" },
+  );
+  await Promise.all([refreshModelVersions(), refreshModelStatus(), refreshAudit()]);
+  showMessage(`Activated model ${activated.version}; older scores now require review`, "ok");
+}
+
 function syncOrganizationSelect(select, organizations) {
   if (!select) return;
   const previousValue = select.value;
@@ -1980,6 +2090,18 @@ function wireEvents() {
   });
   els.refreshUsers.addEventListener("click", () => {
     refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
+  });
+  els.refreshModelVersions.addEventListener("click", () => {
+    refreshModelVersions().catch((error) => showMessage(error.message, "error"));
+  });
+  els.modelVersionForm.addEventListener("submit", (event) => {
+    createModelVersion(event).catch((error) => showMessage(error.message, "error"));
+  });
+  els.modelVersionRegistry.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-model-version]");
+    if (!button) return;
+    activateModelVersion(button.dataset.modelVersion)
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshOrganizations.addEventListener("click", () => {
     refreshOrganizations().catch((error) => showMessage(error.message, "error"));

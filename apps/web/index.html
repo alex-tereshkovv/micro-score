@@ -291,7 +291,10 @@
                 <p class="eyebrow">Portfolio</p>
                 <h3>Overview</h3>
               </div>
-              <span class="pill muted">Live queue</span>
+              <div class="button-row">
+                <span id="modelStatusPill" class="pill muted">Model status unknown</span>
+                <span class="pill muted">Live queue</span>
+              </div>
             </div>
             <div id="portfolioOverview" class="portfolio-overview empty">Load applications to view portfolio analytics.</div>
           </section>
@@ -457,6 +460,54 @@
               </button>
             </div>
             <div id="staffUsers" class="table-shell empty">No users loaded.</div>
+          </section>
+
+          <section class="panel wide-panel model-registry-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Model governance</p>
+                <h3>Version registry</h3>
+              </div>
+              <button id="refreshModelVersions" class="icon-button" type="button" title="Refresh model registry" aria-label="Refresh model registry">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <p class="tiny-text">
+              Register reviewed model configurations, activate one runtime at a time, and keep every score tied to an immutable governance snapshot.
+            </p>
+            <form id="modelVersionForm" class="model-version-form">
+              <label>
+                Version
+                <input name="version" type="text" pattern="[A-Za-z0-9._-]{3,100}" placeholder="research-v0.2" required />
+              </label>
+              <label>
+                Feature schema
+                <input name="feature_schema_version" type="text" value="behavioral-v2" required />
+              </label>
+              <label>
+                Training data label
+                <input name="training_data_label" type="text" value="synthetic-credit-risk-v2" required />
+              </label>
+              <label>
+                Random state
+                <input name="random_state" type="number" min="0" value="42" required />
+              </label>
+              <label>
+                ROC AUC
+                <input name="roc_auc" type="number" min="0" max="1" step="0.0001" placeholder="0.8200" />
+              </label>
+              <label>
+                Brier score
+                <input name="brier_score" type="number" min="0" max="1" step="0.0001" placeholder="0.1800" />
+              </label>
+              <label class="model-limitations-field">
+                Limitations (one per line)
+                <textarea name="limitations" rows="3" required>Synthetic validation only.
+Human review is required.</textarea>
+              </label>
+              <button class="primary-button" type="submit">Register candidate</button>
+            </form>
+            <div id="modelVersionRegistry" class="model-version-grid empty">No model versions loaded.</div>
           </section>
 
           <section class="panel wide-panel">

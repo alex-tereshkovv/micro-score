@@ -219,6 +219,22 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("loads this directory dynamically", api_contract)
         self.assertIn("not a replacement", api_contract)
 
+    def test_model_registry_governance_is_documented(self) -> None:
+        api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")
+        architecture = (DOCS_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        roadmap = (DOCS_ROOT / "PRODUCT_ROADMAP.md").read_text(encoding="utf-8")
+
+        self.assertIn("GET /mfi/model-status", api_contract)
+        self.assertIn("GET /admin/model-versions", api_contract)
+        self.assertIn("POST /admin/model-versions/{version}/activate", api_contract)
+        self.assertIn("model_governance", api_contract)
+        self.assertIn("stale_model_version", api_contract)
+        self.assertIn("immutable governance snapshot", api_contract)
+        self.assertIn("Model registry", architecture)
+        self.assertIn("candidate/active/inactive", architecture)
+        self.assertIn("stale-score detection", architecture)
+        self.assertIn("model versions", roadmap)
+
 
 if __name__ == "__main__":
     unittest.main()

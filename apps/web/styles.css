@@ -38,7 +38,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -409,7 +410,8 @@ h3 {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
@@ -425,7 +427,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(7, 139, 132, 0.7);
   box-shadow: 0 0 0 3px rgba(7, 139, 132, 0.13);
 }
@@ -552,6 +555,19 @@ select:focus {
 .pill.muted {
   background: #e8edf1;
   color: var(--muted);
+}
+
+.pill.status-scored,
+.pill.status-approved {
+  border-color: rgba(31, 122, 77, 0.24);
+  background: #e9f6ef;
+  color: var(--green);
+}
+
+.pill.status-declined {
+  border-color: rgba(181, 59, 59, 0.22);
+  background: #fceeee;
+  color: var(--red);
 }
 
 .demo-pill {
@@ -818,11 +834,70 @@ select:focus {
 }
 
 .staff-form,
-.organization-form {
+.organization-form,
+.model-version-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 10px;
   align-items: end;
+}
+
+.model-registry-panel {
+  border-top: 3px solid var(--amber);
+}
+
+.model-version-form {
+  margin: 16px 0 18px;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.model-limitations-field {
+  grid-column: span 2;
+}
+
+.model-version-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.model-version-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 14px;
+}
+
+.model-version-card.active-model {
+  border-color: rgba(31, 122, 77, 0.45);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.model-version-heading,
+.model-version-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-version-heading strong,
+.model-version-heading span {
+  display: block;
+}
+
+.model-version-heading span,
+.model-version-meta,
+.model-version-limitations {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-version-limitations {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.45;
 }
 
 label {
@@ -1950,6 +2025,7 @@ tr.selected {
   .form-grid,
   .staff-form,
   .organization-form,
+  .model-version-form,
   .decision-columns,
   .mfi-decision-form,
   .recorded-decision,
@@ -1957,6 +2033,10 @@ tr.selected {
   .explanation-columns,
   .explanation-summary {
     grid-template-columns: 1fr;
+  }
+
+  .model-limitations-field {
+    grid-column: auto;
   }
 
   .session-strip {
@@ -1969,6 +2049,10 @@ tr.selected {
   .portfolio-metrics,
   .portfolio-grid,
   .policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-version-grid {
     grid-template-columns: 1fr;
   }
 

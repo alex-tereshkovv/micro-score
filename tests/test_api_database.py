@@ -10,7 +10,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from microscore_api.database import DuplicateUserError, MicroScoreRepository
+from microscore_api.database import (
+    DuplicateModelVersionError,
+    DuplicateUserError,
+    MicroScoreRepository,
+)
 
 
 class ApiDatabaseTests(unittest.TestCase):
@@ -196,6 +200,67 @@ class ApiDatabaseTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.repository.revoke_session("expired-token"))
+
+    def test_model_registry_has_active_default_and_atomic_activation(self) -> None:
+        default_model = self.repository.get_active_model_version()
+        self.assertEqual(default_model["version"], "research-v0.1")
+        self.assertTrue(default_model["is_active"])
+        self.assertEqual(default_model["random_state"], 42)
+        self.assertTrue(default_model["limitations"])
+
+        candidate = self.repository.create_model_version(
+            version="research-v0.2",
+            model_name="Logistic Regression",
+            feature_schema_version="behavioral-v2",
+            training_data_label="synthetic-credit-risk-v2",
+            random_state=77,
+            metrics={"roc_auc": 0.82, "brier_score": 0.18},
+            limitations=["Synthetic validation only."],
+            created_by="admin@example.com",
+        )
+        self.assertEqual(candidate["lifecycle_status"], "candidate")
+        self.assertFalse(candidate["is_active"])
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "UPDATE model_versions SET is_active = 1 WHERE version = ?",
+                    ("research-v0.2",),
+                )
+                connection.commit()
+            connection.rollback()
+        finally:
+            connection.close()
+
+        activated = self.repository.activate_model_version("research-v0.2")
+        self.assertTrue(activated["is_active"])
+        self.assertEqual(activated["lifecycle_status"], "active")
+        self.assertEqual(
+            self.repository.get_model_version("research-v0.1")["lifecycle_status"],
+            "inactive",
+        )
+        self.assertEqual(
+            self.repository.get_active_model_version()["version"],
+            "research-v0.2",
+        )
+        self.assertIsNone(self.repository.activate_model_version("missing-version"))
+
+        reopened = MicroScoreRepository(self.db_path)
+        self.assertEqual(reopened.get_active_model_version()["version"], "research-v0.2")
+        self.assertEqual(len(reopened.list_model_versions()), 2)
+
+        with self.assertRaises(DuplicateModelVersionError):
+            reopened.create_model_version(
+                version="research-v0.2",
+                model_name="Logistic Regression",
+                feature_schema_version="behavioral-v2",
+                training_data_label="synthetic-credit-risk-v2",
+                random_state=77,
+                metrics={},
+                limitations=["Synthetic validation only."],
+                created_by="admin@example.com",
+            )
 
     def test_score_results_segment_analytics_and_audit_events(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")

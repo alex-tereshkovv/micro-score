@@ -31,6 +31,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on optional ext
     ) from exc
 
 from .database import (
+    DuplicateModelVersionError,
     DuplicateOrganizationError,
     DuplicateUserError,
     MicroScoreRepository,
@@ -51,6 +52,9 @@ from .schemas import (
     LoanApplicationResponse,
     LoginRequest,
     LogoutResponse,
+    ModelStatusResponse,
+    ModelVersionCreate,
+    ModelVersionPublic,
     OrganizationCreate,
     OrganizationPublic,
     PilotReadinessResponse,
@@ -126,6 +130,27 @@ def _validate_new_password(password: str) -> None:
                 "requirements": violations,
             },
         )
+
+
+def _active_model_or_503(repository: MicroScoreRepository) -> dict[str, Any]:
+    active_model = repository.get_active_model_version()
+    if active_model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scoring is disabled because no active model version is registered",
+        )
+    return active_model
+
+
+def _model_governance_snapshot(model: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "lifecycle_status": model["lifecycle_status"],
+        "feature_schema_version": model["feature_schema_version"],
+        "training_data_label": model["training_data_label"],
+        "random_state": model["random_state"],
+        "activated_at": model.get("activated_at"),
+        "limitations": list(model.get("limitations") or []),
+    }
 
 
 def current_user(
@@ -234,10 +259,11 @@ def _timeline_event(event: dict[str, Any]) -> dict[str, Any]:
 def _review_packet(
     application: dict[str, Any],
     timeline_events: list[dict[str, Any]] | None = None,
+    active_model_version: str | None = None,
 ) -> dict[str, Any]:
     score = application.get("score_result")
     decision = application.get("decision_result")
-    governance_flags = _review_governance_flags(application)
+    governance_flags = _review_governance_flags(application, active_model_version)
 
     return {
         "application_id": application["id"],
@@ -254,7 +280,7 @@ def _review_packet(
             "created_at": application["created_at"],
             "scored_at": application.get("scored_at"),
         },
-        "model_summary": _review_model_summary(score),
+        "model_summary": _review_model_summary(score, active_model_version),
         "decision_support": (score or {}).get("decision_support") if score else None,
         "analyst_decision": decision,
         "timeline_events": timeline_events or [],
@@ -271,12 +297,23 @@ def _review_packet(
     }
 
 
-def _review_model_summary(score: dict[str, Any] | None) -> dict[str, Any] | None:
+def _review_model_summary(
+    score: dict[str, Any] | None,
+    active_model_version: str | None = None,
+) -> dict[str, Any] | None:
     if not score:
         return None
+    governance = score.get("model_governance") or {}
     return {
         "model_name": score.get("model_name", "unknown"),
         "model_version": score.get("model_version", "unknown"),
+        "feature_schema_version": governance.get("feature_schema_version"),
+        "training_data_label": governance.get("training_data_label"),
+        "activated_at": governance.get("activated_at"),
+        "is_current_active": (
+            active_model_version is None
+            or score.get("model_version") == active_model_version
+        ),
         "risk_band": score.get("risk_band"),
         "high_risk_probability": score.get("high_risk_probability"),
         "proxy_sensitivity_delta": score.get("proxy_sensitivity_delta"),
@@ -292,7 +329,10 @@ def _top_explanation_factors(
     return list(explanation.get(field_name) or [])[:5]
 
 
-def _review_governance_flags(application: dict[str, Any]) -> list[str]:
+def _review_governance_flags(
+    application: dict[str, Any],
+    active_model_version: str | None = None,
+) -> list[str]:
     score = application.get("score_result")
     flags: list[str] = []
     if score is None:
@@ -307,6 +347,11 @@ def _review_governance_flags(application: dict[str, Any]) -> list[str]:
         flags.append("proxy_sensitive_score")
     if score.get("missing_feature_count", 0) > 0:
         flags.append("missing_model_features")
+    if (
+        active_model_version is not None
+        and score.get("model_version") != active_model_version
+    ):
+        flags.append("stale_model_version")
 
     recommendation = score.get("decision_support") or {}
     if recommendation.get("recommendation_code") == "manual_review_proxy_sensitive":
@@ -351,6 +396,15 @@ def _review_checklist(
                 "title": "Escalate high-risk cases before approval",
                 "status": "required",
                 "evidence": "risk_band=high",
+            }
+        )
+    if "stale_model_version" in governance_flags:
+        checklist.append(
+            {
+                "code": "rescore_current_model",
+                "title": "Re-score with the currently active model before decision",
+                "status": "required",
+                "evidence": f"scored_with={score.get('model_version') if score else 'unknown'}",
             }
         )
     checklist.append(
@@ -697,6 +751,23 @@ def list_mfi_applications(
     return repository.list_applications(_mfi_organization_scope(user))
 
 
+@app.get("/mfi/model-status", response_model=ModelStatusResponse)
+def mfi_model_status(
+    _user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    active_model = repository.get_active_model_version()
+    return {
+        "scoring_allowed": active_model is not None,
+        "active_model": active_model,
+        "note": (
+            "Active model is registered for decision support only; human review remains required."
+            if active_model
+            else "Scoring is disabled until an administrator activates a model version."
+        ),
+    }
+
+
 @app.get("/mfi/applications/export.csv")
 def export_mfi_applications(
     user: dict[str, Any] = Depends(require_mfi_user),
@@ -722,10 +793,17 @@ def score_application(
 ) -> dict[str, Any]:
     application = _application_for_user(application_id, user, repository)
 
-    score = get_scoring_service().score(application["behavioral_signals"])
+    active_model = _active_model_or_503(repository)
+    score = get_scoring_service(
+        active_model["model_name"],
+        active_model["version"],
+        active_model["random_state"],
+    ).score(application["behavioral_signals"])
+    score_result = asdict(score)
+    score_result["model_governance"] = _model_governance_snapshot(active_model)
     updated = repository.update_application_score(
         application_id=application_id,
-        score_result=asdict(score),
+        score_result=score_result,
         actor_email=user["email"],
     )
     if updated is None:
@@ -773,7 +851,12 @@ def application_review_packet(
         _timeline_event(event)
         for event in repository.list_application_timeline(application_id)
     ]
-    return _review_packet(application, timeline)
+    active_model = repository.get_active_model_version()
+    return _review_packet(
+        application,
+        timeline,
+        active_model["version"] if active_model else None,
+    )
 
 
 @app.get("/mfi/analytics/segments", response_model=list[SegmentAnalyticsRow])
@@ -816,6 +899,84 @@ def list_admin_users(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_users()
+
+
+@app.get("/admin/model-versions", response_model=list[ModelVersionPublic])
+def list_admin_model_versions(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    return repository.list_model_versions()
+
+
+@app.post(
+    "/admin/model-versions",
+    response_model=ModelVersionPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_model_version(
+    payload: ModelVersionCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    try:
+        created = repository.create_model_version(
+            version=payload.version.strip(),
+            model_name=payload.model_name,
+            feature_schema_version=payload.feature_schema_version.strip(),
+            training_data_label=payload.training_data_label.strip(),
+            random_state=payload.random_state,
+            metrics=dict(payload.metrics),
+            limitations=[item.strip() for item in payload.limitations if item.strip()],
+            created_by=user["email"],
+        )
+    except DuplicateModelVersionError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Model version already exists",
+        )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="model_version_registered",
+        entity_type="model_version",
+        entity_id=created["version"],
+        details={
+            "model_name": created["model_name"],
+            "feature_schema_version": created["feature_schema_version"],
+            "training_data_label": created["training_data_label"],
+            "random_state": created["random_state"],
+        },
+    )
+    return created
+
+
+@app.post(
+    "/admin/model-versions/{version}/activate",
+    response_model=ModelVersionPublic,
+)
+def activate_admin_model_version(
+    version: str,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    previous = repository.get_active_model_version()
+    activated = repository.activate_model_version(version)
+    if activated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Model version not found",
+        )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="model_version_activated",
+        entity_type="model_version",
+        entity_id=version,
+        details={
+            "previous_active_version": (previous or {}).get("version"),
+            "random_state": activated["random_state"],
+        },
+    )
+    return activated
 
 
 @app.post(

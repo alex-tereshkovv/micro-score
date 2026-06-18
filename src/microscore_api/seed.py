@@ -536,6 +536,7 @@ def seed_demo_data(
             existing_portfolio_borrowers.append(user["email"])
 
     scoring_service = None
+    active_model = repository.get_active_model_version()
 
     for application in DEMO_APPLICATIONS:
         application_id = application["application_id"]
@@ -556,8 +557,22 @@ def seed_demo_data(
 
         if score_applications and current.get("score_result") is None:
             if scoring_service is None:
-                scoring_service = get_scoring_service()
+                if active_model is None:
+                    raise RuntimeError("Seed scoring requires an active model version")
+                scoring_service = get_scoring_service(
+                    active_model["model_name"],
+                    active_model["version"],
+                    active_model["random_state"],
+                )
             score_result = asdict(scoring_service.score(current["behavioral_signals"]))
+            score_result["model_governance"] = {
+                "lifecycle_status": active_model["lifecycle_status"],
+                "feature_schema_version": active_model["feature_schema_version"],
+                "training_data_label": active_model["training_data_label"],
+                "random_state": active_model["random_state"],
+                "activated_at": active_model.get("activated_at"),
+                "limitations": list(active_model.get("limitations") or []),
+            }
             repository.update_application_score(
                 application_id=application_id,
                 score_result=score_result,

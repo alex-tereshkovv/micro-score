@@ -133,6 +133,14 @@ class ApiIntegrationTests(unittest.TestCase):
         scored_application = score_response.json()
         self.assertEqual(scored_application["status"], "scored")
         self.assertIn(scored_application["score_result"]["risk_band"], {"low", "medium", "high"})
+        self.assertEqual(
+            scored_application["score_result"]["model_version"],
+            "research-v0.1",
+        )
+        self.assertEqual(
+            scored_application["score_result"]["model_governance"]["feature_schema_version"],
+            "behavioral-v1",
+        )
 
         decision_response = self.client.post(
             f"/mfi/applications/{application_id}/decision",
@@ -236,6 +244,79 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("balanced_review", csv_text)
 
         admin_token = self._register("admin@example.com", "admin")
+        model_status = self.client.get(
+            "/mfi/model-status",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(model_status.status_code, 200, model_status.text)
+        self.assertTrue(model_status.json()["scoring_allowed"])
+        self.assertEqual(
+            model_status.json()["active_model"]["version"],
+            "research-v0.1",
+        )
+
+        registered_model = self.client.post(
+            "/admin/model-versions",
+            headers=self._headers(admin_token),
+            json={
+                "version": "research-v0.2",
+                "model_name": "Logistic Regression",
+                "feature_schema_version": "behavioral-v2",
+                "training_data_label": "synthetic-credit-risk-v2",
+                "random_state": 77,
+                "metrics": {"roc_auc": 0.82, "brier_score": 0.18},
+                "limitations": [
+                    "Synthetic validation only.",
+                    "Requires human decision review.",
+                ],
+            },
+        )
+        self.assertEqual(registered_model.status_code, 201, registered_model.text)
+        self.assertEqual(registered_model.json()["lifecycle_status"], "candidate")
+
+        activated_model = self.client.post(
+            "/admin/model-versions/research-v0.2/activate",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(activated_model.status_code, 200, activated_model.text)
+        self.assertTrue(activated_model.json()["is_active"])
+
+        model_versions = self.client.get(
+            "/admin/model-versions",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(model_versions.status_code, 200, model_versions.text)
+        self.assertEqual(len(model_versions.json()), 2)
+        self.assertEqual(model_versions.json()[0]["version"], "research-v0.2")
+
+        stale_packet_response = self.client.get(
+            f"/mfi/applications/{application_id}/review-packet",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(stale_packet_response.status_code, 200, stale_packet_response.text)
+        stale_packet = stale_packet_response.json()
+        self.assertIn("stale_model_version", stale_packet["governance_flags"])
+        self.assertFalse(stale_packet["model_summary"]["is_current_active"])
+        self.assertTrue(
+            any(item["code"] == "rescore_current_model" for item in stale_packet["checklist"])
+        )
+
+        rescored_response = self.client.post(
+            f"/mfi/applications/{application_id}/score",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(rescored_response.status_code, 200, rescored_response.text)
+        rescored = rescored_response.json()["score_result"]
+        self.assertEqual(rescored["model_version"], "research-v0.2")
+        self.assertEqual(rescored["model_governance"]["random_state"], 77)
+
+        current_packet = self.client.get(
+            f"/mfi/applications/{application_id}/review-packet",
+            headers=self._headers(analyst_token),
+        ).json()
+        self.assertNotIn("stale_model_version", current_packet["governance_flags"])
+        self.assertTrue(current_packet["model_summary"]["is_current_active"])
+
         audit_response = self.client.get(
             "/admin/audit-events",
             headers=self._headers(admin_token),
@@ -246,6 +327,12 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(
             any(event["action"] == "application_decision_recorded" for event in audit_response.json())
+        )
+        self.assertTrue(
+            any(event["action"] == "model_version_registered" for event in audit_response.json())
+        )
+        self.assertTrue(
+            any(event["action"] == "model_version_activated" for event in audit_response.json())
         )
         application_created = next(
             event
@@ -268,6 +355,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffUserCreate", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
+        self.assertIn("ModelVersionCreate", schemas)
+        self.assertIn("ModelVersionPublic", schemas)
+        self.assertIn("ModelStatusResponse", schemas)
         self.assertIn("ApplicationDecisionResponse", schemas)
         self.assertIn("ApplicationTimelineEventResponse", schemas)
         self.assertIn("ApplicationReviewPacketResponse", schemas)

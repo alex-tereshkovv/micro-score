@@ -15,6 +15,11 @@ from microscore.paths import PROJECT_ROOT
 
 DEFAULT_API_DB_PATH = PROJECT_ROOT / "data" / "app" / "microscore.sqlite3"
 DEFAULT_SESSION_TTL_HOURS = 8.0
+DEFAULT_MODEL_VERSION = "research-v0.1"
+DEFAULT_MODEL_NAME = "Logistic Regression"
+DEFAULT_FEATURE_SCHEMA_VERSION = "behavioral-v1"
+DEFAULT_TRAINING_DATA_LABEL = "synthetic-credit-risk-v1"
+DEFAULT_MODEL_RANDOM_STATE = 42
 
 
 class DuplicateUserError(ValueError):
@@ -23,6 +28,10 @@ class DuplicateUserError(ValueError):
 
 class DuplicateOrganizationError(ValueError):
     """Raised when an organization id is already registered."""
+
+
+class DuplicateModelVersionError(ValueError):
+    """Raised when a model version is already registered."""
 
 
 def default_database_path() -> Path:
@@ -236,12 +245,31 @@ class MicroScoreRepository:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS model_versions (
+                    version TEXT PRIMARY KEY,
+                    model_name TEXT NOT NULL,
+                    model_type TEXT NOT NULL,
+                    lifecycle_status TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 0,
+                    feature_schema_version TEXT NOT NULL,
+                    training_data_label TEXT NOT NULL,
+                    random_state INTEGER NOT NULL,
+                    metrics_json TEXT NOT NULL,
+                    limitations_json TEXT NOT NULL,
+                    created_by TEXT,
+                    created_at TEXT NOT NULL,
+                    activated_at TEXT
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_applications_borrower
                     ON loan_applications(borrower_email);
                 CREATE INDEX IF NOT EXISTS idx_application_decisions_application
                     ON application_decisions(application_id);
                 CREATE INDEX IF NOT EXISTS idx_audit_entity
                     ON audit_events(entity_type, entity_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_model_versions_single_active
+                    ON model_versions(is_active)
+                    WHERE is_active = 1;
                 """
             )
             _ensure_column(
@@ -262,6 +290,163 @@ class MicroScoreRepository:
                 ON loan_applications(organization_id)
                 """
             )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO model_versions (
+                    version,
+                    model_name,
+                    model_type,
+                    lifecycle_status,
+                    is_active,
+                    feature_schema_version,
+                    training_data_label,
+                    random_state,
+                    metrics_json,
+                    limitations_json,
+                    created_by,
+                    created_at,
+                    activated_at
+                )
+                VALUES (?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, NULL, ?, ?)
+                """,
+                (
+                    DEFAULT_MODEL_VERSION,
+                    DEFAULT_MODEL_NAME,
+                    "logistic_regression",
+                    DEFAULT_FEATURE_SCHEMA_VERSION,
+                    DEFAULT_TRAINING_DATA_LABEL,
+                    DEFAULT_MODEL_RANDOM_STATE,
+                    _json_dumps({"validation_status": "research_only"}),
+                    _json_dumps(
+                        [
+                            "Trained on synthetic data; not validated for real lending.",
+                            "Late-payment history is proxy-sensitive and requires human review.",
+                        ]
+                    ),
+                    _now_iso(),
+                    _now_iso(),
+                ),
+            )
+            active_count = connection.execute(
+                "SELECT COUNT(*) AS count FROM model_versions WHERE is_active = 1"
+            ).fetchone()["count"]
+            if active_count == 0:
+                connection.execute(
+                    """
+                    UPDATE model_versions
+                    SET lifecycle_status = 'active', is_active = 1, activated_at = ?
+                    WHERE version = ?
+                    """,
+                    (_now_iso(), DEFAULT_MODEL_VERSION),
+                )
+
+    def create_model_version(
+        self,
+        *,
+        version: str,
+        model_name: str,
+        feature_schema_version: str,
+        training_data_label: str,
+        random_state: int,
+        metrics: dict[str, Any],
+        limitations: list[str],
+        created_by: str,
+    ) -> dict[str, Any]:
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO model_versions (
+                        version,
+                        model_name,
+                        model_type,
+                        lifecycle_status,
+                        is_active,
+                        feature_schema_version,
+                        training_data_label,
+                        random_state,
+                        metrics_json,
+                        limitations_json,
+                        created_by,
+                        created_at,
+                        activated_at
+                    )
+                    VALUES (?, ?, 'logistic_regression', 'candidate', 0, ?, ?, ?, ?, ?, ?, ?, NULL)
+                    """,
+                    (
+                        version,
+                        model_name,
+                        feature_schema_version,
+                        training_data_label,
+                        random_state,
+                        _json_dumps(metrics),
+                        _json_dumps(limitations),
+                        created_by,
+                        _now_iso(),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateModelVersionError(version) from exc
+        return self.get_model_version(version) or {}
+
+    def get_model_version(self, version: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_versions WHERE version = ?",
+                (version,),
+            ).fetchone()
+        return self._model_version_from_row(row) if row else None
+
+    def get_active_model_version(self) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM model_versions
+                WHERE is_active = 1
+                ORDER BY activated_at DESC, created_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return self._model_version_from_row(row) if row else None
+
+    def list_model_versions(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM model_versions
+                ORDER BY is_active DESC, created_at DESC, version DESC
+                """
+            ).fetchall()
+        return [self._model_version_from_row(row) for row in rows]
+
+    def activate_model_version(self, version: str) -> dict[str, Any] | None:
+        activated_at = _now_iso()
+        with self._connection() as connection:
+            target = connection.execute(
+                "SELECT version FROM model_versions WHERE version = ?",
+                (version,),
+            ).fetchone()
+            if target is None:
+                return None
+            connection.execute(
+                """
+                UPDATE model_versions
+                SET lifecycle_status = 'inactive', is_active = 0
+                WHERE is_active = 1 AND version <> ?
+                """,
+                (version,),
+            )
+            connection.execute(
+                """
+                UPDATE model_versions
+                SET lifecycle_status = 'active', is_active = 1, activated_at = ?
+                WHERE version = ?
+                """,
+                (activated_at, version),
+            )
+        return self.get_model_version(version)
 
     def create_organization(
         self,
@@ -952,6 +1137,16 @@ class MicroScoreRepository:
             application["id"]
         )
         return application
+
+    @staticmethod
+    def _model_version_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        model_version = dict(row)
+        model_version["is_active"] = bool(model_version["is_active"])
+        model_version["metrics"] = _json_loads(model_version.pop("metrics_json")) or {}
+        model_version["limitations"] = (
+            _json_loads(model_version.pop("limitations_json")) or []
+        )
+        return model_version
 
     def _latest_application_decision(self, application_id: str) -> dict[str, Any] | None:
         with self._connection() as connection:

@@ -2,6 +2,7 @@
   const demo = {
     users: {},
     organizations: {},
+    modelVersions: {},
     sessions: {},
     applications: [],
     timelines: {},
@@ -247,6 +248,38 @@
       },
     };
     demo.applications = [];
+    demo.modelVersions = {
+      "static-demo-v1": {
+        version: "static-demo-v1",
+        model_name: "Logistic Regression",
+        model_type: "logistic_regression",
+        lifecycle_status: "active",
+        is_active: true,
+        feature_schema_version: "behavioral-v1",
+        training_data_label: "synthetic-demo-portfolio-v1",
+        random_state: 42,
+        metrics: { roc_auc: 0.8063, brier_score: 0.1855 },
+        limitations: ["Synthetic validation only.", "Human review is required."],
+        created_by: "system",
+        created_at: nowIso(),
+        activated_at: nowIso(),
+      },
+      "static-demo-v2-candidate": {
+        version: "static-demo-v2-candidate",
+        model_name: "Logistic Regression",
+        model_type: "logistic_regression",
+        lifecycle_status: "candidate",
+        is_active: false,
+        feature_schema_version: "behavioral-v2",
+        training_data_label: "synthetic-demo-portfolio-v2",
+        random_state: 77,
+        metrics: { roc_auc: 0.821, brier_score: 0.176 },
+        limitations: ["Candidate uses synthetic validation only."],
+        created_by: "admin@test.com",
+        created_at: nowIso(),
+        activated_at: null,
+      },
+    };
     demo.timelines = {};
     demo.auditEvents = [];
     demo.nextTimelineId = 1;
@@ -333,6 +366,10 @@
     return application;
   }
 
+  function activeModelVersion() {
+    return Object.values(demo.modelVersions).find((model) => model.is_active) || null;
+  }
+
   function addTimeline(applicationId, action, actorEmail, details = {}) {
     const event = {
       id: demo.nextTimelineId++,
@@ -387,6 +424,8 @@
   }
 
   function buildScore(application) {
+    const activeModel = activeModelVersion();
+    if (!activeModel) throw new Error("Scoring is disabled until an administrator activates a model version");
     const s = application.behavioral_signals || {};
     const income = number(s.annual_income, 1);
     const debt = number(s.total_outstanding_debt);
@@ -420,8 +459,16 @@
     ].filter((item) => item.value < 0);
 
     return {
-      model_name: "static-demo-scorecard",
-      model_version: "static-demo-v1",
+      model_name: activeModel.model_name,
+      model_version: activeModel.version,
+      model_governance: {
+        lifecycle_status: activeModel.lifecycle_status,
+        feature_schema_version: activeModel.feature_schema_version,
+        training_data_label: activeModel.training_data_label,
+        random_state: activeModel.random_state,
+        activated_at: activeModel.activated_at,
+        limitations: [...activeModel.limitations],
+      },
       high_risk_probability: probability,
       risk_band: band,
       proxy_sensitivity_delta: proxyDelta,
@@ -597,6 +644,10 @@
         ? {
             model_name: score.model_name,
             model_version: score.model_version,
+            feature_schema_version: score.model_governance?.feature_schema_version || null,
+            training_data_label: score.model_governance?.training_data_label || null,
+            activated_at: score.model_governance?.activated_at || null,
+            is_current_active: score.model_version === activeModelVersion()?.version,
             risk_band: score.risk_band,
             high_risk_probability: score.high_risk_probability,
             proxy_sensitivity_delta: score.proxy_sensitivity_delta,
@@ -622,6 +673,7 @@
     if (!application.decision_result) flags.push("human_decision_not_recorded");
     if (score.risk_band === "high") flags.push("high_risk_application");
     if ((score.proxy_sensitivity_delta || 0) >= 0.2) flags.push("proxy_sensitive_score");
+    if (score.model_version !== activeModelVersion()?.version) flags.push("stale_model_version");
     if (score.decision_support?.recommendation_code === "manual_review_proxy_sensitive") {
       flags.push("manual_review_proxy_sensitive");
     }
@@ -651,6 +703,14 @@
         title: "Review late-payment context before declining",
         status: "required",
         evidence: "proxy_sensitivity_delta >= 0.20",
+      });
+    }
+    if (flags.includes("stale_model_version")) {
+      rows.push({
+        code: "rescore_current_model",
+        title: "Re-score with the currently active model before decision",
+        status: "required",
+        evidence: `scored_with=${score?.model_version || "unknown"}`,
       });
     }
     if (flags.includes("high_risk_application")) {
@@ -986,6 +1046,18 @@
       return clone(mfiApplications(user));
     }
 
+    if (cleanPath === "/mfi/model-status" && method === "GET") {
+      requireMfi(session);
+      const activeModel = activeModelVersion();
+      return clone({
+        scoring_allowed: Boolean(activeModel),
+        active_model: activeModel,
+        note: activeModel
+          ? "Active model is registered for decision support only; human review remains required."
+          : "Scoring is disabled until an administrator activates a model version.",
+      });
+    }
+
     const scoreMatch = cleanPath.match(/^\/mfi\/applications\/([^/]+)\/score$/);
     if (scoreMatch && method === "POST") {
       const user = requireMfi(session);
@@ -1048,6 +1120,69 @@
           }))
           .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
       );
+    }
+
+    if (cleanPath === "/admin/model-versions" && method === "GET") {
+      requireAdmin(session);
+      return clone(
+        Object.values(demo.modelVersions).sort((left, right) => {
+          if (left.is_active !== right.is_active) return left.is_active ? -1 : 1;
+          return right.created_at.localeCompare(left.created_at);
+        }),
+      );
+    }
+
+    if (cleanPath === "/admin/model-versions" && method === "POST") {
+      const user = requireAdmin(session);
+      const version = String(body.version || "").trim();
+      if (!/^[A-Za-z0-9._-]{3,100}$/.test(version)) throw new Error("Invalid model version");
+      if (demo.modelVersions[version]) throw new Error("Model version already exists");
+      if (!Array.isArray(body.limitations) || !body.limitations.length) {
+        throw new Error("Record at least one model limitation");
+      }
+      demo.modelVersions[version] = {
+        version,
+        model_name: body.model_name || "Logistic Regression",
+        model_type: "logistic_regression",
+        lifecycle_status: "candidate",
+        is_active: false,
+        feature_schema_version: body.feature_schema_version,
+        training_data_label: body.training_data_label,
+        random_state: Number(body.random_state ?? 42),
+        metrics: body.metrics || {},
+        limitations: body.limitations.map((item) => String(item).trim()).filter(Boolean),
+        created_by: user.email,
+        created_at: nowIso(),
+        activated_at: null,
+      };
+      addAudit("model_version_registered", "model_version", version, user.email, {
+        feature_schema_version: body.feature_schema_version,
+        training_data_label: body.training_data_label,
+      });
+      return clone(demo.modelVersions[version]);
+    }
+
+    const activateModelMatch = cleanPath.match(/^\/admin\/model-versions\/([^/]+)\/activate$/);
+    if (activateModelMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const version = decodeURIComponent(activateModelMatch[1]);
+      const target = demo.modelVersions[version];
+      if (!target) throw new Error("Model version not found");
+      const previous = activeModelVersion();
+      Object.values(demo.modelVersions).forEach((model) => {
+        if (model.is_active && model.version !== version) {
+          model.is_active = false;
+          model.lifecycle_status = "inactive";
+        }
+      });
+      target.is_active = true;
+      target.lifecycle_status = "active";
+      target.activated_at = nowIso();
+      addAudit("model_version_activated", "model_version", version, user.email, {
+        previous_active_version: previous?.version || null,
+        random_state: target.random_state,
+      });
+      return clone(target);
     }
 
     if (cleanPath === "/admin/users" && method === "POST") {

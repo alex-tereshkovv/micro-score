@@ -11,6 +11,7 @@ RiskBand = Literal["low", "medium", "high"]
 ExplanationDirection = Literal["increases_risk", "reduces_risk"]
 ApplicationDecision = Literal["approve", "review", "decline"]
 ReviewChecklistStatus = Literal["required", "suggested", "complete"]
+ModelLifecycleStatus = Literal["candidate", "active", "inactive"]
 
 
 class RegisterRequest(BaseModel):
@@ -68,6 +69,38 @@ class OrganizationPublic(BaseModel):
     created_at: str
 
 
+class ModelVersionCreate(BaseModel):
+    version: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")
+    model_name: Literal["Logistic Regression"] = "Logistic Regression"
+    feature_schema_version: str = Field(min_length=2, max_length=100)
+    training_data_label: str = Field(min_length=2, max_length=200)
+    random_state: int = Field(default=42, ge=0, le=2_147_483_647)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list, min_length=1, max_length=20)
+
+
+class ModelVersionPublic(BaseModel):
+    version: str
+    model_name: str
+    model_type: str
+    lifecycle_status: ModelLifecycleStatus
+    is_active: bool
+    feature_schema_version: str
+    training_data_label: str
+    random_state: int
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
+    created_by: str | None = None
+    created_at: str
+    activated_at: str | None = None
+
+
+class ModelStatusResponse(BaseModel):
+    scoring_allowed: bool
+    active_model: ModelVersionPublic | None = None
+    note: str
+
+
 class ApplicationCreate(BaseModel):
     requested_amount: float = Field(gt=0)
     purpose: str = ""
@@ -116,6 +149,7 @@ class DecisionSupportResponse(BaseModel):
 class ScoreResultResponse(BaseModel):
     model_name: str
     model_version: str
+    model_governance: dict[str, Any] = Field(default_factory=dict)
     high_risk_probability: float = Field(ge=0.0, le=1.0)
     risk_band: RiskBand
     proxy_sensitivity_delta: float | None = Field(default=None, ge=0.0)
@@ -185,6 +219,10 @@ class ReviewPacketApplicationSummary(BaseModel):
 class ReviewPacketModelSummary(BaseModel):
     model_name: str
     model_version: str
+    feature_schema_version: str | None = None
+    training_data_label: str | None = None
+    activated_at: str | None = None
+    is_current_active: bool = True
     risk_band: RiskBand
     high_risk_probability: float = Field(ge=0.0, le=1.0)
     proxy_sensitivity_delta: float | None = Field(default=None, ge=0.0)

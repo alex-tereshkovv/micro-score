@@ -337,6 +337,16 @@ class ScoringService:
         )
 
 
-@lru_cache(maxsize=1)
-def get_scoring_service() -> ScoringService:
-    return ScoringService()
+@lru_cache(maxsize=8)
+def get_scoring_service(
+    model_name: str = "Logistic Regression",
+    model_version: str = "research-v0.1",
+    random_state: int = RANDOM_STATE,
+) -> ScoringService:
+    """Return a cached deterministic runtime for a registered model version."""
+
+    return ScoringService(
+        model_name=model_name,
+        model_version=model_version,
+        random_state=random_state,
+    )

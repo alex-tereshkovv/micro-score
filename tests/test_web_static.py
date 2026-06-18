@@ -81,6 +81,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="refreshOrganizations"', html)
         self.assertIn('id="applicationOrganization"', html)
         self.assertIn('id="staffOrganization"', html)
+        self.assertIn('id="modelStatusPill"', html)
+        self.assertIn('id="modelVersionForm"', html)
+        self.assertIn('id="modelVersionRegistry"', html)
+        self.assertIn('id="refreshModelVersions"', html)
+        self.assertIn("Version registry", html)
         self.assertIn('name="organization_id"', html)
         self.assertIn("Pavlodar Demo MFI", html)
 
@@ -105,6 +110,7 @@ class WebStaticTests(unittest.TestCase):
             "/applications",
             "/timeline",
             "/mfi/applications",
+            "/mfi/model-status",
             "/mfi/applications/export.csv",
             "/decision",
             "/review-packet",
@@ -112,6 +118,7 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/analytics/policies",
             "/mfi/analytics/decisions",
             "/admin/audit-events",
+            "/admin/model-versions",
             "/admin/applications",
         ]
         for path in expected_paths:
@@ -210,7 +217,16 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("createOrganization", script)
         self.assertIn("syncOrganizationSelect", script)
         self.assertIn("checkApiAndOrganizations", script)
+        self.assertIn("refreshModelStatus", script)
+        self.assertIn("refreshModelVersions", script)
+        self.assertIn("createModelVersion", script)
+        self.assertIn("activateModelVersion", script)
+        self.assertIn("stale_model_version", mock_script)
+        self.assertIn("model_version_activated", mock_script)
+        self.assertIn("activeModelVersion", mock_script)
         self.assertIn(".organization-form", styles)
+        self.assertIn(".model-version-form", styles)
+        self.assertIn(".model-version-card", styles)
         self.assertIn("enterDemoWorkspace", script)
         self.assertIn("API settings", markup)
         self.assertIn("roleAllowedViews", script)

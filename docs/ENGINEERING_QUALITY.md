@@ -33,6 +33,8 @@ The smoke test verifies that the in-browser static backend can:
 - load the seeded application queue
 - score an application
 - open a review packet
+- switch the active model registry version and detect a stale score
+- re-score with the newly active model and preserve its governance snapshot
 - load policy analytics
 - export a CSV sample
 - reset the static demo portfolio
