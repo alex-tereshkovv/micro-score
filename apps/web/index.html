@@ -81,12 +81,7 @@
 
             <form id="authForm" class="auth-form">
               <input id="email" name="email" type="email" placeholder="email" autocomplete="email" required />
-              <input id="password" name="password" type="password" placeholder="password" autocomplete="current-password" required />
-              <select id="role" name="role">
-                <option value="borrower">borrower</option>
-                <option value="mfi_analyst">mfi_analyst</option>
-                <option value="admin">admin</option>
-              </select>
+              <input id="password" name="password" type="password" placeholder="password" autocomplete="current-password" minlength="10" maxlength="128" required />
               <button id="loginButton" class="primary-button" type="submit">Sign in</button>
               <button id="registerButton" class="secondary-button" type="button">Register</button>
             </form>
@@ -165,6 +160,12 @@
             </div>
             <form id="applicationForm" class="application-form">
               <div class="form-grid">
+                <label>
+                  MFI organization
+                  <select id="applicationOrganization" name="organization_id" required>
+                    <option value="pavlodar-demo-mfi">Pavlodar Demo MFI</option>
+                  </select>
+                </label>
                 <label>
                   Requested amount
                   <input name="requested_amount" type="number" min="1000" step="1" required />
@@ -382,11 +383,87 @@
         </section>
 
         <section id="adminView" class="view-grid" aria-labelledby="admin-title">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Tenant registry</p>
+                <h3 id="admin-title">Create organization</h3>
+              </div>
+            </div>
+            <form id="organizationForm" class="organization-form">
+              <label>
+                Organization ID
+                <input name="id" type="text" placeholder="pavlodar-mfi" required />
+              </label>
+              <label>
+                Name
+                <input name="name" type="text" required />
+              </label>
+              <label>
+                Region
+                <input name="region" type="text" value="Pavlodar region, Kazakhstan" required />
+              </label>
+              <button class="primary-button" type="submit">Create organization</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Tenants</p>
+                <h3>Organizations</h3>
+              </div>
+              <button id="refreshOrganizations" class="icon-button" type="button" title="Refresh organizations" aria-label="Refresh organizations">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="organizationDirectory" class="table-shell empty">No organizations loaded.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">MFI access</p>
+                <h3>Create analyst</h3>
+              </div>
+            </div>
+            <form id="staffForm" class="staff-form">
+              <label>
+                Email
+                <input name="email" type="email" autocomplete="off" required />
+              </label>
+              <label>
+                Temporary password
+                <input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required />
+              </label>
+              <label>
+                Organization
+                <select id="staffOrganization" name="organization_id" required>
+                  <option value="pavlodar-demo-mfi">Pavlodar Demo MFI</option>
+                </select>
+              </label>
+              <button class="primary-button" type="submit">Create analyst</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Access</p>
+                <h3>User accounts</h3>
+              </div>
+              <button id="refreshUsers" class="icon-button" type="button" title="Refresh users" aria-label="Refresh users">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="staffUsers" class="table-shell empty">No users loaded.</div>
+          </section>
+
           <section class="panel wide-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Admin</p>
-                <h3 id="admin-title">Audit trail</h3>
+                <h3>Audit trail</h3>
               </div>
               <div class="button-row">
                 <button id="clearApplications" class="danger-button" type="button">Clear applications</button>

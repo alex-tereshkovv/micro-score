@@ -713,7 +713,7 @@ select:focus {
 .auth-form {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(170px, 1.15fr) minmax(160px, 0.85fr) minmax(150px, 0.7fr) auto auto;
+  grid-template-columns: minmax(190px, 1.15fr) minmax(180px, 0.85fr) auto auto;
   gap: 8px;
 }
 
@@ -815,6 +815,14 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 12px;
+}
+
+.staff-form,
+.organization-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
 }
 
 label {
@@ -1940,6 +1948,8 @@ tr.selected {
   .auth-entry .demo-actions,
   .auth-band .demo-actions,
   .form-grid,
+  .staff-form,
+  .organization-form,
   .decision-columns,
   .mfi-decision-form,
   .recorded-decision,

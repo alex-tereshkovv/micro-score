@@ -76,6 +76,15 @@ Main local components:
 
 - `src/microscore_api/` for authentication, applications, scoring, decisions,
   and audit endpoints;
+- expiring bearer sessions, backend token revocation, and restricted browser
+  origins for the current prototype boundary;
+- borrower-only public registration, staff-role provisioning, password policy,
+  and a single-process login attempt limiter;
+- admin-only MFI analyst creation with public user listings and audit events;
+- organization-scoped applications, queues, review packets, exports, and
+  analytics, with global visibility reserved for admins;
+- dynamic organization discovery for borrower routing and admin staff
+  provisioning;
 - SQLite demo database generated under `data/app/`;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.

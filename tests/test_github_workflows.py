@@ -37,6 +37,11 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("/review-packet", script)
         self.assertIn("/mfi/analytics/policies", script)
         self.assertIn("/mfi/applications/export.csv", script)
+        self.assertIn("/auth/logout", script)
+        self.assertIn("logout_guard", script)
+        self.assertIn("registration_guards", script)
+        self.assertIn("staff_provisioning", script)
+        self.assertIn("tenant_isolation", script)
         self.assertIn("resetDemo", script)
         self.assertIn("reset_applications", script)
 

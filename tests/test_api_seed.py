@@ -13,6 +13,7 @@ from microscore_api.seed import (
     DEMO_APPLICATION_ID,
     DEMO_APPLICATIONS,
     DEMO_PASSWORD,
+    DEMO_ORGANIZATION_ID,
     DEMO_USERS,
     seed_demo_data,
 )
@@ -38,6 +39,15 @@ class ApiSeedTests(unittest.TestCase):
             self.assertIsNotNone(repository.get_application(DEMO_APPLICATION_ID))
             self.assertIsNotNone(repository.get_application(DEMO_APPLICATION_ID)["score_result"])
             self.assertEqual(repository.get_user("analyst@test.com")["role"], "mfi_analyst")
+            self.assertEqual(
+                repository.get_user("analyst@test.com")["organization_id"],
+                DEMO_ORGANIZATION_ID,
+            )
+            self.assertEqual(
+                repository.get_application(DEMO_APPLICATION_ID)["organization_id"],
+                DEMO_ORGANIZATION_ID,
+            )
+            self.assertIsNotNone(repository.get_organization(DEMO_ORGANIZATION_ID))
 
 
 if __name__ == "__main__":

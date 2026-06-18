@@ -15,19 +15,24 @@ ReviewChecklistStatus = Literal["required", "suggested", "complete"]
 
 class RegisterRequest(BaseModel):
     email: str
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=1, max_length=128)
     role: Role = "borrower"
 
 
 class LoginRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: Role
+    organization_id: str | None = None
+
+
+class LogoutResponse(BaseModel):
+    revoked: bool
 
 
 class HealthResponse(BaseModel):
@@ -39,6 +44,27 @@ class HealthResponse(BaseModel):
 class UserPublic(BaseModel):
     email: str
     role: Role
+    organization_id: str | None = None
+    created_at: str
+
+
+class StaffUserCreate(BaseModel):
+    email: str
+    password: str = Field(min_length=1, max_length=128)
+    role: Literal["mfi_analyst"] = "mfi_analyst"
+    organization_id: str = Field(min_length=1, max_length=100)
+
+
+class OrganizationCreate(BaseModel):
+    id: str = Field(min_length=2, max_length=100)
+    name: str = Field(min_length=2, max_length=200)
+    region: str = Field(min_length=2, max_length=200)
+
+
+class OrganizationPublic(BaseModel):
+    id: str
+    name: str
+    region: str
     created_at: str
 
 
@@ -47,6 +73,9 @@ class ApplicationCreate(BaseModel):
     purpose: str = ""
     district: str | None = None
     settlement_type: str | None = None
+    organization_id: str = Field(min_length=1, max_length=100)
+    consent_confirmed: bool = False
+    consent_version: str | None = Field(default=None, max_length=64)
     behavioral_signals: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -127,11 +156,12 @@ class ApplicationTimelineEventResponse(BaseModel):
 class LoanApplicationResponse(BaseModel):
     id: str
     borrower_email: str
-    status: Literal["submitted", "scored"]
+    status: Literal["submitted", "scored", "under_review", "approved", "declined"]
     requested_amount: float
     purpose: str
     district: str | None = None
     settlement_type: str | None = None
+    organization_id: str | None = None
     behavioral_signals: dict[str, Any]
     score_result: ScoreResultResponse | None = None
     decision_result: ApplicationDecisionResponse | None = None
@@ -147,6 +177,7 @@ class ReviewPacketApplicationSummary(BaseModel):
     purpose: str
     district: str | None = None
     settlement_type: str | None = None
+    organization_id: str | None = None
     created_at: str
     scored_at: str | None = None
 

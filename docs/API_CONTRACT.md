@@ -72,8 +72,28 @@ MicroScore's privacy boundary explicit.
 
 - `borrower`: can create and view own loan applications.
 - `mfi_analyst`: can view all applications, score applications, and view
-  segment and policy analytics.
+  segment and policy analytics within the assigned MFI organization.
 - `admin`: can do MFI analyst actions and view audit events.
+
+List organizations available for borrower applications:
+
+```http
+GET /organizations
+```
+
+Create an organization as global admin:
+
+```http
+POST /admin/organizations
+```
+
+Applications, MFI queues, review packets, CSV exports, and analytics are scoped
+by `organization_id`. Global admins can inspect all organizations; analysts can
+access only applications assigned to their organization.
+
+The web client loads this directory dynamically. Borrower application and staff
+provisioning selects are refreshed from `GET /organizations`; global admins can
+create a tenant and immediately assign analysts without editing frontend code.
 
 Demo users:
 
@@ -102,6 +122,16 @@ Request:
 }
 ```
 
+Public registration creates borrower accounts only. Requests that attempt to
+self-assign `mfi_analyst` or `admin` are rejected. MFI analysts are provisioned
+by an existing administrator; additional administrators remain a
+deployment-level operation.
+
+New registration passwords must contain at least 10 characters, uppercase and
+lowercase letters, a number, and a symbol. Common passwords are rejected. The
+seeded demo accounts keep `password123` for reviewer convenience; this is demo
+data and not the production password policy.
+
 Response:
 
 ```json
@@ -118,6 +148,69 @@ All protected endpoints use:
 Authorization: Bearer <access_token>
 ```
 
+Sessions expire after 8 hours by default. Override the duration for a deployed
+environment with:
+
+```powershell
+$env:MICROSCORE_SESSION_TTL_HOURS = "4"
+```
+
+Logout and revoke the current token:
+
+```http
+POST /auth/logout
+```
+
+The browser API accepts CORS requests only from the local frontend and the
+MicroScore GitHub Pages origin by default. Additional deployed frontend origins
+can be supplied as a comma-separated list:
+
+```powershell
+$env:MICROSCORE_CORS_ORIGINS = "https://demo.example.org,https://mfi.example.org"
+```
+
+These controls improve the prototype boundary, but they are not a replacement
+for a production identity provider, MFA, HTTPS, distributed rate limiting, or
+a formal security review.
+
+Login currently has a small in-memory limiter: five failed attempts within one
+minute block that client/account key for five minutes and return `429` with a
+`Retry-After` header. This protects the single-process prototype only. A
+multi-instance deployment should move the limiter to Redis or a managed
+identity provider.
+
+## Admin Staff Provisioning
+
+List public user records:
+
+```http
+GET /admin/users
+```
+
+Create an MFI analyst account:
+
+```http
+POST /admin/users
+```
+
+```json
+{
+  "email": "analyst@mfi.example",
+  "password": "TemporaryPass1!",
+  "role": "mfi_analyst",
+  "organization_id": "pavlodar-demo-mfi"
+}
+```
+
+Both endpoints require an `admin` bearer token. The create endpoint accepts
+only `mfi_analyst`; additional administrators remain a deployment-level
+operation. Password hashes are never returned. Successful provisioning records
+a `staff_user_created` audit event with the acting administrator.
+
+The temporary-password flow is suitable only for the prototype. A production
+version should use expiring invitation links, forced password setup, MFA, and
+MFI organization membership.
+
 ## Borrower Application Form
 
 Endpoint:
@@ -129,7 +222,15 @@ POST /applications
 Required fields:
 
 - `requested_amount`
+- `organization_id`
+- `consent_confirmed: true`
+- `consent_version`
 - `behavioral_signals`
+
+The API rejects the request with `422` when consent is missing or when
+`behavioral_signals` contains sensitive keys such as IIN, passport, phone,
+address, raw bank-statement, precise-geolocation, or biometric fields. The
+consent version is written to the application audit event.
 
 Recommended borrower form fields for the first frontend:
 
@@ -157,6 +258,9 @@ Request example:
   "purpose": "working capital",
   "district": "Pavlodar city",
   "settlement_type": "urban",
+  "organization_id": "pavlodar-demo-mfi",
+  "consent_confirmed": true,
+  "consent_version": "synthetic-demo-v1",
   "behavioral_signals": {
     "annual_income": 52000,
     "total_outstanding_debt": 6500,

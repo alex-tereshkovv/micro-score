@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -47,11 +49,153 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(reopened.get_application(application["id"])["district"], "Pavlodar city")
         self.assertEqual(len(reopened.list_applications()), 1)
 
+    def test_legacy_database_is_migrated_without_deleting_tables(self) -> None:
+        legacy_path = Path(self.tempdir.name) / "legacy.sqlite3"
+        connection = sqlite3.connect(legacy_path)
+        try:
+            connection.executescript(
+                """
+                CREATE TABLE users (
+                    email TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE loan_applications (
+                    id TEXT PRIMARY KEY,
+                    borrower_email TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    requested_amount REAL NOT NULL,
+                    purpose TEXT NOT NULL,
+                    district TEXT,
+                    settlement_type TEXT,
+                    behavioral_signals_json TEXT NOT NULL,
+                    score_result_json TEXT,
+                    created_at TEXT NOT NULL,
+                    scored_at TEXT
+                );
+                INSERT INTO users VALUES (
+                    'legacy@example.com', 'hash', 'borrower', '2026-01-01T00:00:00+00:00'
+                );
+                """
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        migrated = MicroScoreRepository(legacy_path)
+
+        self.assertIn("organization_id", migrated.get_user("legacy@example.com"))
+        self.assertIsNone(migrated.get_user("legacy@example.com")["organization_id"])
+        migrated.create_organization(
+            organization_id="legacy-mfi",
+            name="Legacy MFI",
+            region="Pavlodar region",
+        )
+        migrated.assign_user_organization("legacy@example.com", "legacy-mfi")
+        self.assertEqual(
+            migrated.get_user("legacy@example.com")["organization_id"],
+            "legacy-mfi",
+        )
+
     def test_duplicate_user_is_reported_cleanly(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")
 
         with self.assertRaises(DuplicateUserError):
             self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+
+    def test_user_listing_excludes_password_hashes(self) -> None:
+        self.repository.create_user("borrower@example.com", "borrower-hash", "borrower")
+        self.repository.create_user("analyst@example.com", "analyst-hash", "mfi_analyst")
+
+        users = self.repository.list_users()
+
+        self.assertEqual(len(users), 2)
+        self.assertTrue(all("password_hash" not in user for user in users))
+        self.assertEqual(
+            {user["email"] for user in users},
+            {"borrower@example.com", "analyst@example.com"},
+        )
+
+    def test_organization_membership_scopes_application_listing(self) -> None:
+        for organization_id, name in (("mfi-a", "MFI A"), ("mfi-b", "MFI B")):
+            self.repository.create_organization(
+                organization_id=organization_id,
+                name=name,
+                region="Pavlodar region",
+            )
+        self.repository.create_user("borrower@example.com", "hash", "borrower")
+        self.repository.create_user(
+            "analyst-a@example.com",
+            "hash",
+            "mfi_analyst",
+            "mfi-a",
+        )
+
+        for organization_id in ("mfi-a", "mfi-b"):
+            self.repository.create_application(
+                application_id=f"app-{organization_id}",
+                borrower_email="borrower@example.com",
+                requested_amount=250_000,
+                purpose="inventory",
+                district="Pavlodar city",
+                settlement_type="urban",
+                behavioral_signals={"loan_application_amount": 250_000},
+                organization_id=organization_id,
+            )
+
+        self.assertEqual(len(self.repository.list_organizations()), 2)
+        self.assertEqual(
+            self.repository.get_user("analyst-a@example.com")["organization_id"],
+            "mfi-a",
+        )
+        self.assertEqual(
+            [item["id"] for item in self.repository.list_applications("mfi-a")],
+            ["app-mfi-a"],
+        )
+        self.assertEqual(
+            [item["id"] for item in self.repository.list_applications("mfi-b")],
+            ["app-mfi-b"],
+        )
+
+    def test_sessions_expire_and_can_be_revoked(self) -> None:
+        self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+        now = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
+
+        self.repository.create_session(
+            "active-token",
+            "borrower@example.com",
+            created_at=(now - timedelta(hours=1)).isoformat(),
+        )
+        self.assertIsNotNone(
+            self.repository.get_user_by_token(
+                "active-token",
+                now=now,
+                ttl_hours=8,
+            )
+        )
+        self.assertTrue(self.repository.revoke_session("active-token"))
+        self.assertIsNone(
+            self.repository.get_user_by_token(
+                "active-token",
+                now=now,
+                ttl_hours=8,
+            )
+        )
+
+        self.repository.create_session(
+            "expired-token",
+            "borrower@example.com",
+            created_at=(now - timedelta(hours=9)).isoformat(),
+        )
+        self.assertIsNone(
+            self.repository.get_user_by_token(
+                "expired-token",
+                now=now,
+                ttl_hours=8,
+            )
+        )
+        self.assertFalse(self.repository.revoke_session("expired-token"))
 
     def test_score_results_segment_analytics_and_audit_events(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")

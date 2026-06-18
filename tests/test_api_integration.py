@@ -20,7 +20,14 @@ except ModuleNotFoundError:  # pragma: no cover - depends on optional app extra
 
 if TestClient is not None:
     from microscore_api.database import MicroScoreRepository
-    from microscore_api.main import app, get_repository
+    from microscore_api.main import app, get_login_rate_limiter, get_repository
+    from microscore_api.rate_limit import LoginRateLimiter
+    from microscore_api.security import hash_password
+
+
+TEST_PASSWORD = "StrongPassword1!"
+TEST_ORGANIZATION_ID = "pavlodar-mfi-a"
+SECOND_ORGANIZATION_ID = "pavlodar-mfi-b"
 
 
 @unittest.skipIf(TestClient is None, "FastAPI app dependencies are not installed")
@@ -28,7 +35,23 @@ class ApiIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repository = MicroScoreRepository(Path(self.tempdir.name) / "api-test.sqlite3")
+        self.repository.create_organization(
+            organization_id=TEST_ORGANIZATION_ID,
+            name="Pavlodar MFI A",
+            region="Pavlodar region",
+        )
+        self.repository.create_organization(
+            organization_id=SECOND_ORGANIZATION_ID,
+            name="Pavlodar MFI B",
+            region="Pavlodar region",
+        )
+        self.login_limiter = LoginRateLimiter(
+            max_attempts=3,
+            window_seconds=60,
+            block_seconds=120,
+        )
         app.dependency_overrides[get_repository] = lambda: self.repository
+        app.dependency_overrides[get_login_rate_limiter] = lambda: self.login_limiter
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
@@ -36,10 +59,22 @@ class ApiIntegrationTests(unittest.TestCase):
         self.tempdir.cleanup()
 
     def _register(self, email: str, role: str) -> str:
-        response = self.client.post(
-            "/auth/register",
-            json={"email": email, "password": "password123", "role": role},
-        )
+        if role == "borrower":
+            response = self.client.post(
+                "/auth/register",
+                json={"email": email, "password": TEST_PASSWORD, "role": role},
+            )
+        else:
+            self.repository.create_user(
+                email,
+                hash_password(TEST_PASSWORD),
+                role,
+                TEST_ORGANIZATION_ID if role == "mfi_analyst" else None,
+            )
+            response = self.client.post(
+                "/auth/login",
+                json={"email": email, "password": TEST_PASSWORD},
+            )
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["access_token"]
 
@@ -61,6 +96,9 @@ class ApiIntegrationTests(unittest.TestCase):
                 "purpose": "working capital",
                 "district": "Pavlodar city",
                 "settlement_type": "urban",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "consent_confirmed": True,
+                "consent_version": "synthetic-demo-v1",
                 "behavioral_signals": {
                     "annual_income": 4_200_000,
                     "total_outstanding_debt": 650_000,
@@ -189,7 +227,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("text/csv", export_response.headers["content-type"])
         self.assertIn("microscore-applications.csv", export_response.headers["content-disposition"])
         csv_text = export_response.text
-        self.assertIn("application_id,borrower_email,status", csv_text)
+        self.assertIn(
+            "application_id,organization_id,borrower_email,status",
+            csv_text,
+        )
         self.assertIn(application_id, csv_text)
         self.assertIn("borrower@example.com", csv_text)
         self.assertIn("balanced_review", csv_text)
@@ -206,6 +247,16 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(
             any(event["action"] == "application_decision_recorded" for event in audit_response.json())
         )
+        application_created = next(
+            event
+            for event in audit_response.json()
+            if event["action"] == "application_created"
+        )
+        self.assertTrue(application_created["details"]["consent_confirmed"])
+        self.assertEqual(
+            application_created["details"]["consent_version"],
+            "synthetic-demo-v1",
+        )
 
     def test_openapi_exposes_product_response_schemas(self) -> None:
         response = self.client.get("/openapi.json")
@@ -213,6 +264,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         schemas = response.json()["components"]["schemas"]
         self.assertIn("ApplicationDecisionCreate", schemas)
+        self.assertIn("LogoutResponse", schemas)
+        self.assertIn("StaffUserCreate", schemas)
+        self.assertIn("OrganizationCreate", schemas)
+        self.assertIn("OrganizationPublic", schemas)
         self.assertIn("ApplicationDecisionResponse", schemas)
         self.assertIn("ApplicationTimelineEventResponse", schemas)
         self.assertIn("ApplicationReviewPacketResponse", schemas)
@@ -267,14 +322,328 @@ class ApiIntegrationTests(unittest.TestCase):
             )
         )
 
-    def test_cors_headers_allow_local_frontend(self) -> None:
-        response = self.client.get(
+    def test_application_boundary_enforces_consent_and_rejects_sensitive_fields(self) -> None:
+        borrower_token = self._register("privacy-borrower@example.com", "borrower")
+        headers = self._headers(borrower_token)
+        safe_payload = {
+            "requested_amount": 245_600,
+            "purpose": "equipment repair",
+            "district": "Bayanaul",
+            "settlement_type": "rural",
+            "organization_id": TEST_ORGANIZATION_ID,
+            "behavioral_signals": {
+                "annual_income": 4_100_000,
+                "mobile_banking_logins": 12,
+                "late_payment_count": 0,
+            },
+        }
+
+        missing_consent = self.client.post(
+            "/applications",
+            headers=headers,
+            json=safe_payload,
+        )
+        self.assertEqual(missing_consent.status_code, 422, missing_consent.text)
+        self.assertIn("consent", missing_consent.json()["detail"])
+
+        missing_consent_version = self.client.post(
+            "/applications",
+            headers=headers,
+            json={**safe_payload, "consent_confirmed": True},
+        )
+        self.assertEqual(
+            missing_consent_version.status_code,
+            422,
+            missing_consent_version.text,
+        )
+        self.assertIn("consent version", missing_consent_version.json()["detail"])
+
+        sensitive_payload = {
+            **safe_payload,
+            "consent_confirmed": True,
+            "consent_version": "synthetic-demo-v1",
+            "behavioral_signals": {
+                **safe_payload["behavioral_signals"],
+                "identity": {"passport_number": "demo-value"},
+            },
+        }
+        sensitive_response = self.client.post(
+            "/applications",
+            headers=headers,
+            json=sensitive_payload,
+        )
+        self.assertEqual(sensitive_response.status_code, 422, sensitive_response.text)
+        self.assertIn(
+            "behavioral_signals.identity.passport_number",
+            sensitive_response.json()["detail"]["forbidden_fields"],
+        )
+
+        safe_payload["consent_confirmed"] = True
+        safe_payload["consent_version"] = "synthetic-demo-v1"
+        accepted = self.client.post(
+            "/applications",
+            headers=headers,
+            json=safe_payload,
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+
+    def test_logout_revokes_backend_session(self) -> None:
+        token = self._register("logout@example.com", "borrower")
+        headers = self._headers(token)
+
+        self.assertEqual(self.client.get("/me", headers=headers).status_code, 200)
+        logout_response = self.client.post("/auth/logout", headers=headers)
+        self.assertEqual(logout_response.status_code, 200, logout_response.text)
+        self.assertTrue(logout_response.json()["revoked"])
+        self.assertEqual(self.client.get("/me", headers=headers).status_code, 401)
+
+        admin_token = self._register("logout-admin@example.com", "admin")
+        audit_response = self.client.get(
+            "/admin/audit-events",
+            headers=self._headers(admin_token),
+        )
+        self.assertTrue(
+            any(event["action"] == "user_logged_out" for event in audit_response.json())
+        )
+
+    def test_public_registration_enforces_borrower_role_and_password_policy(self) -> None:
+        weak_password = self.client.post(
+            "/auth/register",
+            json={
+                "email": "weak@example.com",
+                "password": "password123",
+                "role": "borrower",
+            },
+        )
+        self.assertEqual(weak_password.status_code, 422, weak_password.text)
+        self.assertIn("registration policy", weak_password.json()["detail"]["message"])
+
+        privileged_role = self.client.post(
+            "/auth/register",
+            json={
+                "email": "self-admin@example.com",
+                "password": TEST_PASSWORD,
+                "role": "admin",
+            },
+        )
+        self.assertEqual(privileged_role.status_code, 403, privileged_role.text)
+        self.assertIn("borrower accounts", privileged_role.json()["detail"])
+
+        borrower = self.client.post(
+            "/auth/register",
+            json={
+                "email": "new-borrower@example.com",
+                "password": TEST_PASSWORD,
+                "role": "borrower",
+            },
+        )
+        self.assertEqual(borrower.status_code, 200, borrower.text)
+        self.assertEqual(borrower.json()["role"], "borrower")
+
+    def test_login_rate_limit_blocks_repeated_failures(self) -> None:
+        self.repository.create_user(
+            "limited@example.com",
+            hash_password(TEST_PASSWORD),
+            "borrower",
+        )
+
+        for _attempt in range(2):
+            response = self.client.post(
+                "/auth/login",
+                json={"email": "limited@example.com", "password": "wrong-password"},
+            )
+            self.assertEqual(response.status_code, 401, response.text)
+
+        blocked = self.client.post(
+            "/auth/login",
+            json={"email": "limited@example.com", "password": "wrong-password"},
+        )
+        self.assertEqual(blocked.status_code, 429, blocked.text)
+        self.assertEqual(blocked.headers["retry-after"], "120")
+
+        still_blocked = self.client.post(
+            "/auth/login",
+            json={"email": "limited@example.com", "password": TEST_PASSWORD},
+        )
+        self.assertEqual(still_blocked.status_code, 429, still_blocked.text)
+
+    def test_admin_can_provision_audited_mfi_analyst(self) -> None:
+        borrower_token = self._register("regular@example.com", "borrower")
+        forbidden = self.client.post(
+            "/admin/users",
+            headers=self._headers(borrower_token),
+            json={
+                "email": "blocked-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+            },
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("provisioning-admin@example.com", "admin")
+        created = self.client.post(
+            "/admin/users",
+            headers=self._headers(admin_token),
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+            },
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual(created.json()["role"], "mfi_analyst")
+        self.assertEqual(created.json()["organization_id"], TEST_ORGANIZATION_ID)
+        self.assertNotIn("password", created.json())
+
+        users = self.client.get(
+            "/admin/users",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(users.status_code, 200, users.text)
+        self.assertTrue(
+            any(user["email"] == "new-analyst@example.com" for user in users.json())
+        )
+        self.assertTrue(all("password_hash" not in user for user in users.json()))
+
+        analyst_login = self.client.post(
+            "/auth/login",
+            json={"email": "new-analyst@example.com", "password": TEST_PASSWORD},
+        )
+        self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
+        self.assertEqual(analyst_login.json()["role"], "mfi_analyst")
+
+        audit = self.client.get(
+            "/admin/audit-events",
+            headers=self._headers(admin_token),
+        ).json()
+        provisioning_event = next(
+            event for event in audit if event["action"] == "staff_user_created"
+        )
+        self.assertEqual(provisioning_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(provisioning_event["entity_id"], "new-analyst@example.com")
+
+    def test_admin_can_create_publicly_listed_organization(self) -> None:
+        public_before = self.client.get("/organizations")
+        self.assertEqual(public_before.status_code, 200, public_before.text)
+        self.assertEqual(len(public_before.json()), 2)
+
+        borrower_token = self._register("org-borrower@example.com", "borrower")
+        forbidden = self.client.post(
+            "/admin/organizations",
+            headers=self._headers(borrower_token),
+            json={
+                "id": "mfi-c",
+                "name": "MFI C",
+                "region": "Pavlodar region",
+            },
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("org-admin@example.com", "admin")
+        created = self.client.post(
+            "/admin/organizations",
+            headers=self._headers(admin_token),
+            json={
+                "id": "MFI-C",
+                "name": "MFI C",
+                "region": "Pavlodar region",
+            },
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual(created.json()["id"], "mfi-c")
+
+        public_after = self.client.get("/organizations").json()
+        self.assertTrue(any(item["id"] == "mfi-c" for item in public_after))
+
+    def test_mfi_analysts_are_isolated_by_organization(self) -> None:
+        borrower_token = self._register("tenant-borrower@example.com", "borrower")
+        borrower_headers = self._headers(borrower_token)
+
+        application_ids: dict[str, str] = {}
+        for organization_id in (TEST_ORGANIZATION_ID, SECOND_ORGANIZATION_ID):
+            response = self.client.post(
+                "/applications",
+                headers=borrower_headers,
+                json={
+                    "requested_amount": 250_000,
+                    "purpose": "inventory",
+                    "district": "Pavlodar city",
+                    "settlement_type": "urban",
+                    "organization_id": organization_id,
+                    "consent_confirmed": True,
+                    "consent_version": "synthetic-demo-v1",
+                    "behavioral_signals": {
+                        "annual_income": 4_000_000,
+                        "late_payment_count": 0,
+                    },
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            application_ids[organization_id] = response.json()["id"]
+
+        analyst_a_token = self._register("analyst-a@example.com", "mfi_analyst")
+        self.repository.create_user(
+            "analyst-b@example.com",
+            hash_password(TEST_PASSWORD),
+            "mfi_analyst",
+            SECOND_ORGANIZATION_ID,
+        )
+        analyst_b_login = self.client.post(
+            "/auth/login",
+            json={"email": "analyst-b@example.com", "password": TEST_PASSWORD},
+        )
+        analyst_b_token = analyst_b_login.json()["access_token"]
+
+        queue_a = self.client.get(
+            "/mfi/applications",
+            headers=self._headers(analyst_a_token),
+        ).json()
+        queue_b = self.client.get(
+            "/mfi/applications",
+            headers=self._headers(analyst_b_token),
+        ).json()
+        self.assertEqual(
+            {item["organization_id"] for item in queue_a},
+            {TEST_ORGANIZATION_ID},
+        )
+        self.assertEqual(
+            {item["organization_id"] for item in queue_b},
+            {SECOND_ORGANIZATION_ID},
+        )
+
+        cross_tenant_score = self.client.post(
+            f"/mfi/applications/{application_ids[SECOND_ORGANIZATION_ID]}/score",
+            headers=self._headers(analyst_a_token),
+        )
+        self.assertEqual(cross_tenant_score.status_code, 403, cross_tenant_score.text)
+
+        admin_token = self._register("tenant-admin@example.com", "admin")
+        admin_queue = self.client.get(
+            "/mfi/applications",
+            headers=self._headers(admin_token),
+        ).json()
+        self.assertEqual(len(admin_queue), 2)
+
+    def test_cors_headers_allow_only_trusted_frontends(self) -> None:
+        local_response = self.client.get(
             "/health",
             headers={"Origin": "http://127.0.0.1:5173"},
         )
 
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.headers["access-control-allow-origin"], "*")
+        untrusted_response = self.client.get(
+            "/health",
+            headers={"Origin": "https://untrusted.example"},
+        )
+
+        self.assertEqual(local_response.status_code, 200, local_response.text)
+        self.assertEqual(
+            local_response.headers["access-control-allow-origin"],
+            "http://127.0.0.1:5173",
+        )
+        self.assertEqual(untrusted_response.status_code, 200, untrusted_response.text)
+        self.assertNotIn("access-control-allow-origin", untrusted_response.headers)
 
     def test_admin_can_clear_applications(self) -> None:
         borrower_token = self._register("borrower@example.com", "borrower")
@@ -286,6 +655,9 @@ class ApiIntegrationTests(unittest.TestCase):
                 "purpose": "working capital",
                 "district": "Pavlodar city",
                 "settlement_type": "urban",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "consent_confirmed": True,
+                "consent_version": "synthetic-demo-v1",
                 "behavioral_signals": {"loan_application_amount": 300_000},
             },
         )

@@ -183,6 +183,8 @@ class ResearchDocsTests(unittest.TestCase):
 
         self.assertIn("minimum data", pilot_schema)
         self.assertIn("GET /governance/pilot-readiness", pilot_schema)
+        self.assertIn("POST /applications", pilot_schema)
+        self.assertIn("sensitive behavioral-signal keys are rejected", pilot_schema)
         self.assertIn("future supervised pilot", pilot_schema)
         self.assertIn("Collect only what is needed", pilot_schema)
         self.assertIn("Keep personal identifiers separate", pilot_schema)
@@ -194,6 +196,28 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("IINs", pilot_schema)
         self.assertIn("raw bank statements", pilot_schema)
         self.assertIn("segment/fairness reporting", pilot_schema)
+
+    def test_api_contract_documents_session_security(self) -> None:
+        api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")
+
+        self.assertIn("POST /auth/logout", api_contract)
+        self.assertIn("MICROSCORE_SESSION_TTL_HOURS", api_contract)
+        self.assertIn("MICROSCORE_CORS_ORIGINS", api_contract)
+        self.assertIn("expire after 8 hours", api_contract)
+        self.assertIn("borrower accounts only", api_contract)
+        self.assertIn("Common passwords are rejected", api_contract)
+        self.assertIn("Retry-After", api_contract)
+        self.assertIn("Redis or a managed", api_contract)
+        self.assertIn("POST /admin/users", api_contract)
+        self.assertIn("staff_user_created", api_contract)
+        self.assertIn("Password hashes are never returned", api_contract)
+        self.assertIn("expiring invitation links", api_contract)
+        self.assertIn("GET /organizations", api_contract)
+        self.assertIn("POST /admin/organizations", api_contract)
+        self.assertIn("scoped", api_contract)
+        self.assertIn("organization_id", api_contract)
+        self.assertIn("loads this directory dynamically", api_contract)
+        self.assertIn("not a replacement", api_contract)
 
 
 if __name__ == "__main__":

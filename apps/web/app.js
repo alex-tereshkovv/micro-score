@@ -13,6 +13,7 @@ const LOCAL_HOSTNAMES = new Set(["", "localhost", "127.0.0.1", "0.0.0.0", "::1"]
 const hostedStaticPage = !LOCAL_HOSTNAMES.has(window.location.hostname);
 // A 15-point proxy swing is enough to make an analyst slow down. Real pilot data should get the final vote here.
 const HIGH_PROXY_SENSITIVITY_DELTA = 0.15;
+const DEMO_CONSENT_VERSION = "synthetic-demo-v1";
 
 function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/$/, "");
@@ -30,6 +31,7 @@ const state = {
   applications: [],
   policyAnalytics: null,
   decisionAnalytics: null,
+  organizations: [],
 };
 
 const els = {
@@ -48,7 +50,6 @@ const els = {
   registerButton: document.querySelector("#registerButton"),
   email: document.querySelector("#email"),
   password: document.querySelector("#password"),
-  role: document.querySelector("#role"),
   demoModePill: document.querySelector("#demoModePill"),
   resetDemoData: document.querySelector("#resetDemoData"),
   sessionRole: document.querySelector("#sessionRole"),
@@ -80,6 +81,14 @@ const els = {
   decisionAudit: document.querySelector("#decisionAudit"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
+  staffForm: document.querySelector("#staffForm"),
+  staffUsers: document.querySelector("#staffUsers"),
+  refreshUsers: document.querySelector("#refreshUsers"),
+  applicationOrganization: document.querySelector("#applicationOrganization"),
+  staffOrganization: document.querySelector("#staffOrganization"),
+  organizationForm: document.querySelector("#organizationForm"),
+  organizationDirectory: document.querySelector("#organizationDirectory"),
+  refreshOrganizations: document.querySelector("#refreshOrganizations"),
   clearApplications: document.querySelector("#clearApplications"),
 };
 
@@ -126,6 +135,7 @@ const roleDefaultRoutes = {
 };
 
 const demoApplication = {
+  organization_id: "pavlodar-demo-mfi",
   requested_amount: 3000,
   purpose: "working capital",
   district: "Pavlodar city",
@@ -162,6 +172,19 @@ function clearSession() {
   saveSession();
   updateSessionStrip();
   navigateToRoute("#/login");
+}
+
+async function logoutSession() {
+  try {
+    if (state.token) {
+      await apiFetch("/auth/logout", { method: "POST" });
+    }
+  } catch (_error) {
+    // An expired token is already logged out from the server's point of view.
+  } finally {
+    clearSession();
+    showMessage("Signed out", "info");
+  }
 }
 
 function updateSessionStrip() {
@@ -389,9 +412,21 @@ async function apiFetch(path, options = {}) {
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
     const detail = data?.detail || response.statusText;
-    throw new Error(Array.isArray(detail) ? JSON.stringify(detail) : detail);
+    throw new Error(formatApiError(detail));
   }
   return data;
+}
+
+function formatApiError(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item?.msg || String(item)).join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const extras = detail.requirements || detail.forbidden_fields || [];
+    return [detail.message, ...extras].filter(Boolean).join(": ");
+  }
+  return "Request failed";
 }
 
 async function apiBlob(path) {
@@ -488,6 +523,12 @@ async function checkApi() {
   return false;
 }
 
+async function checkApiAndOrganizations() {
+  const online = await checkApi();
+  if (online) await refreshOrganizations();
+  return online;
+}
+
 async function fetchHealth(apiBase) {
   const response = await fetch(`${apiBase}/health`);
   const text = await response.text();
@@ -511,7 +552,7 @@ async function authenticate(mode) {
     email: els.email.value.trim(),
     password: els.password.value,
   };
-  if (mode === "register") payload.role = els.role.value;
+  if (mode === "register") payload.role = "borrower";
 
   const endpoint = mode === "register" ? "/auth/register" : "/auth/login";
   const auth = await apiFetch(endpoint, {
@@ -528,15 +569,14 @@ async function authenticate(mode) {
   return auth;
 }
 
-function fillDemoCredentials(email, role) {
+function fillDemoCredentials(email) {
   els.email.value = email;
   els.password.value = "password123";
-  els.role.value = role;
 }
 
 async function enterDemoWorkspace(email, role) {
-  fillDemoCredentials(email, role);
-  const online = await checkApi();
+  fillDemoCredentials(email);
+  const online = await checkApiAndOrganizations();
   if (!online) {
     showMessage("Start MicroScore first, then try demo entry again", "error");
     return;
@@ -549,7 +589,7 @@ async function loadRoleWorkspace(role) {
   if (role === "mfi_analyst") {
     await refreshApplications();
   } else if (role === "admin") {
-    await refreshAudit();
+    await Promise.all([refreshAudit(), refreshStaffUsers(), refreshOrganizations()]);
   }
 }
 
@@ -558,6 +598,7 @@ async function resetStaticDemoData() {
 
   window.MicroScoreMockApi.resetDemo();
   resetApplicationViews();
+  await refreshOrganizations();
   fillApplicationForm(demoApplication);
 
   if (state.token) {
@@ -588,9 +629,12 @@ function applicationPayload() {
   const form = els.applicationForm;
   return {
     requested_amount: formNumber(form, "requested_amount"),
+    organization_id: form.elements.organization_id.value,
     purpose: form.elements.purpose.value.trim(),
     district: form.elements.district.value,
     settlement_type: form.elements.settlement_type.value,
+    consent_confirmed: borrowerConsentAcknowledged(),
+    consent_version: DEMO_CONSENT_VERSION,
     behavioral_signals: {
       annual_income: formNumber(form, "annual_income"),
       total_outstanding_debt: formNumber(form, "total_outstanding_debt"),
@@ -1751,6 +1795,78 @@ async function refreshAudit() {
   ]);
 }
 
+async function refreshStaffUsers() {
+  const rows = await apiFetch("/admin/users");
+  renderSimpleTable(els.staffUsers, rows, [
+    ["email", "Email"],
+    ["role", "Role", formatPolicyName],
+    ["organization_id", "Organization"],
+    ["created_at", "Created"],
+  ]);
+}
+
+function syncOrganizationSelect(select, organizations) {
+  if (!select) return;
+  const previousValue = select.value;
+  select.innerHTML = organizations
+    .map(
+      (organization) =>
+        `<option value="${escapeHtml(organization.id)}">${escapeHtml(organization.name)}</option>`,
+    )
+    .join("");
+  if (organizations.some((organization) => organization.id === previousValue)) {
+    select.value = previousValue;
+  }
+}
+
+async function refreshOrganizations() {
+  const organizations = await apiFetch("/organizations");
+  state.organizations = organizations;
+  syncOrganizationSelect(els.applicationOrganization, organizations);
+  syncOrganizationSelect(els.staffOrganization, organizations);
+  renderSimpleTable(els.organizationDirectory, organizations, [
+    ["name", "Organization"],
+    ["id", "ID"],
+    ["region", "Region"],
+  ]);
+  return organizations;
+}
+
+async function createOrganization(event) {
+  event.preventDefault();
+  const form = els.organizationForm;
+  const created = await apiFetch("/admin/organizations", {
+    method: "POST",
+    body: JSON.stringify({
+      id: form.elements.id.value.trim(),
+      name: form.elements.name.value.trim(),
+      region: form.elements.region.value.trim(),
+    }),
+  });
+  form.reset();
+  form.elements.region.value = "Pavlodar region, Kazakhstan";
+  await Promise.all([refreshOrganizations(), refreshAudit()]);
+  els.staffOrganization.value = created.id;
+  showMessage(`Created ${created.name}`, "ok");
+}
+
+async function createStaffUser(event) {
+  event.preventDefault();
+  const form = els.staffForm;
+  const created = await apiFetch("/admin/users", {
+    method: "POST",
+    body: JSON.stringify({
+      email: form.elements.email.value.trim(),
+      password: form.elements.password.value,
+      role: "mfi_analyst",
+      organization_id: form.elements.organization_id.value,
+    }),
+  });
+  form.reset();
+  showMessage(`Created ${created.email}`, "ok");
+  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+}
+
 async function clearApplications() {
   const confirmed = window.confirm("Clear all loan applications from the local demo database?");
   if (!confirmed) return;
@@ -1794,8 +1910,12 @@ function renderSimpleTable(container, rows, columns) {
 function wireEvents() {
   els.apiBase.value = state.apiBase;
   window.addEventListener("hashchange", applyRoute);
-  els.checkApiButton.addEventListener("click", () => checkApi());
-  els.apiBase.addEventListener("change", () => checkApi());
+  els.checkApiButton.addEventListener("click", () => {
+    checkApiAndOrganizations().catch((error) => showMessage(error.message, "error"));
+  });
+  els.apiBase.addEventListener("change", () => {
+    checkApiAndOrganizations().catch((error) => showMessage(error.message, "error"));
+  });
   els.roleTabs.forEach((tab) => {
     tab.addEventListener("click", () => switchView(tab.dataset.view));
   });
@@ -1810,10 +1930,7 @@ function wireEvents() {
       .then((auth) => loadRoleWorkspace(auth.role))
       .catch((error) => showMessage(error.message, "error"));
   });
-  els.logoutButton.addEventListener("click", () => {
-    clearSession();
-    showMessage("Signed out", "info");
-  });
+  els.logoutButton.addEventListener("click", () => logoutSession());
   els.resetDemoData.addEventListener("click", () => {
     resetStaticDemoData().catch((error) => showMessage(error.message, "error"));
   });
@@ -1861,6 +1978,18 @@ function wireEvents() {
   els.refreshAudit.addEventListener("click", () => {
     refreshAudit().catch((error) => showMessage(error.message, "error"));
   });
+  els.refreshUsers.addEventListener("click", () => {
+    refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
+  });
+  els.refreshOrganizations.addEventListener("click", () => {
+    refreshOrganizations().catch((error) => showMessage(error.message, "error"));
+  });
+  els.organizationForm.addEventListener("submit", (event) => {
+    createOrganization(event).catch((error) => showMessage(error.message, "error"));
+  });
+  els.staffForm.addEventListener("submit", (event) => {
+    createStaffUser(event).catch((error) => showMessage(error.message, "error"));
+  });
   els.clearApplications.addEventListener("click", () => {
     clearApplications().catch((error) => showMessage(error.message, "error"));
   });
@@ -1875,4 +2004,4 @@ function restoreState() {
 
 wireEvents();
 restoreState();
-checkApi();
+checkApiAndOrganizations().catch((error) => showMessage(error.message, "error"));

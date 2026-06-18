@@ -13,14 +13,15 @@ from __future__ import annotations
 
 import csv
 from dataclasses import asdict
+from datetime import datetime, timezone
 from functools import lru_cache
 from io import StringIO
+import os
 from typing import Any
 from uuid import uuid4
-from datetime import datetime, timezone
 
 try:
-    from fastapi import Depends, FastAPI, HTTPException, status
+    from fastapi import Depends, FastAPI, HTTPException, Request, status
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import Response
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -29,8 +30,14 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on optional ext
         'MicroScore API dependencies are missing. Install them with: pip install -e ".[app]"'
     ) from exc
 
-from .database import DuplicateUserError, MicroScoreRepository
+from .database import (
+    DuplicateOrganizationError,
+    DuplicateUserError,
+    MicroScoreRepository,
+)
 from .analytics import policy_analytics as build_policy_analytics
+from .privacy import find_forbidden_signal_paths
+from .rate_limit import LoginRateLimiter
 from .schemas import (
     ApplicationDecisionCreate,
     ApplicationCreate,
@@ -43,14 +50,33 @@ from .schemas import (
     HealthResponse,
     LoanApplicationResponse,
     LoginRequest,
+    LogoutResponse,
+    OrganizationCreate,
+    OrganizationPublic,
     PilotReadinessResponse,
     PolicyAnalyticsResponse,
     RegisterRequest,
     SegmentAnalyticsRow,
+    StaffUserCreate,
     UserPublic,
 )
 from .scoring import get_scoring_service
-from .security import create_token, hash_password, verify_password
+from .security import create_token, hash_password, password_policy_violations, verify_password
+
+
+DEFAULT_CORS_ORIGINS = (
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://alex-tereshkovv.github.io",
+)
+
+
+def configured_cors_origins() -> list[str]:
+    raw_value = os.environ.get("MICROSCORE_CORS_ORIGINS", "").strip()
+    if not raw_value:
+        return list(DEFAULT_CORS_ORIGINS)
+    origins = [item.strip().rstrip("/") for item in raw_value.split(",")]
+    return [origin for origin in origins if origin]
 
 
 app = FastAPI(
@@ -60,9 +86,9 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=configured_cors_origins(),
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 security = HTTPBearer()
 
@@ -70,6 +96,36 @@ security = HTTPBearer()
 @lru_cache(maxsize=1)
 def get_repository() -> MicroScoreRepository:
     return MicroScoreRepository()
+
+
+@lru_cache(maxsize=1)
+def get_login_rate_limiter() -> LoginRateLimiter:
+    return LoginRateLimiter()
+
+
+def _login_rate_key(request: Request, email: str) -> str:
+    client_host = request.client.host if request.client else "unknown"
+    return f"{client_host}:{email}"
+
+
+def _raise_login_rate_limit(retry_after: int) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Too many login attempts. Try again later.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _validate_new_password(password: str) -> None:
+    violations = password_policy_violations(password)
+    if violations:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Password does not meet the registration policy",
+                "requirements": violations,
+            },
+        )
 
 
 def current_user(
@@ -94,6 +150,18 @@ def require_admin_user(user: dict[str, Any] = Depends(current_user)) -> dict[str
     return user
 
 
+def _mfi_organization_scope(user: dict[str, Any]) -> str | None:
+    if user["role"] == "admin":
+        return None
+    organization_id = user.get("organization_id")
+    if not organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFI analyst is not assigned to an organization",
+        )
+    return str(organization_id)
+
+
 def _application_for_user(
     application_id: str,
     user: dict[str, Any],
@@ -104,7 +172,10 @@ def _application_for_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
     is_owner = application["borrower_email"] == user["email"]
-    can_review = user["role"] in {"mfi_analyst", "admin"}
+    can_review = user["role"] == "admin" or (
+        user["role"] == "mfi_analyst"
+        and user.get("organization_id") == application.get("organization_id")
+    )
     if not is_owner and not can_review:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
     return application
@@ -112,6 +183,32 @@ def _application_for_user(
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _validate_application_privacy(payload: ApplicationCreate) -> str:
+    if not payload.consent_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Confirm synthetic-data consent before submitting an application",
+        )
+
+    consent_version = (payload.consent_version or "").strip()
+    if not consent_version:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A consent version is required for auditability",
+        )
+
+    forbidden_paths = find_forbidden_signal_paths(payload.behavioral_signals)
+    if forbidden_paths:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Remove sensitive personal fields before submitting",
+                "forbidden_fields": forbidden_paths,
+            },
+        )
+    return consent_version
 
 
 def _timeline_title(action: str) -> str:
@@ -153,6 +250,7 @@ def _review_packet(
             "purpose": application["purpose"],
             "district": application.get("district"),
             "settlement_type": application.get("settlement_type"),
+            "organization_id": application.get("organization_id"),
             "created_at": application["created_at"],
             "scored_at": application.get("scored_at"),
         },
@@ -268,6 +366,7 @@ def _review_checklist(
 
 PORTFOLIO_EXPORT_FIELDS = (
     "application_id",
+    "organization_id",
     "borrower_email",
     "status",
     "created_at",
@@ -379,6 +478,7 @@ def _portfolio_export_row(application: dict[str, Any]) -> dict[str, Any]:
     governance_flags = _review_governance_flags(application)
     return {
         "application_id": application["id"],
+        "organization_id": application.get("organization_id") or "",
         "borrower_email": application["borrower_email"],
         "status": application["status"],
         "created_at": application["created_at"],
@@ -426,12 +526,27 @@ def pilot_readiness() -> PilotReadinessResponse:
     }
 
 
+@app.get("/organizations", response_model=list[OrganizationPublic])
+def list_public_organizations(
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    return repository.list_organizations()
+
+
 @app.post("/auth/register", response_model=AuthResponse)
 def register(
     payload: RegisterRequest,
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> AuthResponse:
     email = payload.email.strip().lower()
+    if payload.role != "borrower":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is limited to borrower accounts",
+        )
+
+    _validate_new_password(payload.password)
+
     token = create_token()
 
     try:
@@ -440,27 +555,64 @@ def register(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
 
     repository.create_session(token, email)
-    return AuthResponse(access_token=token, role=payload.role)
+    return AuthResponse(access_token=token, role=payload.role, organization_id=None)
 
 
 @app.post("/auth/login", response_model=AuthResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     repository: MicroScoreRepository = Depends(get_repository),
+    limiter: LoginRateLimiter = Depends(get_login_rate_limiter),
 ) -> AuthResponse:
     email = payload.email.strip().lower()
+    rate_key = _login_rate_key(request, email)
+    retry_after = limiter.retry_after(rate_key)
+    if retry_after:
+        _raise_login_rate_limit(retry_after)
+
     user = repository.get_user(email)
     if user is None or not verify_password(payload.password, user["password_hash"]):
+        retry_after = limiter.record_failure(rate_key)
+        if retry_after:
+            _raise_login_rate_limit(retry_after)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
+    limiter.record_success(rate_key)
     token = create_token()
     repository.create_session(token, email)
-    return AuthResponse(access_token=token, role=user["role"])
+    return AuthResponse(
+        access_token=token,
+        role=user["role"],
+        organization_id=user.get("organization_id"),
+    )
+
+
+@app.post("/auth/logout", response_model=LogoutResponse)
+def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user: dict[str, Any] = Depends(current_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> LogoutResponse:
+    revoked = repository.revoke_session(credentials.credentials)
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="user_logged_out",
+        entity_type="session",
+        entity_id=user["email"],
+        details={"role": user["role"]},
+    )
+    return LogoutResponse(revoked=revoked)
 
 
 @app.get("/me", response_model=UserPublic)
 def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    return {"email": user["email"], "role": user["role"], "created_at": user["created_at"]}
+    return {
+        "email": user["email"],
+        "role": user["role"],
+        "organization_id": user.get("organization_id"),
+        "created_at": user["created_at"],
+    }
 
 
 @app.post("/applications", response_model=LoanApplicationResponse)
@@ -472,6 +624,12 @@ def create_application(
     if user["role"] != "borrower":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Borrower account required")
 
+    consent_version = _validate_application_privacy(payload)
+    if repository.get_organization(payload.organization_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Select a valid MFI organization",
+        )
     application_id = str(uuid4())
     features = dict(payload.behavioral_signals)
     features["loan_application_amount"] = payload.requested_amount
@@ -488,7 +646,22 @@ def create_application(
         district=payload.district,
         settlement_type=payload.settlement_type,
         behavioral_signals=features,
+        consent_version=consent_version,
+        organization_id=payload.organization_id,
     )
+
+
+@app.get("/applications", response_model=list[LoanApplicationResponse])
+def list_borrower_applications(
+    user: dict[str, Any] = Depends(current_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    if user["role"] != "borrower":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Borrower account required",
+        )
+    return repository.list_borrower_applications(user["email"])
 
 
 @app.get("/applications/{application_id}", response_model=LoanApplicationResponse)
@@ -518,18 +691,20 @@ def application_timeline(
 
 @app.get("/mfi/applications", response_model=list[LoanApplicationResponse])
 def list_mfi_applications(
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
-    return repository.list_applications()
+    return repository.list_applications(_mfi_organization_scope(user))
 
 
 @app.get("/mfi/applications/export.csv")
 def export_mfi_applications(
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> Response:
-    csv_text = _portfolio_export_csv(repository.list_applications())
+    csv_text = _portfolio_export_csv(
+        repository.list_applications(_mfi_organization_scope(user))
+    )
     return Response(
         content=csv_text,
         media_type="text/csv; charset=utf-8",
@@ -545,9 +720,7 @@ def score_application(
     user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    application = repository.get_application(application_id)
-    if application is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    application = _application_for_user(application_id, user, repository)
 
     score = get_scoring_service().score(application["behavioral_signals"])
     updated = repository.update_application_score(
@@ -567,9 +740,7 @@ def record_application_decision(
     user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    application = repository.get_application(application_id)
-    if application is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    application = _application_for_user(application_id, user, repository)
     if application.get("score_result") is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -594,12 +765,10 @@ def record_application_decision(
 )
 def application_review_packet(
     application_id: str,
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    application = repository.get_application(application_id)
-    if application is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    application = _application_for_user(application_id, user, repository)
     timeline = [
         _timeline_event(event)
         for event in repository.list_application_timeline(application_id)
@@ -609,26 +778,28 @@ def application_review_packet(
 
 @app.get("/mfi/analytics/segments", response_model=list[SegmentAnalyticsRow])
 def segment_analytics(
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
-    return repository.segment_analytics()
+    return repository.segment_analytics(_mfi_organization_scope(user))
 
 
 @app.get("/mfi/analytics/policies", response_model=PolicyAnalyticsResponse)
 def policy_analytics(
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    return build_policy_analytics(repository.list_applications())
+    return build_policy_analytics(
+        repository.list_applications(_mfi_organization_scope(user))
+    )
 
 
 @app.get("/mfi/analytics/decisions", response_model=DecisionAnalyticsResponse)
 def decision_analytics(
-    _user: dict[str, Any] = Depends(require_mfi_user),
+    user: dict[str, Any] = Depends(require_mfi_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    return repository.decision_analytics()
+    return repository.decision_analytics(_mfi_organization_scope(user))
 
 
 @app.get("/admin/audit-events", response_model=list[AuditEventResponse])
@@ -637,6 +808,99 @@ def audit_events(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_audit_events()
+
+
+@app.get("/admin/users", response_model=list[UserPublic])
+def list_admin_users(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    return repository.list_users()
+
+
+@app.post(
+    "/admin/organizations",
+    response_model=OrganizationPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_organization(
+    payload: OrganizationCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    organization_id = payload.id.strip().lower()
+    if not organization_id.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Organization id may contain letters, numbers, hyphens, and underscores",
+        )
+    try:
+        created = repository.create_organization(
+            organization_id=organization_id,
+            name=payload.name.strip(),
+            region=payload.region.strip(),
+        )
+    except DuplicateOrganizationError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization already exists",
+        )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="organization_created",
+        entity_type="mfi_organization",
+        entity_id=organization_id,
+        details={"name": created["name"], "region": created["region"]},
+    )
+    return created
+
+
+@app.post(
+    "/admin/users",
+    response_model=UserPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_staff_user(
+    payload: StaffUserCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    _validate_new_password(payload.password)
+    email = payload.email.strip().lower()
+    if repository.get_organization(payload.organization_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Select a valid MFI organization",
+        )
+    try:
+        created = repository.create_user(
+            email,
+            hash_password(payload.password),
+            payload.role,
+            payload.organization_id,
+        )
+    except DuplicateUserError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists",
+        )
+
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="staff_user_created",
+        entity_type="user",
+        entity_id=email,
+        details={
+            "role": payload.role,
+            "organization_id": payload.organization_id,
+        },
+    )
+    return {
+        "email": created["email"],
+        "role": created["role"],
+        "organization_id": created.get("organization_id"),
+        "created_at": created["created_at"],
+    }
 
 
 @app.delete("/admin/applications", response_model=ClearApplicationsResponse)

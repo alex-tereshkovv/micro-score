@@ -1,6 +1,7 @@
 (() => {
   const demo = {
     users: {},
+    organizations: {},
     sessions: {},
     applications: [],
     timelines: {},
@@ -12,10 +13,105 @@
   };
 
   const demoUsers = [
-    ["borrower@test.com", "borrower"],
-    ["analyst@test.com", "mfi_analyst"],
-    ["admin@test.com", "admin"],
+    ["borrower@test.com", "borrower", null],
+    ["analyst@test.com", "mfi_analyst", "pavlodar-demo-mfi"],
+    ["admin@test.com", "admin", null],
   ];
+
+  const commonPasswords = new Set([
+    "1234567890",
+    "admin123",
+    "letmein123",
+    "password",
+    "password123",
+    "qwerty123",
+  ]);
+
+  function passwordPolicyViolations(password) {
+    const value = String(password || "");
+    const violations = [];
+    if (value.length < 10) violations.push("use at least 10 characters");
+    if (!/[a-z]/.test(value)) violations.push("include a lowercase letter");
+    if (!/[A-Z]/.test(value)) violations.push("include an uppercase letter");
+    if (!/[0-9]/.test(value)) violations.push("include a number");
+    if (/^[a-z0-9]+$/i.test(value)) violations.push("include a symbol");
+    if (commonPasswords.has(value.trim().toLowerCase())) violations.push("avoid a common password");
+    return violations;
+  }
+
+  const forbiddenSignalTokens = new Set([
+    "address",
+    "biometric",
+    "email",
+    "iin",
+    "latitude",
+    "longitude",
+    "passport",
+    "phone",
+    "photo",
+    "voice",
+  ]);
+  const forbiddenSignalPhrases = [
+    "bank_statement",
+    "device_fingerprint",
+    "first_name",
+    "full_name",
+    "id_number",
+    "last_name",
+    "national_id",
+    "phone_book",
+    "precise_geolocation",
+    "raw_transaction",
+    "social_media",
+    "transaction_description",
+    "voice_recording",
+  ];
+
+  function normalizedSignalKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function signalKeyIsForbidden(key) {
+    const normalized = normalizedSignalKey(key);
+    const tokens = normalized.split("_");
+    return (
+      tokens.some((token) => forbiddenSignalTokens.has(token)) ||
+      forbiddenSignalPhrases.some((phrase) => normalized.includes(phrase))
+    );
+  }
+
+  function findForbiddenSignalPaths(value, path = "behavioral_signals") {
+    const matches = [];
+    if (Array.isArray(value)) {
+      value.forEach((child, index) => {
+        matches.push(...findForbiddenSignalPaths(child, `${path}[${index}]`));
+      });
+    } else if (value && typeof value === "object") {
+      Object.entries(value).forEach(([key, child]) => {
+        const childPath = `${path}.${key}`;
+        if (signalKeyIsForbidden(key)) matches.push(childPath);
+        matches.push(...findForbiddenSignalPaths(child, childPath));
+      });
+    }
+    return [...new Set(matches)].sort();
+  }
+
+  function validateApplicationPrivacy(payload) {
+    if (payload.consent_confirmed !== true) {
+      throw new Error("Confirm synthetic-data consent before submitting an application");
+    }
+    if (!String(payload.consent_version || "").trim()) {
+      throw new Error("A consent version is required for auditability");
+    }
+    const forbiddenPaths = findForbiddenSignalPaths(payload.behavioral_signals || {});
+    if (forbiddenPaths.length) {
+      throw new Error(`Remove sensitive personal fields: ${forbiddenPaths.join(", ")}`);
+    }
+  }
 
   const seedApplications = [
     {
@@ -142,7 +238,14 @@
 
   function resetDemo() {
     demo.users = {};
-    demo.sessions = {};
+    demo.organizations = {
+      "pavlodar-demo-mfi": {
+        id: "pavlodar-demo-mfi",
+        name: "Pavlodar Demo MFI",
+        region: "Pavlodar region, Kazakhstan",
+        created_at: nowIso(),
+      },
+    };
     demo.applications = [];
     demo.timelines = {};
     demo.auditEvents = [];
@@ -151,8 +254,14 @@
     demo.nextDecisionId = 1;
     demo.nextApplicationNumber = 1;
 
-    demoUsers.forEach(([email, role]) => {
-      demo.users[email] = { email, role, password: "password123", created_at: nowIso() };
+    demoUsers.forEach(([email, role, organizationId]) => {
+      demo.users[email] = {
+        email,
+        role,
+        organization_id: organizationId,
+        password: "password123",
+        created_at: nowIso(),
+      };
     });
 
     seedApplications.forEach((seed, index) => {
@@ -209,6 +318,7 @@
       purpose: payload.purpose || "",
       district: payload.district || null,
       settlement_type: payload.settlement_type || null,
+      organization_id: payload.organization_id || "pavlodar-demo-mfi",
       behavioral_signals: behavioral,
       score_result: null,
       decision_result: null,
@@ -409,10 +519,16 @@
   }
 
   function currentUser(session) {
-    if (!session?.email || !session?.role) {
+    const sessionEmail = session?.token ? demo.sessions[session.token] : null;
+    const user = sessionEmail ? demo.users[sessionEmail] : null;
+    if (!user || user.email !== session?.email || user.role !== session?.role) {
       throw new Error("Demo session expired. Sign in again.");
     }
-    return { email: session.email, role: session.role };
+    return {
+      email: user.email,
+      role: user.role,
+      organization_id: user.organization_id || null,
+    };
   }
 
   function requireMfi(session) {
@@ -433,10 +549,27 @@
     return app;
   }
 
+  function mfiApplications(user) {
+    if (user.role === "admin") return demo.applications;
+    if (!user.organization_id) throw new Error("MFI analyst is not assigned to an organization");
+    return demo.applications.filter((app) => app.organization_id === user.organization_id);
+  }
+
+  function mfiApplication(applicationId, user) {
+    const app = findApplication(applicationId);
+    if (user.role !== "admin" && app.organization_id !== user.organization_id) {
+      throw new Error("Not allowed");
+    }
+    return app;
+  }
+
   function visibleApplication(applicationId, session) {
     const user = currentUser(session);
     const app = findApplication(applicationId);
-    if (app.borrower_email !== user.email && !["mfi_analyst", "admin"].includes(user.role)) {
+    const canReview = user.role === "admin" || (
+      user.role === "mfi_analyst" && app.organization_id === user.organization_id
+    );
+    if (app.borrower_email !== user.email && !canReview) {
       throw new Error("Not allowed");
     }
     return app;
@@ -456,6 +589,7 @@
         purpose: application.purpose,
         district: application.district,
         settlement_type: application.settlement_type,
+        organization_id: application.organization_id,
         created_at: application.created_at,
         scored_at: application.scored_at,
       },
@@ -536,8 +670,8 @@
     return rows;
   }
 
-  function analyticsSegments() {
-    const scored = demo.applications.filter((app) => app.score_result);
+  function analyticsSegments(applications = demo.applications) {
+    const scored = applications.filter((app) => app.score_result);
     const specs = [
       ["gender", (app) => app.behavioral_signals.gender || "unknown"],
       ["employment_status", (app) => app.behavioral_signals.employment_status || "unknown"],
@@ -552,8 +686,8 @@
     })));
   }
 
-  function policyAnalytics() {
-    const scored = demo.applications.filter((app) => app.score_result);
+  function policyAnalytics(applications = demo.applications) {
+    const scored = applications.filter((app) => app.score_result);
     const policies = [
       ["balanced_review", "Balanced inclusion and lender sustainability", 0.24, 0.58],
       ["inclusion_first", "More approvals with stronger manual monitoring", 0.34, 0.7],
@@ -633,11 +767,11 @@
     return "review";
   }
 
-  function decisionAnalytics() {
-    const apps = demo.applications.filter((app) => app.score_result);
+  function decisionAnalytics(applications = demo.applications) {
+    const apps = applications.filter((app) => app.score_result);
     const decided = apps.filter((app) => app.decision_result);
     return {
-      application_count: demo.applications.length,
+      application_count: applications.length,
       decided_application_count: decided.length,
       decision_rows: decisionRows(decided, () => "all").map((row) => ({
         decision: row.decision,
@@ -729,9 +863,10 @@
     return total ? count / total : 0;
   }
 
-  function portfolioCsv() {
+  function portfolioCsv(applications = demo.applications) {
     const columns = [
       "application_id",
+      "organization_id",
       "borrower_email",
       "status",
       "requested_amount",
@@ -742,11 +877,12 @@
       "decision",
       "policy_name",
     ];
-    const rows = demo.applications.map((app) => {
+    const rows = applications.map((app) => {
       const score = app.score_result || {};
       const decision = app.decision_result || {};
       return [
         app.id,
+        app.organization_id,
         app.borrower_email,
         app.status,
         app.requested_amount,
@@ -774,29 +910,65 @@
       if (!user || user.password !== body.password) throw new Error("Invalid demo credentials");
       const token = `mock-token-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       demo.sessions[token] = email;
-      return { access_token: token, token_type: "bearer", role: user.role };
+      return {
+        access_token: token,
+        token_type: "bearer",
+        role: user.role,
+        organization_id: user.organization_id || null,
+      };
     }
 
     if (cleanPath === "/auth/register" && method === "POST") {
       const email = String(body.email || "").trim().toLowerCase();
+      if (body.role && body.role !== "borrower") {
+        throw new Error("Public registration is limited to borrower accounts");
+      }
+      const passwordViolations = passwordPolicyViolations(body.password);
+      if (passwordViolations.length) {
+        throw new Error(`Password does not meet the registration policy: ${passwordViolations.join(", ")}`);
+      }
       if (demo.users[email]) throw new Error("User already exists in static demo");
       demo.users[email] = {
         email,
-        role: body.role || "borrower",
+        role: "borrower",
+        organization_id: null,
         password: body.password || "",
         created_at: nowIso(),
       };
       const token = `mock-token-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       demo.sessions[token] = email;
-      return { access_token: token, token_type: "bearer", role: demo.users[email].role };
+      return {
+        access_token: token,
+        token_type: "bearer",
+        role: demo.users[email].role,
+        organization_id: null,
+      };
+    }
+
+    if (cleanPath === "/auth/logout" && method === "POST") {
+      const user = currentUser(session);
+      const revoked = Boolean(demo.sessions[session.token]);
+      delete demo.sessions[session.token];
+      addAudit("user_logged_out", "session", user.email, user.email, { role: user.role });
+      return { revoked };
+    }
+
+    if (cleanPath === "/organizations" && method === "GET") {
+      return clone(Object.values(demo.organizations));
     }
 
     if (cleanPath === "/applications" && method === "POST") {
       const user = currentUser(session);
       if (user.role !== "borrower") throw new Error("Borrower account required");
+      validateApplicationPrivacy(body);
+      if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
       const app = createApplicationRecord(body, user.email);
       demo.applications.unshift(app);
-      addAudit("application_created", "application", app.id, user.email, { mode: "static_demo" });
+      addAudit("application_created", "application", app.id, user.email, {
+        mode: "static_demo",
+        consent_confirmed: true,
+        consent_version: body.consent_version,
+      });
       return clone(app);
     }
 
@@ -810,14 +982,14 @@
     }
 
     if (cleanPath === "/mfi/applications" && method === "GET") {
-      requireMfi(session);
-      return clone(demo.applications);
+      const user = requireMfi(session);
+      return clone(mfiApplications(user));
     }
 
     const scoreMatch = cleanPath.match(/^\/mfi\/applications\/([^/]+)\/score$/);
     if (scoreMatch && method === "POST") {
       const user = requireMfi(session);
-      const app = findApplication(decodeURIComponent(scoreMatch[1]));
+      const app = mfiApplication(decodeURIComponent(scoreMatch[1]), user);
       app.score_result = buildScore(app);
       app.status = "scored";
       app.scored_at = nowIso();
@@ -831,14 +1003,14 @@
 
     const packetMatch = cleanPath.match(/^\/mfi\/applications\/([^/]+)\/review-packet$/);
     if (packetMatch && method === "GET") {
-      requireMfi(session);
-      return clone(reviewPacket(findApplication(decodeURIComponent(packetMatch[1]))));
+      const user = requireMfi(session);
+      return clone(reviewPacket(mfiApplication(decodeURIComponent(packetMatch[1]), user)));
     }
 
     const decisionMatch = cleanPath.match(/^\/mfi\/applications\/([^/]+)\/decision$/);
     if (decisionMatch && method === "POST") {
       const user = requireMfi(session);
-      const app = findApplication(decodeURIComponent(decisionMatch[1]));
+      const app = mfiApplication(decodeURIComponent(decisionMatch[1]), user);
       if (!app.score_result) throw new Error("Score the application before saving a decision");
       app.decision_result = createDecision(app.id, user.email, body);
       addTimeline(app.id, "application_decision_recorded", user.email, {
@@ -850,18 +1022,78 @@
     }
 
     if (cleanPath === "/mfi/analytics/segments" && method === "GET") {
-      requireMfi(session);
-      return clone(analyticsSegments());
+      const user = requireMfi(session);
+      return clone(analyticsSegments(mfiApplications(user)));
     }
 
     if (cleanPath === "/mfi/analytics/policies" && method === "GET") {
-      requireMfi(session);
-      return clone(policyAnalytics());
+      const user = requireMfi(session);
+      return clone(policyAnalytics(mfiApplications(user)));
     }
 
     if (cleanPath === "/mfi/analytics/decisions" && method === "GET") {
-      requireMfi(session);
-      return clone(decisionAnalytics());
+      const user = requireMfi(session);
+      return clone(decisionAnalytics(mfiApplications(user)));
+    }
+
+    if (cleanPath === "/admin/users" && method === "GET") {
+      requireAdmin(session);
+      return clone(
+        Object.values(demo.users)
+          .map(({ email, role, organization_id, created_at }) => ({
+            email,
+            role,
+            organization_id: organization_id || null,
+            created_at,
+          }))
+          .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
+      );
+    }
+
+    if (cleanPath === "/admin/users" && method === "POST") {
+      const user = requireAdmin(session);
+      const email = String(body.email || "").trim().toLowerCase();
+      if (body.role !== "mfi_analyst") throw new Error("Only MFI analyst accounts can be provisioned");
+      if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
+      const passwordViolations = passwordPolicyViolations(body.password);
+      if (passwordViolations.length) {
+        throw new Error(`Password does not meet the registration policy: ${passwordViolations.join(", ")}`);
+      }
+      if (demo.users[email]) throw new Error("User already exists in static demo");
+      demo.users[email] = {
+        email,
+        role: "mfi_analyst",
+        organization_id: body.organization_id,
+        password: body.password,
+        created_at: nowIso(),
+      };
+      addAudit("staff_user_created", "user", email, user.email, {
+        role: "mfi_analyst",
+        organization_id: body.organization_id,
+      });
+      return clone({
+        email,
+        role: "mfi_analyst",
+        organization_id: body.organization_id,
+        created_at: demo.users[email].created_at,
+      });
+    }
+
+    if (cleanPath === "/admin/organizations" && method === "POST") {
+      const user = requireAdmin(session);
+      const organizationId = String(body.id || "").trim().toLowerCase();
+      if (demo.organizations[organizationId]) throw new Error("Organization already exists");
+      demo.organizations[organizationId] = {
+        id: organizationId,
+        name: body.name,
+        region: body.region,
+        created_at: nowIso(),
+      };
+      addAudit("organization_created", "mfi_organization", organizationId, user.email, {
+        name: body.name,
+        region: body.region,
+      });
+      return clone(demo.organizations[organizationId]);
     }
 
     if (cleanPath === "/admin/audit-events" && method === "GET") {
@@ -883,8 +1115,11 @@
 
   async function blob(path, session = {}) {
     if (path === "/mfi/applications/export.csv") {
-      requireMfi(session);
-      return new Blob([portfolioCsv()], { type: "text/csv;charset=utf-8" });
+      const user = requireMfi(session);
+      return new Blob(
+        [portfolioCsv(mfiApplications(user))],
+        { type: "text/csv;charset=utf-8" },
+      );
     }
     throw new Error(`Static demo file endpoint not implemented: ${path}`);
   }

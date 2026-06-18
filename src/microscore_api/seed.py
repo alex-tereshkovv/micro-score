@@ -5,11 +5,21 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from .database import DuplicateUserError, MicroScoreRepository
+from .database import (
+    DuplicateOrganizationError,
+    DuplicateUserError,
+    MicroScoreRepository,
+)
 from .scoring import get_scoring_service
 from .security import hash_password
 
 DEMO_PASSWORD = "password123"
+DEMO_ORGANIZATION_ID = "pavlodar-demo-mfi"
+DEMO_ORGANIZATION = {
+    "organization_id": DEMO_ORGANIZATION_ID,
+    "name": "Pavlodar Demo MFI",
+    "region": "Pavlodar region, Kazakhstan",
+}
 
 DEMO_USERS: tuple[dict[str, str], ...] = (
     {"email": "borrower@test.com", "role": "borrower"},
@@ -465,10 +475,18 @@ def _seed_user(
     *,
     email: str,
     role: str,
+    organization_id: str | None = None,
 ) -> bool:
     try:
-        repository.create_user(email, hash_password(DEMO_PASSWORD), role)
+        repository.create_user(
+            email,
+            hash_password(DEMO_PASSWORD),
+            role,
+            organization_id,
+        )
     except DuplicateUserError:
+        if organization_id:
+            repository.assign_user_organization(email, organization_id)
         return False
     return True
 
@@ -487,11 +505,19 @@ def seed_demo_data(
     existing_applications: list[str] = []
     scored_applications: list[str] = []
 
+    try:
+        repository.create_organization(**DEMO_ORGANIZATION)
+    except DuplicateOrganizationError:
+        pass
+
     for user in DEMO_USERS:
         created = _seed_user(
             repository,
             email=user["email"],
             role=user["role"],
+            organization_id=(
+                DEMO_ORGANIZATION_ID if user["role"] == "mfi_analyst" else None
+            ),
         )
         if created:
             created_users.append(user["email"])
@@ -515,10 +541,17 @@ def seed_demo_data(
         application_id = application["application_id"]
         existing = repository.get_application(application_id)
         if existing is None:
-            current = repository.create_application(**application)
+            current = repository.create_application(
+                **application,
+                organization_id=DEMO_ORGANIZATION_ID,
+            )
             created_applications.append(application_id)
         else:
-            current = existing
+            repository.assign_application_organization(
+                application_id,
+                DEMO_ORGANIZATION_ID,
+            )
+            current = repository.get_application(application_id) or existing
             existing_applications.append(application_id)
 
         if score_applications and current.get("score_result") is None:
@@ -540,6 +573,7 @@ def seed_demo_data(
 
     return {
         "database": str(repository.db_path),
+        "demo_organization_id": DEMO_ORGANIZATION_ID,
         "demo_password": DEMO_PASSWORD,
         "created_users": created_users,
         "existing_users": existing_users,

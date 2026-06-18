@@ -10,6 +10,10 @@ artifact for future validation.
 The API exposes the same boundary as a read-only contract at:
 `GET /governance/pilot-readiness`.
 
+Borrower submissions enforce this boundary at `POST /applications`: consent
+metadata is required and sensitive behavioral-signal keys are rejected before
+the application reaches storage or scoring.
+
 ## Design Principles
 
 - Collect only what is needed for risk research and analyst review.
@@ -59,6 +63,7 @@ The API exposes the same boundary as a read-only contract at:
 | --- | --- | --- | --- |
 | `application_id` | string | No | Random application id. |
 | `borrower_id` | string | No | Links to borrower table. |
+| `organization_id` | string | No | MFI tenant that owns the application workflow. |
 | `requested_amount_band` | string | Yes | Band instead of exact amount for early pilot. |
 | `loan_purpose` | string | Yes | Business, household, emergency, education, etc. |
 | `income_band` | string | Yes | Monthly or annual band, depending on partner data. |

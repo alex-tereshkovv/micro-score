@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import os
@@ -13,10 +14,15 @@ from typing import Any
 from microscore.paths import PROJECT_ROOT
 
 DEFAULT_API_DB_PATH = PROJECT_ROOT / "data" / "app" / "microscore.sqlite3"
+DEFAULT_SESSION_TTL_HOURS = 8.0
 
 
 class DuplicateUserError(ValueError):
     """Raised when an email is already registered."""
+
+
+class DuplicateOrganizationError(ValueError):
+    """Raised when an organization id is already registered."""
 
 
 def default_database_path() -> Path:
@@ -27,9 +33,25 @@ def default_database_path() -> Path:
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
-
     return datetime.now(timezone.utc).isoformat()
+
+
+def configured_session_ttl_hours() -> float:
+    raw_value = os.environ.get("MICROSCORE_SESSION_TTL_HOURS", "").strip()
+    if not raw_value:
+        return DEFAULT_SESSION_TTL_HOURS
+    try:
+        value = float(raw_value)
+    except ValueError:
+        return DEFAULT_SESSION_TTL_HOURS
+    return value if value > 0 else DEFAULT_SESSION_TTL_HOURS
+
+
+def _parse_utc_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _json_dumps(value: Any) -> str:
@@ -42,7 +64,26 @@ def _json_loads(value: str | None) -> Any:
     return json.loads(value)
 
 
+def _ensure_column(
+    connection: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 DECISION_VALUES = ("approve", "review", "decline")
+DECISION_WORKFLOW_STATUSES = {
+    "approve": "approved",
+    "review": "under_review",
+    "decline": "declined",
+}
 PROXY_SENSITIVITY_THRESHOLD = 0.2
 
 
@@ -138,10 +179,18 @@ class MicroScoreRepository:
         with self._connection() as connection:
             connection.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS mfi_organizations (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    region TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS users (
                     email TEXT PRIMARY KEY,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL,
+                    organization_id TEXT REFERENCES mfi_organizations(id),
                     created_at TEXT NOT NULL
                 );
 
@@ -159,6 +208,7 @@ class MicroScoreRepository:
                     purpose TEXT NOT NULL,
                     district TEXT,
                     settlement_type TEXT,
+                    organization_id TEXT REFERENCES mfi_organizations(id),
                     behavioral_signals_json TEXT NOT NULL,
                     score_result_json TEXT,
                     created_at TEXT NOT NULL,
@@ -194,17 +244,90 @@ class MicroScoreRepository:
                     ON audit_events(entity_type, entity_id);
                 """
             )
+            _ensure_column(
+                connection,
+                "users",
+                "organization_id",
+                "TEXT REFERENCES mfi_organizations(id)",
+            )
+            _ensure_column(
+                connection,
+                "loan_applications",
+                "organization_id",
+                "TEXT REFERENCES mfi_organizations(id)",
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_applications_organization
+                ON loan_applications(organization_id)
+                """
+            )
 
-    def create_user(self, email: str, password_hash: str, role: str) -> dict[str, Any]:
+    def create_organization(
+        self,
+        *,
+        organization_id: str,
+        name: str,
+        region: str,
+    ) -> dict[str, Any]:
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO mfi_organizations (id, name, region, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (organization_id, name, region, _now_iso()),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateOrganizationError(organization_id) from exc
+        return self.get_organization(organization_id) or {}
+
+    def get_organization(self, organization_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id, name, region, created_at
+                FROM mfi_organizations
+                WHERE id = ?
+                """,
+                (organization_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_organizations(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, name, region, created_at
+                FROM mfi_organizations
+                ORDER BY name
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def create_user(
+        self,
+        email: str,
+        password_hash: str,
+        role: str,
+        organization_id: str | None = None,
+    ) -> dict[str, Any]:
         now = _now_iso()
         try:
             with self._connection() as connection:
                 connection.execute(
                     """
-                    INSERT INTO users (email, password_hash, role, created_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO users (
+                        email,
+                        password_hash,
+                        role,
+                        organization_id,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?)
                     """,
-                    (email, password_hash, role, now),
+                    (email, password_hash, role, organization_id, now),
                 )
         except sqlite3.IntegrityError as exc:
             raise DuplicateUserError(email) from exc
@@ -214,7 +337,7 @@ class MicroScoreRepository:
             action="user_registered",
             entity_type="user",
             entity_id=email,
-            details={"role": role},
+            details={"role": role, "organization_id": organization_id},
         )
         return self.get_user(email) or {}
 
@@ -222,7 +345,7 @@ class MicroScoreRepository:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT email, password_hash, role, created_at
+                SELECT email, password_hash, role, organization_id, created_at
                 FROM users
                 WHERE email = ?
                 """,
@@ -230,28 +353,82 @@ class MicroScoreRepository:
             ).fetchone()
         return dict(row) if row else None
 
-    def create_session(self, token: str, email: str) -> None:
+    def list_users(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT email, role, organization_id, created_at
+                FROM users
+                ORDER BY role, email
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def assign_user_organization(self, email: str, organization_id: str | None) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "UPDATE users SET organization_id = ? WHERE email = ?",
+                (organization_id, email),
+            )
+
+    def create_session(
+        self,
+        token: str,
+        email: str,
+        *,
+        created_at: str | None = None,
+    ) -> None:
         with self._connection() as connection:
             connection.execute(
                 """
                 INSERT INTO sessions (token, email, created_at)
                 VALUES (?, ?, ?)
                 """,
-                (token, email, _now_iso()),
+                (token, email, created_at or _now_iso()),
             )
 
-    def get_user_by_token(self, token: str) -> dict[str, Any] | None:
+    def get_user_by_token(
+        self,
+        token: str,
+        *,
+        now: datetime | None = None,
+        ttl_hours: float | None = None,
+    ) -> dict[str, Any] | None:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT users.email, users.password_hash, users.role, users.created_at
+                SELECT
+                    users.email,
+                    users.password_hash,
+                    users.role,
+                    users.organization_id,
+                    users.created_at,
+                    sessions.created_at AS session_created_at
                 FROM sessions
                 JOIN users ON users.email = sessions.email
                 WHERE sessions.token = ?
                 """,
                 (token,),
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+
+        session_created_at = _parse_utc_datetime(row["session_created_at"])
+        expires_at = session_created_at + timedelta(
+            hours=ttl_hours if ttl_hours is not None else configured_session_ttl_hours()
+        )
+        if expires_at <= (now or datetime.now(timezone.utc)):
+            self.revoke_session(token)
+            return None
+
+        user = dict(row)
+        user.pop("session_created_at", None)
+        return user
+
+    def revoke_session(self, token: str) -> bool:
+        with self._connection() as connection:
+            cursor = connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        return cursor.rowcount > 0
 
     def create_application(
         self,
@@ -263,6 +440,8 @@ class MicroScoreRepository:
         district: str | None,
         settlement_type: str | None,
         behavioral_signals: dict[str, Any],
+        consent_version: str | None = None,
+        organization_id: str | None = None,
     ) -> dict[str, Any]:
         with self._connection() as connection:
             connection.execute(
@@ -275,12 +454,13 @@ class MicroScoreRepository:
                     purpose,
                     district,
                     settlement_type,
+                    organization_id,
                     behavioral_signals_json,
                     score_result_json,
                     created_at,
                     scored_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     application_id,
@@ -290,6 +470,7 @@ class MicroScoreRepository:
                     purpose,
                     district,
                     settlement_type,
+                    organization_id,
                     _json_dumps(behavioral_signals),
                     None,
                     _now_iso(),
@@ -302,7 +483,12 @@ class MicroScoreRepository:
             action="application_created",
             entity_type="loan_application",
             entity_id=application_id,
-            details={"requested_amount": requested_amount},
+            details={
+                "requested_amount": requested_amount,
+                "consent_confirmed": consent_version is not None,
+                "consent_version": consent_version,
+                "organization_id": organization_id,
+            },
         )
         return self.get_application(application_id) or {}
 
@@ -318,16 +504,54 @@ class MicroScoreRepository:
             ).fetchone()
         return self._application_from_row(row) if row else None
 
-    def list_applications(self) -> list[dict[str, Any]]:
+    def list_applications(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            if organization_id is None:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM loan_applications
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM loan_applications
+                    WHERE organization_id = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (organization_id,),
+                ).fetchall()
+        return [self._application_from_row(row) for row in rows]
+
+    def list_borrower_applications(self, borrower_email: str) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT *
                 FROM loan_applications
+                WHERE borrower_email = ?
                 ORDER BY created_at DESC
-                """
+                """,
+                (borrower_email,),
             ).fetchall()
         return [self._application_from_row(row) for row in rows]
+
+    def assign_application_organization(
+        self,
+        application_id: str,
+        organization_id: str,
+    ) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "UPDATE loan_applications SET organization_id = ? WHERE id = ?",
+                (organization_id, application_id),
+            )
 
     def clear_applications(self, *, actor_email: str) -> int:
         with self._connection() as connection:
@@ -408,6 +632,10 @@ class MicroScoreRepository:
                     _now_iso(),
                 ),
             )
+            connection.execute(
+                "UPDATE loan_applications SET status = ? WHERE id = ?",
+                (DECISION_WORKFLOW_STATUSES[decision], application_id),
+            )
 
         self.record_audit_event(
             actor_email=actor_email,
@@ -421,8 +649,15 @@ class MicroScoreRepository:
         )
         return self.get_application(application_id)
 
-    def segment_analytics(self) -> list[dict[str, Any]]:
-        scored = [item for item in self.list_applications() if item.get("score_result")]
+    def segment_analytics(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        scored = [
+            item
+            for item in self.list_applications(organization_id)
+            if item.get("score_result")
+        ]
         segments: dict[tuple[str, str], list[float]] = {}
 
         for item in scored:
@@ -451,8 +686,11 @@ class MicroScoreRepository:
             )
         return rows
 
-    def decision_analytics(self) -> dict[str, Any]:
-        applications = self.list_applications()
+    def decision_analytics(
+        self,
+        organization_id: str | None = None,
+    ) -> dict[str, Any]:
+        applications = self.list_applications(organization_id)
         decision_records = [
             application for application in applications if application.get("decision_result")
         ]
