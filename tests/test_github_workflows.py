@@ -58,6 +58,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("--check apps\\web\\mock-api.js", script)
         self.assertIn("scripts\\static-demo-smoke.js", script)
         self.assertIn("git diff --check", script)
+        self.assertIn("Assert-LastExitCode", script)
+        self.assertIn('throw "$Name failed with exit code $LASTEXITCODE."', script)
         self.assertIn("Ship it carefully", script)
 
 

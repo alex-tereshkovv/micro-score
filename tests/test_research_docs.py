@@ -18,6 +18,7 @@ class ResearchDocsTests(unittest.TestCase):
             "DEMO_WALKTHROUGH.md",
             "ENGINEERING_QUALITY.md",
             "MODEL_CARD.md",
+            "MONTE_CARLO_METHODOLOGY.md",
             "IMPACT.md",
             "PILOT_DATA_SCHEMA.md",
             "PUBLIC_DEMO_PLAN.md",
@@ -47,6 +48,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("ADMISSIONS_REVIEWER_BRIEF.md", readme)
         self.assertIn("ARCHITECTURE.md", readme)
         self.assertIn("PILOT_DATA_SCHEMA.md", readme)
+        self.assertIn("MONTE_CARLO_METHODOLOGY.md", readme)
         self.assertIn("SCREENSHOT_CHECKLIST.md", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
@@ -234,6 +236,35 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("candidate/active/inactive", architecture)
         self.assertIn("stale-score detection", architecture)
         self.assertIn("model versions", roadmap)
+
+    def test_monte_carlo_methodology_sets_statistical_boundaries(self) -> None:
+        methodology = (DOCS_ROOT / "MONTE_CARLO_METHODOLOGY.md").read_text(
+            encoding="utf-8"
+        )
+        api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")
+        model_card = (DOCS_ROOT / "MODEL_CARD.md").read_text(encoding="utf-8")
+        validation_tracker = (DOCS_ROOT / "VALIDATION_TRACKER.md").read_text(
+            encoding="utf-8"
+        )
+        research_paper = (DOCS_ROOT / "RESEARCH_PAPER.md").read_text(encoding="utf-8")
+
+        self.assertIn("does **not** randomize", methodology)
+        self.assertIn("macro_volatility * Z_k", methodology)
+        self.assertIn("common random numbers", methodology)
+        self.assertIn("5th/50th/95th percentiles", methodology)
+        self.assertIn("regulatory VaR", methodology)
+        self.assertIn("synthetic probabilities", methodology)
+        self.assertIn("default operating cost is zero", methodology)
+        self.assertIn("deliberately says", methodology)
+        self.assertIn("20 million", methodology)
+        self.assertIn("POST /mfi/simulations/portfolio", api_contract)
+        self.assertIn("portfolio_simulation_run", api_contract)
+        self.assertIn("100 to 20,000", api_contract)
+        self.assertIn("Monte Carlo Policy Lab", model_card)
+        self.assertIn("calibration volatility", validation_tracker)
+        self.assertIn("Methodological prototype only", validation_tracker)
+        self.assertIn("Monte Carlo portfolio simulation", research_paper)
+        self.assertIn("common random numbers", research_paper)
 
 
 if __name__ == "__main__":

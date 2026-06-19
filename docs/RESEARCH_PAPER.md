@@ -203,6 +203,15 @@ The threshold module estimates:
 This reframes credit scoring as a decision system rather than a pure
 classification problem.
 
+The product prototype now adds seeded Monte Carlo portfolio simulation on top
+of the deterministic policy table. A shared macro shock creates correlated
+movement across borrowers, application-level shocks represent calibration
+uncertainty, and common random numbers support paired baseline/adverse/severe
+comparison. The output is a scenario range for approvals, defaults, exposure,
+and one-period financial result. Because both probabilities and financial
+assumptions remain unvalidated for a local MFI, this is a methodological
+uncertainty demonstration rather than a forecast or regulatory risk measure.
+
 ## 10. Fairness And Segment Audit
 
 The current audit reports segment metrics by:
@@ -229,6 +238,7 @@ The project includes:
 - local positive/protective explanation factors;
 - false-positive and false-negative research reports;
 - threshold policy reports;
+- tenant-scoped Monte Carlo portfolio stress ranges;
 - generated `reports/research-artifacts/` outputs;
 - decision-support recommendations.
 
@@ -239,10 +249,13 @@ The project includes:
 - Public benchmark metrics come from Taiwan credit-card data, not Kazakhstan
   microfinance data.
 - No real MFI validation yet.
-- No public deployed demo yet.
+- The public demo is synthetic and browser-local; it does not validate backend
+  deployment or real lending use.
 - No SHAP explanations yet for nonlinear/tree model variants.
 - No longitudinal repayment modeling yet.
 - No production security review yet.
+- Monte Carlo stress and financial assumptions are not calibrated on MFI
+  outcomes.
 
 ## 13. Future Work
 

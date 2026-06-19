@@ -1248,6 +1248,146 @@ label {
   border-top: 3px solid var(--amber);
 }
 
+.monte-carlo-panel {
+  border-top: 3px solid var(--blue);
+}
+
+.simulation-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.simulation-results {
+  min-height: 160px;
+}
+
+.simulation-results.empty {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  padding: 14px;
+  color: var(--muted);
+}
+
+.simulation-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.simulation-summary > div,
+.simulation-metric {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 11px;
+}
+
+.simulation-summary span,
+.simulation-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-summary strong,
+.simulation-metric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+}
+
+.simulation-scenarios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.simulation-warnings {
+  margin: 0 0 12px;
+  border: 1px solid #f1dfbf;
+  border-left: 3px solid var(--amber);
+  border-radius: 7px;
+  background: #fffaf0;
+  padding: 10px 14px 10px 30px;
+  color: #675634;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.simulation-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-card.adverse {
+  border-top: 3px solid var(--amber);
+}
+
+.simulation-card.severe {
+  border-top: 3px solid var(--red);
+}
+
+.simulation-card.baseline {
+  border-top: 3px solid var(--green);
+}
+
+.simulation-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.simulation-card-heading strong {
+  font-size: 18px;
+}
+
+.simulation-card-heading em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.simulation-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-range,
+.simulation-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.loss-meter {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef0;
+}
+
+.loss-meter span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+
 .policy-note {
   margin: -4px 0 14px;
   color: var(--muted);
@@ -1975,6 +2115,14 @@ tr.selected {
   .policy-grid {
     grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
+
+  .simulation-form {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .simulation-scenarios {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -2026,6 +2174,7 @@ tr.selected {
   .staff-form,
   .organization-form,
   .model-version-form,
+  .simulation-form,
   .decision-columns,
   .mfi-decision-form,
   .recorded-decision,
@@ -2049,6 +2198,12 @@ tr.selected {
   .portfolio-metrics,
   .portfolio-grid,
   .policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-summary,
+  .simulation-scenarios,
+  .simulation-card-metrics {
     grid-template-columns: 1fr;
   }
 

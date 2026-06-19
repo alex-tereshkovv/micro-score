@@ -43,6 +43,9 @@ git diff --check
 - MFI score detail and review packet show the model-use notice.
 - Admin model registry shows exactly one active version.
 - Activating a candidate marks older review packets as stale until re-scored.
+- Monte Carlo output says scenario planning, not forecast or borrower score.
+- Repeating a run with the same seed produces identical scenario distributions.
+- Adverse/severe defaults do not improve relative to baseline for paired draws.
 - Demo accounts use synthetic data only.
 - No real borrower names, phone numbers, IINs, addresses, or bank records are
   present.

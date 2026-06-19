@@ -61,7 +61,7 @@ Show:
 - synthetic-data consent
 - submitted application status
 
-### 0:55 - 1:30 MFI Analyst Flow
+### 0:55 - 1:25 MFI Analyst Flow
 
 Sign in as the MFI analyst. Show the application queue, portfolio overview,
 score detail, scenario comparison, local explanation, and review packet. The key
@@ -76,12 +76,16 @@ Show:
 - model-use notice
 - review packet
 - decision form
+- Monte Carlo baseline/adverse/severe cards
 
-### 1:30 - 1:45 Governance
+### 1:25 - 1:45 Uncertainty + Governance
 
-Show the review packet and decision audit. Explain that MicroScore records model
-context, analyst decisions, governance flags, and timeline events so that the
-system can be audited rather than treated as a black box.
+Run a seeded Monte Carlo comparison and explain that the ranges come from
+explicit stress and financial assumptions; they do not change borrower scores
+and are not forecasts. Show the review packet and decision audit. Explain that
+MicroScore records model context, assumptions, analyst decisions, governance
+flags, and timeline events so that the system can be audited rather than
+treated as a black box.
 
 Show:
 
@@ -89,6 +93,7 @@ Show:
 - checklist
 - timeline
 - decision audit
+- Monte Carlo result range and loss probability
 
 ### 1:45 - 2:00 Close
 
@@ -105,6 +110,7 @@ Use these short captions if the video platform allows chapter markers:
 - Borrower: application with behavioral signals
 - MFI: score, explanation, review packet
 - Governance: proxy risk, audit trail, human decision
+- Uncertainty: seeded portfolio stress ranges, not forecasts
 - Next: benchmark validation and pilot readiness
 
 ## Export Settings
@@ -119,5 +125,6 @@ Use these short captions if the video platform allows chapter markers:
 - Do not say the model is ready for real loan approval; it is not ready for real loan approval.
 - Do not imply synthetic Pavlodar data proves real repayment prediction.
 - Do not describe the score as a legal credit decision.
+- Do not describe Monte Carlo ranges as regulatory VaR or validated loss forecasts.
 - Do not say the project already has MFI pilot validation unless that becomes
   true later.

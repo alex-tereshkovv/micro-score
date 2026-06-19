@@ -31,6 +31,7 @@ const state = {
   applications: [],
   policyAnalytics: null,
   decisionAnalytics: null,
+  portfolioSimulation: null,
   organizations: [],
   activeModel: null,
 };
@@ -80,6 +81,9 @@ const els = {
   policyAnalytics: document.querySelector("#policyAnalytics"),
   policySegments: document.querySelector("#policySegments"),
   decisionAudit: document.querySelector("#decisionAudit"),
+  simulationForm: document.querySelector("#simulationForm"),
+  runSimulation: document.querySelector("#runSimulation"),
+  simulationResults: document.querySelector("#simulationResults"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
   staffForm: document.querySelector("#staffForm"),
@@ -368,6 +372,12 @@ function escapeHtml(value) {
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "-";
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(value));
+}
+
+function formatAmountUnits(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  const sign = Number(value) < 0 ? "-" : "";
+  return `${sign}${formatMoney(Math.abs(Number(value)))} units`;
 }
 
 function formatPercent(value) {
@@ -707,6 +717,7 @@ function resetApplicationViews() {
   state.applications = [];
   state.policyAnalytics = null;
   state.decisionAnalytics = null;
+  state.portfolioSimulation = null;
 
   els.borrowerApplicationId.value = "";
   els.borrowerConsent.checked = false;
@@ -779,6 +790,13 @@ function resetApplicationViews() {
     "empty",
     "No decision audit loaded",
     "Recorded analyst decisions will appear here.",
+  );
+  setPanelState(
+    els.simulationResults,
+    "simulation-results",
+    "empty",
+    "No Monte Carlo run yet",
+    "Run the simulation after scored applications are loaded.",
   );
 }
 
@@ -1687,6 +1705,100 @@ function renderPolicyAnalytics(payload) {
   ]);
 }
 
+function simulationPayload() {
+  const form = els.simulationForm;
+  return {
+    iterations: Number(form.elements.iterations.value),
+    seed: Number(form.elements.seed.value),
+    policy: form.elements.policy.value,
+    scenarios: ["baseline", "adverse", "severe"],
+    review_approval_rate: Number(form.elements.review_approval_rate.value),
+    interest_margin_rate: Number(form.elements.interest_margin_rate.value),
+    loss_given_default: Number(form.elements.loss_given_default.value),
+    operating_cost_per_approved: Number(form.elements.operating_cost_per_approved.value),
+    macro_volatility: Number(form.elements.macro_volatility.value),
+    calibration_volatility: Number(form.elements.calibration_volatility.value),
+  };
+}
+
+async function runPortfolioSimulation() {
+  setPanelState(
+    els.simulationResults,
+    "simulation-results",
+    "loading",
+    "Running Monte Carlo simulation",
+    "Applying paired macro, calibration, review, and default draws.",
+  );
+  try {
+    const payload = await apiFetch("/mfi/simulations/portfolio", {
+      method: "POST",
+      body: JSON.stringify(simulationPayload()),
+    });
+    state.portfolioSimulation = payload;
+    renderPortfolioSimulation(payload);
+    showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
+    return payload;
+  } catch (error) {
+    setPanelState(
+      els.simulationResults,
+      "simulation-results",
+      "error",
+      "Simulation unavailable",
+      error.message || "Monte Carlo simulation could not be completed.",
+    );
+    throw error;
+  }
+}
+
+function renderPortfolioSimulation(payload) {
+  const models = (payload.model_versions || []).join(", ") || "not recorded";
+  const scenarioCards = (payload.scenarios || []).map(renderSimulationScenario).join("");
+  const warnings = (payload.warnings || []).length
+    ? `<ul class="simulation-warnings">${payload.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
+    : "";
+  els.simulationResults.className = "simulation-results";
+  els.simulationResults.innerHTML = `
+    <div class="simulation-summary">
+      <div><span>Policy</span><strong>${escapeHtml(formatPolicyName(payload.policy.name))}</strong></div>
+      <div><span>Scored portfolio</span><strong>${escapeHtml(payload.scored_application_count)}</strong></div>
+      <div><span>Iterations / seed</span><strong>${formatMoney(payload.assumptions.iterations)} / ${escapeHtml(payload.assumptions.seed)}</strong></div>
+      <div><span>Score versions</span><strong>${escapeHtml(models)}</strong></div>
+    </div>
+    ${warnings}
+    <div class="simulation-scenarios">${scenarioCards}</div>
+    <p class="simulation-note">
+      Review approval ${formatPercent(payload.assumptions.review_approval_rate)} / margin ${formatPercent(payload.assumptions.interest_margin_rate)} / LGD ${formatPercent(payload.assumptions.loss_given_default)} / macro volatility ${Number(payload.assumptions.macro_volatility).toFixed(2)} / calibration volatility ${Number(payload.assumptions.calibration_volatility).toFixed(2)}.
+    </p>
+    <p class="simulation-note"><strong>Boundary:</strong> ${escapeHtml(payload.note)}</p>
+  `;
+}
+
+function renderSimulationScenario(row) {
+  const lossWidth = clampPercent(row.probability_of_loss);
+  const approved = row.approved_count;
+  const defaults = row.default_count;
+  const result = row.portfolio_result;
+  return `
+    <article class="simulation-card ${escapeHtml(row.scenario)}">
+      <div class="simulation-card-heading">
+        <strong>${escapeHtml(formatPolicyName(row.scenario))}</strong>
+        <em>log-odds shift ${Number(row.log_odds_shift).toFixed(2)}</em>
+      </div>
+      <div class="simulation-card-metrics">
+        <div class="simulation-metric"><span>Median result</span><strong>${formatAmountUnits(result.p50)}</strong></div>
+        <div class="simulation-metric"><span>Loss probability</span><strong>${formatPercent(row.probability_of_loss)}</strong></div>
+        <div class="simulation-metric"><span>Approved mean</span><strong>${Number(approved.mean).toFixed(1)}</strong></div>
+        <div class="simulation-metric"><span>Defaults mean</span><strong>${Number(defaults.mean).toFixed(1)}</strong></div>
+        <div class="simulation-metric"><span>Median exposure</span><strong>${formatAmountUnits(row.approved_exposure.p50)}</strong></div>
+        <div class="simulation-metric"><span>Mean stressed risk</span><strong>${formatPercent(row.mean_stressed_probability)}</strong></div>
+      </div>
+      <div class="loss-meter" aria-label="Probability of negative portfolio result"><span style="width:${lossWidth}%"></span></div>
+      <p class="simulation-range">Result P05-P95: ${formatAmountUnits(result.p05)} to ${formatAmountUnits(result.p95)}</p>
+      <p class="simulation-range">Defaults P05-P95: ${Number(defaults.p05).toFixed(1)} to ${Number(defaults.p95).toFixed(1)} / approved ${Number(approved.p05).toFixed(1)} to ${Number(approved.p95).toFixed(1)}</p>
+    </article>
+  `;
+}
+
 function renderDecisionAudit(payload) {
   if (!payload?.decided_application_count) {
     setPanelState(
@@ -2084,6 +2196,11 @@ function wireEvents() {
   });
   els.refreshPolicyAnalytics.addEventListener("click", () => {
     refreshPolicyAnalytics().catch((error) => showMessage(error.message, "error"));
+  });
+  els.simulationForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    withButtonBusy(els.runSimulation, "Simulating...", () => runPortfolioSimulation())
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshAudit.addEventListener("click", () => {
     refreshAudit().catch((error) => showMessage(error.message, "error"));

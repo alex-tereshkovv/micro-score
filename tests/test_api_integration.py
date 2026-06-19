@@ -380,6 +380,12 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PolicyAnalyticsResponse", schemas)
         self.assertIn("PolicyAnalyticsRow", schemas)
         self.assertIn("SegmentPolicyAnalyticsRow", schemas)
+        self.assertIn("PortfolioSimulationRequest", schemas)
+        self.assertIn("PortfolioSimulationResponse", schemas)
+        self.assertIn("PortfolioSimulationScenario", schemas)
+        self.assertIn("SimulationDistribution", schemas)
+        self.assertIn("SimulationPolicySummary", schemas)
+        self.assertIn("SimulationAssumptions", schemas)
         self.assertIn("AuditEventResponse", schemas)
         self.assertIn("ClearApplicationsResponse", schemas)
         self.assertIn("PilotReadinessResponse", schemas)
@@ -715,6 +721,159 @@ class ApiIntegrationTests(unittest.TestCase):
             headers=self._headers(admin_token),
         ).json()
         self.assertEqual(len(admin_queue), 2)
+
+    def test_monte_carlo_simulation_is_reproducible_scoped_and_audited(self) -> None:
+        self.repository.create_user(
+            "simulation-borrower@example.com",
+            hash_password(TEST_PASSWORD),
+            "borrower",
+        )
+        analyst_token = self._register("simulation-analyst@example.com", "mfi_analyst")
+
+        scored_counts = {TEST_ORGANIZATION_ID: 3, SECOND_ORGANIZATION_ID: 2}
+        for organization_id, count in scored_counts.items():
+            for index in range(count):
+                application_id = f"sim-{organization_id}-{index}"
+                self.repository.create_application(
+                    application_id=application_id,
+                    borrower_email="simulation-borrower@example.com",
+                    requested_amount=200_000 + index * 50_000,
+                    purpose="simulation fixture",
+                    district="Pavlodar city",
+                    settlement_type="urban",
+                    behavioral_signals={"late_payment_count": index},
+                    organization_id=organization_id,
+                )
+                self.repository.update_application_score(
+                    application_id=application_id,
+                    actor_email="simulation-analyst@example.com",
+                    score_result={
+                        "model_name": "Logistic Regression",
+                        "model_version": "research-v0.1",
+                        "model_governance": {},
+                        "high_risk_probability": 0.15 + index * 0.2,
+                        "risk_band": "medium",
+                        "warnings": [],
+                    },
+                )
+
+        self.repository.create_application(
+            application_id="sim-unscored",
+            borrower_email="simulation-borrower@example.com",
+            requested_amount=175_000,
+            purpose="unscored fixture",
+            district="Bayanaul",
+            settlement_type="rural",
+            behavioral_signals={},
+            organization_id=TEST_ORGANIZATION_ID,
+        )
+
+        request_payload = {
+            "iterations": 500,
+            "seed": 991,
+            "policy": "balanced_review",
+            "scenarios": ["baseline", "adverse", "severe"],
+            "review_approval_rate": 0.6,
+            "interest_margin_rate": 0.22,
+            "loss_given_default": 0.65,
+            "operating_cost_per_approved": 5_000,
+            "macro_volatility": 0.25,
+            "calibration_volatility": 0.15,
+        }
+        first = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(analyst_token),
+            json=request_payload,
+        )
+        second = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(analyst_token),
+            json=request_payload,
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
+        first_payload = first.json()
+        second_payload = second.json()
+        self.assertEqual(first_payload["organization_id"], TEST_ORGANIZATION_ID)
+        self.assertEqual(first_payload["application_count"], 4)
+        self.assertEqual(first_payload["scored_application_count"], 3)
+        self.assertEqual(first_payload["unscored_application_count"], 1)
+        self.assertTrue(any("excluded" in warning for warning in first_payload["warnings"]))
+        self.assertEqual(first_payload["scenarios"], second_payload["scenarios"])
+        self.assertEqual(first_payload["policy"], second_payload["policy"])
+        self.assertEqual(len(first_payload["scenarios"]), 3)
+        self.assertIn("scenario-planning", first_payload["note"].lower())
+
+        borrower_login = self.client.post(
+            "/auth/login",
+            json={"email": "simulation-borrower@example.com", "password": TEST_PASSWORD},
+        )
+        self.assertEqual(borrower_login.status_code, 200, borrower_login.text)
+        forbidden = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(borrower_login.json()["access_token"]),
+            json=request_payload,
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        invalid = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(analyst_token),
+            json={**request_payload, "iterations": 99},
+        )
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
+        self.repository.create_model_version(
+            version="simulation-v0.2",
+            model_name="Logistic Regression",
+            feature_schema_version="behavioral-v2",
+            training_data_label="simulation-fixture-v2",
+            random_state=77,
+            metrics={"roc_auc": 0.81},
+            limitations=["Synthetic test fixture."],
+            created_by="simulation-admin@example.com",
+        )
+        self.repository.activate_model_version("simulation-v0.2")
+        stale_score_run = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(analyst_token),
+            json={**request_payload, "scenarios": ["baseline"]},
+        )
+        self.assertEqual(stale_score_run.status_code, 200, stale_score_run.text)
+        self.assertTrue(
+            any("active model version simulation-v0.2" in warning for warning in stale_score_run.json()["warnings"])
+        )
+
+        admin_token = self._register("simulation-admin@example.com", "admin")
+        admin_result = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(admin_token),
+            json={**request_payload, "scenarios": ["baseline"]},
+        )
+        self.assertEqual(admin_result.status_code, 200, admin_result.text)
+        self.assertIsNone(admin_result.json()["organization_id"])
+        self.assertEqual(admin_result.json()["scored_application_count"], 5)
+
+        audit = self.client.get(
+            "/admin/audit-events",
+            headers=self._headers(admin_token),
+        ).json()
+        simulation_events = [
+            event for event in audit if event["action"] == "portfolio_simulation_run"
+        ]
+        self.assertEqual(len(simulation_events), 4)
+        self.assertEqual(simulation_events[-1]["details"]["seed"], 991)
+        self.assertTrue(simulation_events[-1]["details"]["scenario_summary"])
+
+    def test_monte_carlo_requires_a_scored_portfolio(self) -> None:
+        analyst_token = self._register("empty-simulation@example.com", "mfi_analyst")
+        response = self.client.post(
+            "/mfi/simulations/portfolio",
+            headers=self._headers(analyst_token),
+            json={"iterations": 100, "seed": 1},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("scored application", response.json()["detail"])
 
     def test_cors_headers_allow_only_trusted_frontends(self) -> None:
         local_response = self.client.get(

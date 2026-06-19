@@ -61,7 +61,7 @@ The important point is that a thin-file borrower can submit behavioral and
 regional signals without collateral-based assumptions, while the demo explicitly
 warns against entering real personal data.
 
-### 0:55 - 1:30 MFI Analyst Flow
+### 0:55 - 1:20 MFI Analyst Flow
 
 Sign in as:
 
@@ -74,13 +74,16 @@ comparison, local explanation, review packet, and decision form. Point out the
 model-use notice in score detail: the score is decision support, proxy-sensitive
 cases require manual review, and a human analyst records the decision.
 
-### 1:30 - 1:45 Governance
+### 1:20 - 1:40 Monte Carlo + Governance
 
-Open the review packet and point to governance flags, the checklist, the
-timeline, proxy sensitivity, and decision audit. This is where MicroScore is
-more than a raw classifier: it makes model limitations visible.
+Run the Monte Carlo Lab with a fixed seed. Compare baseline, adverse, and severe
+ranges for defaults, exposure, portfolio result, and probability of loss. Say
+clearly that this does not change borrower scores and is scenario planning, not
+a forecast. Then point to review-packet flags and the decision audit. This is
+where MicroScore moves beyond a raw classifier: it makes both model limitations
+and policy uncertainty visible.
 
-### 1:45 - 2:00 Next Step
+### 1:40 - 2:00 Next Step
 
 End by explaining that the static demo uses synthetic data only. The next
 research step is local validation with expert feedback and, later, pilot data
@@ -99,3 +102,5 @@ MicroScore is an interpretable, human-in-the-loop credit-risk research prototype
 for thin-file borrowers. Its strongest current contribution is not accuracy
 alone, but the combination of behavioral scoring, proxy-risk analysis,
 review-packet governance, and a working product flow.
+The Policy Lab adds reproducible portfolio uncertainty ranges without claiming
+that synthetic assumptions predict real MFI losses.

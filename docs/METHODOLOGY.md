@@ -208,6 +208,27 @@ standard and thin-file scores into a human-review recommendation with rationale
 and next steps. This is intentionally framed as analyst support, not automated
 lending approval.
 
+## Monte Carlo Portfolio Uncertainty
+
+The Policy Lab now complements deterministic threshold tables with a seeded
+Monte Carlo portfolio simulation. This layer does not alter an individual
+borrower's probability. It applies the selected policy to stored score
+snapshots, then simulates manual-review conversion, correlated macro movement,
+application-level calibration uncertainty, and Bernoulli defaults.
+
+Baseline, adverse, and severe scenarios share the same underlying random draws.
+This common-random-number design makes differences between scenarios reflect
+the stress assumption rather than unrelated simulation noise. Results report
+means and 5th/50th/95th percentiles for approvals, defaults, exposure, and a
+simple one-period financial result, plus the probability of a negative result.
+
+The formula, defaults, reproducibility rules, and interpretation limits are in
+[MONTE_CARLO_METHODOLOGY.md](MONTE_CARLO_METHODOLOGY.md). Because current risk
+probabilities are synthetic and not calibrated on MFI outcomes, simulation
+ranges are scenario-planning diagnostics only. They are not forecasts,
+regulatory VaR, capital requirements, pricing guidance, or evidence that a
+policy is safe.
+
 ## Local Explanations
 
 The API now returns individual local explanations for the current Logistic

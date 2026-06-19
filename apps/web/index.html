@@ -383,6 +383,66 @@
             <h4 class="table-title">Decision audit</h4>
             <div id="decisionAudit" class="table-shell empty">No decision audit loaded.</div>
           </section>
+
+          <section class="panel wide-panel monte-carlo-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Monte Carlo Lab</p>
+                <h3>Portfolio uncertainty</h3>
+              </div>
+              <span class="pill muted">Scenario planning</span>
+            </div>
+            <p class="policy-note">
+              Simulate approvals, defaults, exposure, and one-period portfolio result under paired baseline, adverse, and severe shocks. This does not change borrower scores.
+            </p>
+            <form id="simulationForm" class="simulation-form">
+              <label>
+                Policy
+                <select name="policy">
+                  <option value="balanced_review">balanced review</option>
+                  <option value="lender_protective">lender protective</option>
+                  <option value="inclusion_first">inclusion first</option>
+                  <option value="starter_loan_review">starter loan review</option>
+                </select>
+              </label>
+              <label>
+                Iterations
+                <input name="iterations" type="number" min="100" max="20000" step="100" value="5000" required />
+              </label>
+              <label>
+                Seed
+                <input name="seed" type="number" min="0" max="4294967295" step="1" value="20260619" required />
+              </label>
+              <label>
+                Review approval rate
+                <input name="review_approval_rate" type="number" min="0" max="1" step="0.05" value="0.50" required />
+              </label>
+              <label>
+                Interest margin rate
+                <input name="interest_margin_rate" type="number" min="0" max="1" step="0.01" value="0.22" required />
+              </label>
+              <label>
+                Loss given default
+                <input name="loss_given_default" type="number" min="0" max="1" step="0.01" value="0.65" required />
+              </label>
+              <label>
+                Operating cost / approval
+                <input name="operating_cost_per_approved" type="number" min="0" step="10" value="0" required />
+              </label>
+              <label>
+                Macro volatility
+                <input name="macro_volatility" type="number" min="0" max="2" step="0.05" value="0.25" required />
+              </label>
+              <label>
+                Calibration volatility
+                <input name="calibration_volatility" type="number" min="0" max="2" step="0.05" value="0.15" required />
+              </label>
+              <button id="runSimulation" class="primary-button" type="submit">Run 3 scenarios</button>
+            </form>
+            <div id="simulationResults" class="simulation-results empty">
+              Run the simulation after scored applications are loaded.
+            </div>
+          </section>
         </section>
 
         <section id="adminView" class="view-grid" aria-labelledby="admin-title">

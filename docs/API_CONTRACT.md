@@ -473,6 +473,67 @@ Important limitation: this endpoint does not know real repayment outcomes. It
 uses predicted high-risk probabilities from scored applications, so it should be
 read as a live portfolio preview, not as validated profit or default evidence.
 
+Monte Carlo portfolio simulation:
+
+```http
+POST /mfi/simulations/portfolio
+```
+
+Request example:
+
+```json
+{
+  "iterations": 5000,
+  "seed": 20260619,
+  "policy": "balanced_review",
+  "scenarios": ["baseline", "adverse", "severe"],
+  "review_approval_rate": 0.50,
+  "interest_margin_rate": 0.22,
+  "loss_given_default": 0.65,
+  "operating_cost_per_approved": 0,
+  "macro_volatility": 0.25,
+  "calibration_volatility": 0.15
+}
+```
+
+The endpoint runs 100 to 20,000 seeded iterations over the caller's
+organization-scoped scored portfolio. It returns paired baseline/adverse/severe
+distributions for:
+
+- approved count and exposure;
+- default count and default rate;
+- one-period portfolio result and result per approved loan;
+- mean stressed probability;
+- probability of a negative result;
+- 5th, 50th, and 95th percentiles.
+
+The synchronous prototype caps work at 20 million borrower-iterations
+(`scored_application_count * iterations`). Larger runs return `409` and should
+eventually move to a background worker.
+
+One macro shock is shared across the portfolio in each iteration, while an
+application-level calibration shock captures residual probability uncertainty.
+Manual-review applications enter the book at the supplied review approval
+rate. Common random numbers are reused across scenarios so stress comparisons
+are less noisy and preserve the same underlying draws.
+
+Runs are reproducible for the same portfolio, score snapshots, seed, policy,
+and assumptions. Every successful call records a `portfolio_simulation_run`
+audit event with inputs and compact scenario summaries. Unscored applications
+are reported but excluded; a portfolio with no scored applications returns
+`409`.
+
+The response warns when unscored applications were excluded, score snapshots
+mix multiple model versions, or a stored score is not from the active model.
+These conditions do not silently disappear inside portfolio aggregation.
+The default operating cost is zero and produces its own warning; enter a cost
+in the same amount units as the portfolio before interpreting financial output.
+
+This is scenario planning, not borrower scoring, a repayment forecast,
+regulatory VaR, or an automatic lending rule. The full formula and
+interpretation boundary are documented in
+`docs/MONTE_CARLO_METHODOLOGY.md`.
+
 Decision analytics:
 
 ```http
@@ -557,6 +618,7 @@ Current audited actions:
 - `application_decision_recorded`
 - `model_version_registered`
 - `model_version_activated`
+- `portfolio_simulation_run`
 - `staff_user_created`
 - `organization_created`
 - `user_logged_out`

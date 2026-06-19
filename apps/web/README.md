@@ -85,5 +85,8 @@ comparing recorded analyst decisions with risk bands, districts, proxy
 sensitivity, and model recommendations. The Score Detail panel can also open a
 review packet with governance flags, top factors, timeline events, and a
 human-review checklist. The Policy Lab compares approve/review/decline
-threshold policies on scored applications. These are predicted-probability
-previews, not validated lending policies.
+threshold policies on scored applications. The Monte Carlo Lab adds seeded,
+paired baseline/adverse/severe portfolio simulations with explicit margin,
+LGD, operating-cost, review-conversion, macro, and calibration assumptions.
+These are predicted-probability scenario previews, not forecasts or validated
+lending policies.

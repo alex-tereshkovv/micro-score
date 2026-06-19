@@ -239,7 +239,9 @@ views, review packets, portfolio CSV export, decision audit analytics, and a
 Policy Lab that compares approve/review/decline threshold policies on scored
 applications. Model governance now includes candidate registration, atomic
 activation, immutable score provenance, and stale-score warnings in analyst
-review packets. The
+review packets. The Policy Lab also includes a reproducible, tenant-scoped
+Monte Carlo layer for portfolio outcome ranges under baseline, adverse, and
+severe assumptions; it is explicitly separated from borrower scoring. The
 project also now generates reproducible research artifacts under
 `reports/research-artifacts/`: model metrics, ablation results, calibration
 bins, calibration/ablation plots, and example local explanations.

@@ -49,6 +49,47 @@ async function main() {
     throw new Error("Expected multiple policy scenarios");
   }
 
+  const simulationRequest = {
+    method: "POST",
+    body: JSON.stringify({
+      iterations: 500,
+      seed: 20260619,
+      policy: "balanced_review",
+      scenarios: ["baseline", "adverse", "severe"],
+      review_approval_rate: 0.5,
+      interest_margin_rate: 0.22,
+      loss_given_default: 0.65,
+      operating_cost_per_approved: 50,
+      macro_volatility: 0.25,
+      calibration_volatility: 0.15,
+    }),
+  };
+  const simulation = await api.request(
+    "/mfi/simulations/portfolio",
+    simulationRequest,
+    session,
+  );
+  const repeatedSimulation = await api.request(
+    "/mfi/simulations/portfolio",
+    simulationRequest,
+    session,
+  );
+  if (JSON.stringify(simulation.scenarios) !== JSON.stringify(repeatedSimulation.scenarios)) {
+    throw new Error("Expected seeded Monte Carlo simulation to be reproducible");
+  }
+  const simulatedScenarios = Object.fromEntries(
+    simulation.scenarios.map((row) => [row.scenario, row]),
+  );
+  if (
+    simulatedScenarios.baseline.default_count.mean > simulatedScenarios.adverse.default_count.mean
+    || simulatedScenarios.adverse.default_count.mean > simulatedScenarios.severe.default_count.mean
+  ) {
+    throw new Error("Expected stress scenarios to increase simulated defaults");
+  }
+  if (!simulation.note.includes("Scenario-planning")) {
+    throw new Error("Expected Monte Carlo interpretation boundary");
+  }
+
   const csv = await api.blob("/mfi/applications/export.csv", session);
   if (!csv.size) {
     throw new Error("Expected non-empty portfolio CSV");
@@ -325,7 +366,9 @@ async function main() {
       applications: applications.length,
       risk_band: scored.score_result.risk_band,
       checklist_items: packet.checklist.length,
-      policies: policies.policies.length,
+    policies: policies.policies.length,
+    monte_carlo: true,
+    simulation_iterations: simulation.assumptions.iterations,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,

@@ -15,6 +15,7 @@ needs local evidence, expert feedback, or real pilot data.
 | MFI analysts need explainable score outputs | Product assumption | Needs expert feedback | Interview at least one lender, finance worker, or fintech reviewer. |
 | Borrowers need human review and appeal options | Ethical design assumption | Needs borrower feedback | Ask borrowers what would feel fair after a high-risk score. |
 | Policy Lab can help show inclusion-vs-risk trade-offs | Working product prototype | Prototype evidence | Ask reviewers whether approve/review/decline analytics are understandable. |
+| Monte Carlo ranges help analysts reason about portfolio uncertainty | Seeded baseline/adverse/severe prototype with explicit assumptions | Methodological prototype only | Validate margin, LGD, review conversion, operating cost, calibration volatility, and stress shifts with an MFI before pilot use. |
 | The model is not ready for operational lending | Data statement, model card, synthetic-data limitation | Validated by project constraints | Keep this limitation visible in README, paper, and demo. |
 
 ## Validation Milestones

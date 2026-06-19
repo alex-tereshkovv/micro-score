@@ -59,6 +59,8 @@ from .schemas import (
     OrganizationPublic,
     PilotReadinessResponse,
     PolicyAnalyticsResponse,
+    PortfolioSimulationRequest,
+    PortfolioSimulationResponse,
     RegisterRequest,
     SegmentAnalyticsRow,
     StaffUserCreate,
@@ -66,6 +68,7 @@ from .schemas import (
 )
 from .scoring import get_scoring_service
 from .security import create_token, hash_password, password_policy_violations, verify_password
+from .simulation import simulate_portfolio
 
 
 DEFAULT_CORS_ORIGINS = (
@@ -875,6 +878,82 @@ def policy_analytics(
     return build_policy_analytics(
         repository.list_applications(_mfi_organization_scope(user))
     )
+
+
+@app.post(
+    "/mfi/simulations/portfolio",
+    response_model=PortfolioSimulationResponse,
+)
+def portfolio_monte_carlo_simulation(
+    payload: PortfolioSimulationRequest,
+    user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    organization_id = _mfi_organization_scope(user)
+    try:
+        result = simulate_portfolio(
+            repository.list_applications(organization_id),
+            iterations=payload.iterations,
+            seed=payload.seed,
+            policy_name=payload.policy,
+            scenarios=tuple(payload.scenarios),
+            review_approval_rate=payload.review_approval_rate,
+            interest_margin_rate=payload.interest_margin_rate,
+            loss_given_default=payload.loss_given_default,
+            operating_cost_per_approved=payload.operating_cost_per_approved,
+            macro_volatility=payload.macro_volatility,
+            calibration_volatility=payload.calibration_volatility,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    active_model = repository.get_active_model_version()
+    active_version = (active_model or {}).get("version")
+    stale_versions = [
+        version
+        for version in result["model_versions"]
+        if active_version is not None and version != active_version
+    ]
+    if stale_versions:
+        result["warnings"].append(
+            "Portfolio includes scores that are not from the active model version "
+            f"{active_version}: {', '.join(stale_versions)}."
+        )
+
+    simulation_id = str(uuid4())
+    response = {
+        "simulation_id": simulation_id,
+        "generated_at": _utc_now_iso(),
+        "organization_id": organization_id,
+        **result,
+    }
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="portfolio_simulation_run",
+        entity_type="portfolio_simulation",
+        entity_id=simulation_id,
+        details={
+            "organization_id": organization_id,
+            "policy": payload.policy,
+            "iterations": payload.iterations,
+            "seed": payload.seed,
+            "scenarios": list(payload.scenarios),
+            "scored_application_count": result["scored_application_count"],
+            "model_versions": result["model_versions"],
+            "scenario_summary": [
+                {
+                    "scenario": row["scenario"],
+                    "probability_of_loss": row["probability_of_loss"],
+                    "portfolio_result_p50": row["portfolio_result"]["p50"],
+                }
+                for row in result["scenarios"]
+            ],
+        },
+    )
+    return response
 
 
 @app.get("/mfi/analytics/decisions", response_model=DecisionAnalyticsResponse)

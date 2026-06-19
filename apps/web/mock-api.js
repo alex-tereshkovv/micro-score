@@ -748,12 +748,13 @@
 
   function policyAnalytics(applications = demo.applications) {
     const scored = applications.filter((app) => app.score_result);
-    const policies = [
-      ["balanced_review", "Balanced inclusion and lender sustainability", 0.24, 0.58],
-      ["inclusion_first", "More approvals with stronger manual monitoring", 0.34, 0.7],
-      ["lender_protective", "Lower default tolerance", 0.18, 0.46],
-      ["starter_loan_review", "Small first-loan policy", 0.28, 0.62],
-    ].map(([policy, description, approve, decline]) => policyRow(scored, policy, description, approve, decline));
+    const policies = thresholdPolicies().map((policy) => policyRow(
+      scored,
+      policy.name,
+      policy.description,
+      policy.approve_threshold,
+      policy.decline_threshold,
+    ));
 
     const balanced = policies[0];
     const segments = groupedRows(scored, (app) => app.district || "unknown")
@@ -825,6 +826,232 @@
     if (probability <= approveThreshold) return "approve";
     if (probability >= declineThreshold) return "decline";
     return "review";
+  }
+
+  function thresholdPolicies() {
+    return [
+      {
+        name: "balanced_review",
+        description: "Middle policy with a substantial manual-review band.",
+        approve_threshold: 0.35,
+        decline_threshold: 0.70,
+      },
+      {
+        name: "lender_protective",
+        description: "Strict risk control; many applicants move to review or decline.",
+        approve_threshold: 0.15,
+        decline_threshold: 0.50,
+      },
+      {
+        name: "inclusion_first",
+        description: "Higher access; only very high-risk applicants are auto-declined.",
+        approve_threshold: 0.50,
+        decline_threshold: 0.85,
+      },
+      {
+        name: "starter_loan_review",
+        description: "Small-starter-loan posture with wide review before decline.",
+        approve_threshold: 0.25,
+        decline_threshold: 0.80,
+      },
+    ];
+  }
+
+  function seededRandom(seed) {
+    let state = Number(seed) >>> 0;
+    return () => {
+      state += 0x6D2B79F5;
+      let value = state;
+      value = Math.imul(value ^ (value >>> 15), value | 1);
+      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function normalRandom(random) {
+    const left = Math.max(random(), 1e-12);
+    const right = random();
+    return Math.sqrt(-2 * Math.log(left)) * Math.cos(2 * Math.PI * right);
+  }
+
+  function simulationDistribution(values) {
+    const sorted = [...values].sort((left, right) => left - right);
+    const quantile = (probability) => {
+      if (!sorted.length) return 0;
+      const position = (sorted.length - 1) * probability;
+      const lower = Math.floor(position);
+      const upper = Math.ceil(position);
+      if (lower === upper) return sorted[lower];
+      return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+    };
+    return {
+      mean: average(values) || 0,
+      p05: quantile(0.05),
+      p50: quantile(0.50),
+      p95: quantile(0.95),
+    };
+  }
+
+  function simulatePortfolio(applications, payload) {
+    const scored = applications.filter(
+      (app) => app.score_result?.high_risk_probability !== null
+        && app.score_result?.high_risk_probability !== undefined
+        && Number(app.requested_amount) > 0,
+    );
+    if (!scored.length) throw new Error("Monte Carlo simulation requires at least one scored application");
+
+    const iterations = Number(payload.iterations ?? 5000);
+    const seed = Number(payload.seed ?? 20260619);
+    const reviewApprovalRate = Number(payload.review_approval_rate ?? 0.5);
+    const interestMarginRate = Number(payload.interest_margin_rate ?? 0.22);
+    const lossGivenDefault = Number(payload.loss_given_default ?? 0.65);
+    const operatingCost = Number(payload.operating_cost_per_approved ?? 0);
+    const macroVolatility = Number(payload.macro_volatility ?? 0.25);
+    const calibrationVolatility = Number(payload.calibration_volatility ?? 0.15);
+    const scenarioShifts = { baseline: 0, adverse: 0.45, severe: 0.9 };
+    const scenarios = [...new Set(payload.scenarios || ["baseline", "adverse", "severe"])];
+    const unknownScenarios = scenarios.filter((scenario) => !Object.hasOwn(scenarioShifts, scenario));
+    const policy = thresholdPolicies().find((item) => item.name === (payload.policy || "balanced_review"));
+    if (!policy) throw new Error("Unknown threshold policy");
+    if (iterations < 100 || iterations > 20000) throw new Error("Iterations must be between 100 and 20000");
+    if (unknownScenarios.length) throw new Error(`Unknown stress scenarios: ${unknownScenarios.join(", ")}`);
+    if (!scenarios.length) throw new Error("At least one stress scenario is required");
+    [reviewApprovalRate, interestMarginRate, lossGivenDefault].forEach((value) => {
+      if (value < 0 || value > 1) throw new Error("Simulation rates must be between 0 and 1");
+    });
+    if (operatingCost < 0 || macroVolatility < 0 || calibrationVolatility < 0) {
+      throw new Error("Simulation cost and volatility assumptions cannot be negative");
+    }
+    const borrowerIterations = iterations * scored.length;
+    if (borrowerIterations > 20000000) {
+      throw new Error("Simulation workload is too large; reduce iterations or portfolio size below 20,000,000 borrower-iterations");
+    }
+
+    const random = seededRandom(seed);
+    const paths = Object.fromEntries(scenarios.map((scenario) => [scenario, {
+      approved_count: [],
+      default_count: [],
+      default_rate: [],
+      approved_exposure: [],
+      portfolio_result: [],
+      result_per_approved: [],
+      mean_stressed_probability: [],
+    }]));
+    const actions = scored.map((app) => policyAction(
+      app.score_result.high_risk_probability,
+      policy.approve_threshold,
+      policy.decline_threshold,
+    ));
+
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const macroShock = normalRandom(random);
+      const calibrationShocks = scored.map(() => normalRandom(random));
+      const reviewDraws = scored.map(() => random());
+      const defaultDraws = scored.map(() => random());
+      const entered = actions.map(
+        (action, index) => action === "approve" || (action === "review" && reviewDraws[index] < reviewApprovalRate),
+      );
+      const approvedCount = entered.filter(Boolean).length;
+      const approvedExposure = scored.reduce(
+        (total, app, index) => total + (entered[index] ? Number(app.requested_amount) : 0),
+        0,
+      );
+
+      scenarios.forEach((scenario) => {
+        let defaultCount = 0;
+        let portfolioResult = 0;
+        let stressedProbabilityTotal = 0;
+        scored.forEach((app, index) => {
+          const baseProbability = clamp(Number(app.score_result.high_risk_probability), 0.000001, 0.999999);
+          const baseLogit = Math.log(baseProbability / (1 - baseProbability));
+          const stressedLogit = baseLogit
+            + scenarioShifts[scenario]
+            + macroVolatility * macroShock
+            + calibrationVolatility * calibrationShocks[index];
+          const stressedProbability = 1 / (1 + Math.exp(-clamp(stressedLogit, -30, 30)));
+          stressedProbabilityTotal += stressedProbability;
+          if (!entered[index]) return;
+          const amount = Number(app.requested_amount);
+          const defaulted = defaultDraws[index] < stressedProbability;
+          if (defaulted) {
+            defaultCount += 1;
+            portfolioResult -= amount * lossGivenDefault + operatingCost;
+          } else {
+            portfolioResult += amount * interestMarginRate - operatingCost;
+          }
+        });
+        const current = paths[scenario];
+        current.approved_count.push(approvedCount);
+        current.default_count.push(defaultCount);
+        current.default_rate.push(approvedCount ? defaultCount / approvedCount : 0);
+        current.approved_exposure.push(approvedExposure);
+        current.portfolio_result.push(portfolioResult);
+        current.result_per_approved.push(approvedCount ? portfolioResult / approvedCount : 0);
+        current.mean_stressed_probability.push(stressedProbabilityTotal / scored.length);
+      });
+    }
+
+    const modelVersions = [...new Set(scored.map((app) => app.score_result.model_version || "unknown"))].sort();
+    const warnings = [];
+    if (applications.length > scored.length) {
+      warnings.push(`${applications.length - scored.length} applications were excluded because they lacked a usable score.`);
+    }
+    if (modelVersions.length > 1) {
+      warnings.push("Portfolio contains scores from multiple model versions; compare or re-score before policy use.");
+    }
+    const activeVersion = activeModelVersion()?.version;
+    const staleVersions = modelVersions.filter((version) => activeVersion && version !== activeVersion);
+    if (staleVersions.length) {
+      warnings.push(`Portfolio includes scores that are not from the active model version ${activeVersion}: ${staleVersions.join(", ")}.`);
+    }
+    if (operatingCost === 0) {
+      warnings.push("Operating cost is zero; set an evidence-based cost before interpreting financial results.");
+    }
+
+    return {
+      simulation_id: `static-simulation-${Date.now()}`,
+      generated_at: nowIso(),
+      application_count: applications.length,
+      scored_application_count: scored.length,
+      unscored_application_count: applications.length - scored.length,
+      model_versions: modelVersions,
+      policy: {
+        ...policy,
+        auto_approve_count: actions.filter((action) => action === "approve").length,
+        manual_review_count: actions.filter((action) => action === "review").length,
+        auto_decline_count: actions.filter((action) => action === "decline").length,
+      },
+      assumptions: {
+        iterations,
+        seed,
+        review_approval_rate: reviewApprovalRate,
+        interest_margin_rate: interestMarginRate,
+        loss_given_default: lossGivenDefault,
+        operating_cost_per_approved: operatingCost,
+        macro_volatility: macroVolatility,
+        calibration_volatility: calibrationVolatility,
+        scenario_log_odds_shifts: Object.fromEntries(scenarios.map((scenario) => [scenario, scenarioShifts[scenario]])),
+        borrower_iterations: borrowerIterations,
+      },
+      scenarios: scenarios.map((scenario) => {
+        const current = paths[scenario];
+        return {
+          scenario,
+          log_odds_shift: scenarioShifts[scenario],
+          approved_count: simulationDistribution(current.approved_count),
+          default_count: simulationDistribution(current.default_count),
+          default_rate: simulationDistribution(current.default_rate),
+          approved_exposure: simulationDistribution(current.approved_exposure),
+          portfolio_result: simulationDistribution(current.portfolio_result),
+          result_per_approved: simulationDistribution(current.result_per_approved),
+          mean_stressed_probability: average(current.mean_stressed_probability) || 0,
+          probability_of_loss: share(current.portfolio_result, (value) => value < 0),
+          downside_p05: simulationDistribution(current.portfolio_result).p05,
+        };
+      }),
+      warnings,
+      note: "Scenario-planning output only. Synthetic probabilities and assumptions are not forecasts or automatic lending decisions.",
+    };
   }
 
   function decisionAnalytics(applications = demo.applications) {
@@ -1101,6 +1328,22 @@
     if (cleanPath === "/mfi/analytics/policies" && method === "GET") {
       const user = requireMfi(session);
       return clone(policyAnalytics(mfiApplications(user)));
+    }
+
+    if (cleanPath === "/mfi/simulations/portfolio" && method === "POST") {
+      const user = requireMfi(session);
+      const result = simulatePortfolio(mfiApplications(user), body);
+      result.organization_id = user.role === "admin" ? null : user.organization_id;
+      addAudit("portfolio_simulation_run", "portfolio_simulation", result.simulation_id, user.email, {
+        organization_id: result.organization_id,
+        policy: result.policy.name,
+        iterations: result.assumptions.iterations,
+        seed: result.assumptions.seed,
+        scenarios: result.scenarios.map((row) => row.scenario),
+        scored_application_count: result.scored_application_count,
+        model_versions: result.model_versions,
+      });
+      return clone(result);
     }
 
     if (cleanPath === "/mfi/analytics/decisions" && method === "GET") {

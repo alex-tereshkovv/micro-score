@@ -21,7 +21,8 @@ Suggested filenames:
 04-score-detail-model-use-notice.png
 05-review-packet-governance.png
 06-policy-lab-decision-audit.png
-07-admin-audit-trail.png
+07-monte-carlo-stress-range.png
+08-admin-audit-trail.png
 ```
 
 ## Required Screenshots
@@ -71,7 +72,16 @@ Capture approval strategy cards and decision audit rows.
 Why it matters: this shows the inclusion-vs-risk trade-off and starts pointing
 toward game theory and incentives later.
 
-### 7. Admin Audit Trail
+### 7. Monte Carlo Stress Range
+
+Run the same policy across baseline, adverse, and severe scenarios. Capture the
+scenario cards with median result, 5-95% range, loss probability, defaults,
+exposure, seed, and assumptions visible.
+
+Why it matters: this shows that MicroScore treats portfolio outcomes as ranges
+under explicit assumptions rather than pretending one expected value is certain.
+
+### 8. Admin Audit Trail
 
 Capture the admin audit trail after a borrower submission, score, and MFI
 decision.
@@ -97,7 +107,7 @@ When screenshots are ready, add only 2-3 images to the README:
 
 1. Login / reviewer snapshot.
 2. MFI score detail or review packet.
-3. Policy Lab or audit trail.
+3. Monte Carlo Lab, Policy Lab, or audit trail.
 
 Keep the rest in this folder or a portfolio page so the README stays fast to
 scan.

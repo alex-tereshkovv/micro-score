@@ -25,7 +25,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 | Current demo | One-click local demo + GitHub Pages static demo |
 | Public demo | https://alex-tereshkovv.github.io/micro-score/ |
 | Quality gate | GitHub Actions CI for tests, smoke checks, and static demo |
-| Model governance | Persistent active/candidate registry with stale-score detection |
+| Model governance | Version registry + tenant-scoped Monte Carlo stress simulation |
 | Main finding | Synthetic-data performance depends heavily on `late_payment_count` |
 | Key limitation | Borrower-level data is synthetic, not real MFI data |
 | Public benchmark | UCI Default of Credit Card Clients: RF ROC-AUC `0.775` |
@@ -41,7 +41,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 - Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
 - Data statement + pilot schema: [docs/DATA_STATEMENT.md](docs/DATA_STATEMENT.md), [docs/PILOT_DATA_SCHEMA.md](docs/PILOT_DATA_SCHEMA.md)
 - Benchmark pipeline: [docs/BENCHMARK_DATASETS.md](docs/BENCHMARK_DATASETS.md)
-- API contract: [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
+- API + Monte Carlo contracts: [docs/API_CONTRACT.md](docs/API_CONTRACT.md), [docs/MONTE_CARLO_METHODOLOGY.md](docs/MONTE_CARLO_METHODOLOGY.md)
 - Product architecture + roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md)
 - Static demo deployment: [docs/STATIC_DEMO_DEPLOYMENT.md](docs/STATIC_DEMO_DEPLOYMENT.md)
 - Engineering quality: [docs/ENGINEERING_QUALITY.md](docs/ENGINEERING_QUALITY.md)
@@ -169,7 +169,7 @@ The web prototype supports:
 - analyst decision capture
 - MFI review packet with governance flags and checklist items
 - decision audit by risk band, district, proxy sensitivity, and recommendation
-- Policy Lab for approve/review/decline threshold trade-offs
+- Policy Lab for threshold trade-offs and seeded Monte Carlo portfolio uncertainty
 - model registry with audited activation, immutable provenance, and stale-score re-checks
 - admin audit trail and application clearing
 

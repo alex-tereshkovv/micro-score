@@ -153,6 +153,13 @@ MicroScore should support a loan officer or MFI analyst. It should not replace
 human judgment. The API explicitly returns decision-support next steps such as
 manual review, affordability review, and proxy-sensitive review.
 
+The Monte Carlo Policy Lab is also a human-review aid. It simulates portfolio
+outcome ranges from stored model probabilities, policy thresholds, and explicit
+financial/stress assumptions. It does not change borrower scores or recommend
+an automatic decision. Its loss probabilities and percentile ranges are not
+validated forecasts or regulatory risk measures because the current model has
+no real MFI repayment calibration.
+
 ## Ethical Risks
 
 - Proxy discrimination through repayment-history or socioeconomic variables.

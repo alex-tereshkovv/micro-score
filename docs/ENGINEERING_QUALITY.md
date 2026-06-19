@@ -35,6 +35,8 @@ The smoke test verifies that the in-browser static backend can:
 - open a review packet
 - switch the active model registry version and detect a stale score
 - re-score with the newly active model and preserve its governance snapshot
+- reproduce a seeded Monte Carlo run and verify worsening stress scenarios do
+  not reduce simulated default counts
 - load policy analytics
 - export a CSV sample
 - reset the static demo portfolio

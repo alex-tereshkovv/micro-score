@@ -19,6 +19,8 @@ flowchart LR
     SQLite --> Registry["Model registry\nactive + candidate versions"]
     FastAPI --> Scoring["Scoring service\nmicroscore package"]
     Registry --> Scoring
+    FastAPI --> Simulation["Monte Carlo engine\nportfolio uncertainty"]
+    Scoring --> Simulation
     Scoring --> Reports["Research reports\nreports/research-artifacts"]
 
     Research["Research CLI\npython -m microscore --reports"] --> Scoring
@@ -92,6 +94,8 @@ Main local components:
   score provenance snapshots;
 - stale-score detection in review packets after an administrator activates a
   newer model version;
+- tenant-scoped, seeded Monte Carlo simulation for baseline/adverse/severe
+  portfolio outcomes with audited assumptions;
 - SQLite demo database generated under `data/app/`;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
@@ -127,9 +131,11 @@ It supports:
    and an immutable governance snapshot.
 5. The analyst reviews the result together with model-use notices and policy
    context.
-6. A later model activation marks older scores as stale without rewriting their
+6. The Monte Carlo engine applies a selected policy to scored applications and
+   reports paired uncertainty ranges without changing borrower scores.
+7. A later model activation marks older scores as stale without rewriting their
    original provenance.
-7. Admin/audit views record demo actions so decisions remain inspectable.
+8. Admin/audit views record demo actions so decisions remain inspectable.
 
 ## Privacy Boundary
 
@@ -156,6 +162,8 @@ while the research is still pre-pilot.
 - No PostgreSQL deployment yet.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
+- Monte Carlo stress shifts and financial assumptions are transparent defaults,
+  not estimates calibrated from real MFI outcomes.
 - The pilot-data schema is defined, but it has not been validated with a real
   Pavlodar MFI dataset.
 

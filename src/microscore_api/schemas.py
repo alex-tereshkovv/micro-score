@@ -12,6 +12,13 @@ ExplanationDirection = Literal["increases_risk", "reduces_risk"]
 ApplicationDecision = Literal["approve", "review", "decline"]
 ReviewChecklistStatus = Literal["required", "suggested", "complete"]
 ModelLifecycleStatus = Literal["candidate", "active", "inactive"]
+ThresholdPolicyName = Literal[
+    "lender_protective",
+    "balanced_review",
+    "inclusion_first",
+    "starter_loan_review",
+]
+StressScenario = Literal["baseline", "adverse", "severe"]
 
 
 class RegisterRequest(BaseModel):
@@ -296,6 +303,82 @@ class PolicyAnalyticsResponse(BaseModel):
     scored_application_count: int = Field(ge=0)
     policies: list[PolicyAnalyticsRow] = Field(default_factory=list)
     segments: list[SegmentPolicyAnalyticsRow] = Field(default_factory=list)
+    note: str
+
+
+class PortfolioSimulationRequest(BaseModel):
+    iterations: int = Field(default=5_000, ge=100, le=20_000)
+    seed: int = Field(default=20_260_619, ge=0, le=4_294_967_295)
+    policy: ThresholdPolicyName = "balanced_review"
+    scenarios: list[StressScenario] = Field(
+        default_factory=lambda: ["baseline", "adverse", "severe"],
+        min_length=1,
+        max_length=3,
+    )
+    review_approval_rate: float = Field(default=0.50, ge=0.0, le=1.0)
+    interest_margin_rate: float = Field(default=0.22, ge=0.0, le=1.0)
+    loss_given_default: float = Field(default=0.65, ge=0.0, le=1.0)
+    operating_cost_per_approved: float = Field(default=0.0, ge=0.0)
+    macro_volatility: float = Field(default=0.25, ge=0.0, le=2.0)
+    calibration_volatility: float = Field(default=0.15, ge=0.0, le=2.0)
+
+
+class SimulationDistribution(BaseModel):
+    mean: float
+    p05: float
+    p50: float
+    p95: float
+
+
+class SimulationPolicySummary(BaseModel):
+    name: ThresholdPolicyName
+    description: str
+    approve_threshold: float = Field(ge=0.0, le=1.0)
+    decline_threshold: float = Field(ge=0.0, le=1.0)
+    auto_approve_count: int = Field(ge=0)
+    manual_review_count: int = Field(ge=0)
+    auto_decline_count: int = Field(ge=0)
+
+
+class SimulationAssumptions(BaseModel):
+    iterations: int = Field(ge=1)
+    seed: int = Field(ge=0)
+    review_approval_rate: float = Field(ge=0.0, le=1.0)
+    interest_margin_rate: float = Field(ge=0.0, le=1.0)
+    loss_given_default: float = Field(ge=0.0, le=1.0)
+    operating_cost_per_approved: float = Field(ge=0.0)
+    macro_volatility: float = Field(ge=0.0)
+    calibration_volatility: float = Field(ge=0.0)
+    scenario_log_odds_shifts: dict[str, float] = Field(default_factory=dict)
+    borrower_iterations: int = Field(ge=1)
+
+
+class PortfolioSimulationScenario(BaseModel):
+    scenario: StressScenario
+    log_odds_shift: float
+    approved_count: SimulationDistribution
+    default_count: SimulationDistribution
+    default_rate: SimulationDistribution
+    approved_exposure: SimulationDistribution
+    portfolio_result: SimulationDistribution
+    result_per_approved: SimulationDistribution
+    mean_stressed_probability: float = Field(ge=0.0, le=1.0)
+    probability_of_loss: float = Field(ge=0.0, le=1.0)
+    downside_p05: float
+
+
+class PortfolioSimulationResponse(BaseModel):
+    simulation_id: str
+    generated_at: str
+    organization_id: str | None = None
+    application_count: int = Field(ge=0)
+    scored_application_count: int = Field(ge=0)
+    unscored_application_count: int = Field(ge=0)
+    model_versions: list[str] = Field(default_factory=list)
+    policy: SimulationPolicySummary
+    assumptions: SimulationAssumptions
+    scenarios: list[PortfolioSimulationScenario] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     note: str
 
 

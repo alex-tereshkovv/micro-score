@@ -86,6 +86,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="modelVersionRegistry"', html)
         self.assertIn('id="refreshModelVersions"', html)
         self.assertIn("Version registry", html)
+        self.assertIn('id="simulationForm"', html)
+        self.assertIn('id="runSimulation"', html)
+        self.assertIn('id="simulationResults"', html)
+        self.assertIn("Monte Carlo Lab", html)
+        self.assertIn("This does not change borrower scores", html)
         self.assertIn('name="organization_id"', html)
         self.assertIn("Pavlodar Demo MFI", html)
 
@@ -116,6 +121,7 @@ class WebStaticTests(unittest.TestCase):
             "/review-packet",
             "/mfi/analytics/segments",
             "/mfi/analytics/policies",
+            "/mfi/simulations/portfolio",
             "/mfi/analytics/decisions",
             "/admin/audit-events",
             "/admin/model-versions",
@@ -221,12 +227,25 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("refreshModelVersions", script)
         self.assertIn("createModelVersion", script)
         self.assertIn("activateModelVersion", script)
+        self.assertIn("runPortfolioSimulation", script)
+        self.assertIn("renderPortfolioSimulation", script)
+        self.assertIn("renderSimulationScenario", script)
+        self.assertIn("probability_of_loss", script)
+        self.assertIn("simulation-warnings", script)
         self.assertIn("stale_model_version", mock_script)
         self.assertIn("model_version_activated", mock_script)
         self.assertIn("activeModelVersion", mock_script)
         self.assertIn(".organization-form", styles)
         self.assertIn(".model-version-form", styles)
         self.assertIn(".model-version-card", styles)
+        self.assertIn(".monte-carlo-panel", styles)
+        self.assertIn(".simulation-form", styles)
+        self.assertIn(".simulation-card", styles)
+        self.assertIn(".simulation-warnings", styles)
+        self.assertIn("simulatePortfolio", mock_script)
+        self.assertIn("seededRandom", mock_script)
+        self.assertIn("scenarioShifts", mock_script)
+        self.assertIn("portfolio_simulation_run", mock_script)
         self.assertIn("enterDemoWorkspace", script)
         self.assertIn("API settings", markup)
         self.assertIn("roleAllowedViews", script)
