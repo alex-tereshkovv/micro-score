@@ -50,6 +50,11 @@ class PortfolioSimulationTests(unittest.TestCase):
             iterations=1_000,
             seed=1234,
         )
+        reordered = simulate_portfolio(
+            list(reversed(self.applications)),
+            iterations=1_000,
+            seed=1234,
+        )
 
         self.assertEqual(first, second)
         self.assertEqual(first["application_count"], 7)
@@ -59,6 +64,11 @@ class PortfolioSimulationTests(unittest.TestCase):
         self.assertTrue(any("Operating cost is zero" in warning for warning in first["warnings"]))
         self.assertEqual(first["model_versions"], ["research-v0.1"])
         self.assertEqual(first["assumptions"]["seed"], 1234)
+        self.assertEqual(len(first["portfolio_fingerprint"]), 64)
+        self.assertEqual(
+            first["portfolio_fingerprint"],
+            reordered["portfolio_fingerprint"],
+        )
 
     def test_stress_scenarios_increase_defaults_and_reduce_result(self) -> None:
         result = simulate_portfolio(
@@ -102,6 +112,14 @@ class PortfolioSimulationTests(unittest.TestCase):
             self.assertLessEqual(
                 scenario["portfolio_result"]["p50"],
                 scenario["portfolio_result"]["p95"],
+            )
+            self.assertGreaterEqual(
+                scenario["diagnostics"]["portfolio_result_mean_standard_error"],
+                0.0,
+            )
+            self.assertGreaterEqual(
+                scenario["diagnostics"]["loss_probability_standard_error"],
+                0.0,
             )
 
     def test_manual_review_rate_controls_simulated_book(self) -> None:

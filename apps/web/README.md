@@ -87,6 +87,8 @@ review packet with governance flags, top factors, timeline events, and a
 human-review checklist. The Policy Lab compares approve/review/decline
 threshold policies on scored applications. The Monte Carlo Lab adds seeded,
 paired baseline/adverse/severe portfolio simulations with explicit margin,
-LGD, operating-cost, review-conversion, macro, and calibration assumptions.
+LGD, operating-cost, review-conversion, macro, and calibration assumptions. It
+also shows numerical standard-error diagnostics and a tenant-scoped recent-run
+registry keyed by a scored-portfolio SHA-256 fingerprint.
 These are predicted-probability scenario previews, not forecasts or validated
 lending policies.

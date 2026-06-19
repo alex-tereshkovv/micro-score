@@ -45,6 +45,9 @@ git diff --check
 - Activating a candidate marks older review packets as stale until re-scored.
 - Monte Carlo output says scenario planning, not forecast or borrower score.
 - Repeating a run with the same seed produces identical scenario distributions.
+- Repeated runs preserve a stable 64-character portfolio fingerprint.
+- Simulation history can reopen the exact stored result and remains tenant-scoped.
+- Monte Carlo standard-error diagnostics are present and nonnegative.
 - Adverse/severe defaults do not improve relative to baseline for paired draws.
 - Demo accounts use synthetic data only.
 - No real borrower names, phone numbers, IINs, addresses, or bank records are

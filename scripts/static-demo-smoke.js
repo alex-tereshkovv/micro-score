@@ -77,6 +77,27 @@ async function main() {
   if (JSON.stringify(simulation.scenarios) !== JSON.stringify(repeatedSimulation.scenarios)) {
     throw new Error("Expected seeded Monte Carlo simulation to be reproducible");
   }
+  if (
+    simulation.portfolio_fingerprint.length !== 64
+    || simulation.portfolio_fingerprint !== repeatedSimulation.portfolio_fingerprint
+  ) {
+    throw new Error("Expected stable SHA-256 portfolio fingerprint");
+  }
+  if (simulation.scenarios.some((row) => !row.diagnostics)) {
+    throw new Error("Expected Monte Carlo standard-error diagnostics");
+  }
+  const simulationHistory = await api.request("/mfi/simulations", {}, session);
+  if (simulationHistory.length !== 2) {
+    throw new Error("Expected immutable simulation history entries");
+  }
+  const storedSimulation = await api.request(
+    `/mfi/simulations/${simulation.simulation_id}`,
+    {},
+    session,
+  );
+  if (storedSimulation.portfolio_fingerprint !== simulation.portfolio_fingerprint) {
+    throw new Error("Expected stored simulation detail to preserve fingerprint");
+  }
   const simulatedScenarios = Object.fromEntries(
     simulation.scenarios.map((row) => [row.scenario, row]),
   );
@@ -366,15 +387,16 @@ async function main() {
       applications: applications.length,
       risk_band: scored.score_result.risk_band,
       checklist_items: packet.checklist.length,
-    policies: policies.policies.length,
-    monte_carlo: true,
-    simulation_iterations: simulation.assumptions.iterations,
+      policies: policies.policies.length,
+      monte_carlo: true,
+      simulation_iterations: simulation.assumptions.iterations,
+      simulation_history: simulationHistory.length,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,
-    staff_provisioning: true,
-    model_registry: true,
-    active_model: rescored.score_result.model_version,
+      staff_provisioning: true,
+      model_registry: true,
+      active_model: rescored.score_result.model_version,
       tenant_isolation: true,
       logout_guard: true,
       reset_applications: resetApplications.length,

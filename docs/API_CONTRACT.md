@@ -505,7 +505,9 @@ distributions for:
 - one-period portfolio result and result per approved loan;
 - mean stressed probability;
 - probability of a negative result;
-- 5th, 50th, and 95th percentiles.
+- 5th, 50th, and 95th percentiles;
+- Monte Carlo standard errors for mean result, mean defaults, and loss
+  probability.
 
 The synchronous prototype caps work at 20 million borrower-iterations
 (`scored_application_count * iterations`). Larger runs return `409` and should
@@ -522,6 +524,22 @@ and assumptions. Every successful call records a `portfolio_simulation_run`
 audit event with inputs and compact scenario summaries. Unscored applications
 are reported but excluded; a portfolio with no scored applications returns
 `409`.
+
+The response includes a SHA-256 `portfolio_fingerprint` over the canonical
+scored snapshot and stores the request plus full response in the immutable local
+simulation registry. Successful runs can be listed and reopened through:
+
+```http
+GET /mfi/simulations
+GET /mfi/simulations/{simulation_id}
+```
+
+The list endpoint returns compact `PortfolioSimulationSummary` records with
+typed `PortfolioSimulationScenarioSummary` rows. The
+detail endpoint returns the original `PortfolioSimulationResponse`, including
+assumptions, fingerprint, warnings, distributions, and diagnostics. Analyst
+access is organization-scoped; admins can inspect all runs. Missing IDs return
+`404`, and cross-tenant detail access returns `403`.
 
 The response warns when unscored applications were excluded, score snapshots
 mix multiple model versions, or a stored score is not from the active model.

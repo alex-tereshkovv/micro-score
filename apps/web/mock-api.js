@@ -5,6 +5,7 @@
     modelVersions: {},
     sessions: {},
     applications: [],
+    simulations: [],
     timelines: {},
     auditEvents: [],
     nextTimelineId: 1,
@@ -248,6 +249,7 @@
       },
     };
     demo.applications = [];
+    demo.simulations = [];
     demo.modelVersions = {
       "static-demo-v1": {
         version: "static-demo-v1",
@@ -892,7 +894,38 @@
     };
   }
 
-  function simulatePortfolio(applications, payload) {
+  function simulationStandardError(values) {
+    if (values.length < 2) return 0;
+    const mean = average(values) || 0;
+    const variance = values.reduce(
+      (total, value) => total + (value - mean) ** 2,
+      0,
+    ) / (values.length - 1);
+    return Math.sqrt(variance / values.length);
+  }
+
+  async function portfolioFingerprint(scored) {
+    const records = scored
+      .map((app) => ({
+        application_id: String(app.id || "unknown"),
+        high_risk_probability: clamp(
+          Number(app.score_result.high_risk_probability),
+          0.000001,
+          0.999999,
+        ),
+        model_version: app.score_result.model_version || "unknown",
+        requested_amount: Number(app.requested_amount),
+        scored_at: app.scored_at || null,
+      }))
+      .sort((left, right) => left.application_id.localeCompare(right.application_id));
+    const encoded = new TextEncoder().encode(JSON.stringify(records));
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", encoded);
+    return [...new Uint8Array(digest)]
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function simulatePortfolio(applications, payload) {
     const scored = applications.filter(
       (app) => app.score_result?.high_risk_probability !== null
         && app.score_result?.high_risk_probability !== undefined
@@ -1007,14 +1040,16 @@
     if (operatingCost === 0) {
       warnings.push("Operating cost is zero; set an evidence-based cost before interpreting financial results.");
     }
+    const fingerprint = await portfolioFingerprint(scored);
 
     return {
-      simulation_id: `static-simulation-${Date.now()}`,
+      simulation_id: `static-simulation-${Date.now()}-${demo.simulations.length + 1}`,
       generated_at: nowIso(),
       application_count: applications.length,
       scored_application_count: scored.length,
       unscored_application_count: applications.length - scored.length,
       model_versions: modelVersions,
+      portfolio_fingerprint: fingerprint,
       policy: {
         ...policy,
         auto_approve_count: actions.filter((action) => action === "approve").length,
@@ -1047,10 +1082,41 @@
           mean_stressed_probability: average(current.mean_stressed_probability) || 0,
           probability_of_loss: share(current.portfolio_result, (value) => value < 0),
           downside_p05: simulationDistribution(current.portfolio_result).p05,
+          diagnostics: {
+            portfolio_result_mean_standard_error: simulationStandardError(current.portfolio_result),
+            default_count_mean_standard_error: simulationStandardError(current.default_count),
+            loss_probability_standard_error: Math.sqrt(
+              share(current.portfolio_result, (value) => value < 0)
+              * (1 - share(current.portfolio_result, (value) => value < 0))
+              / iterations,
+            ),
+          },
         };
       }),
       warnings,
       note: "Scenario-planning output only. Synthetic probabilities and assumptions are not forecasts or automatic lending decisions.",
+    };
+  }
+
+  function simulationSummary(run) {
+    return {
+      simulation_id: run.simulation_id,
+      generated_at: run.generated_at,
+      organization_id: run.organization_id,
+      actor_email: run.actor_email,
+      portfolio_fingerprint: run.portfolio_fingerprint,
+      policy: run.policy.name,
+      iterations: run.assumptions.iterations,
+      seed: run.assumptions.seed,
+      scenarios: run.scenarios.map((row) => row.scenario),
+      scored_application_count: run.scored_application_count,
+      model_versions: run.model_versions,
+      warning_count: run.warnings.length,
+      scenario_summary: run.scenarios.map((row) => ({
+        scenario: row.scenario,
+        probability_of_loss: row.probability_of_loss,
+        portfolio_result_p50: row.portfolio_result.p50,
+      })),
     };
   }
 
@@ -1332,8 +1398,10 @@
 
     if (cleanPath === "/mfi/simulations/portfolio" && method === "POST") {
       const user = requireMfi(session);
-      const result = simulatePortfolio(mfiApplications(user), body);
+      const result = await simulatePortfolio(mfiApplications(user), body);
       result.organization_id = user.role === "admin" ? null : user.organization_id;
+      result.actor_email = user.email;
+      demo.simulations.unshift(clone(result));
       addAudit("portfolio_simulation_run", "portfolio_simulation", result.simulation_id, user.email, {
         organization_id: result.organization_id,
         policy: result.policy.name,
@@ -1344,6 +1412,26 @@
         model_versions: result.model_versions,
       });
       return clone(result);
+    }
+
+    if (cleanPath === "/mfi/simulations" && method === "GET") {
+      const user = requireMfi(session);
+      const visible = user.role === "admin"
+        ? demo.simulations
+        : demo.simulations.filter((run) => run.organization_id === user.organization_id);
+      return clone(visible.map(simulationSummary));
+    }
+
+    const simulationDetailMatch = cleanPath.match(/^\/mfi\/simulations\/([^/]+)$/);
+    if (simulationDetailMatch && method === "GET") {
+      const user = requireMfi(session);
+      const simulationId = decodeURIComponent(simulationDetailMatch[1]);
+      const run = demo.simulations.find((item) => item.simulation_id === simulationId);
+      if (!run) throw new Error("Portfolio simulation not found");
+      if (user.role !== "admin" && run.organization_id !== user.organization_id) {
+        throw new Error("Not allowed");
+      }
+      return clone(run);
     }
 
     if (cleanPath === "/mfi/analytics/decisions" && method === "GET") {

@@ -262,6 +262,56 @@ class ApiDatabaseTests(unittest.TestCase):
                 created_by="admin@example.com",
             )
 
+    def test_portfolio_simulation_registry_persists_and_scopes_runs(self) -> None:
+        self.repository.create_organization(
+            organization_id="mfi-a",
+            name="MFI A",
+            region="Pavlodar region",
+        )
+        self.repository.create_organization(
+            organization_id="mfi-b",
+            name="MFI B",
+            region="Pavlodar region",
+        )
+        self.repository.create_user(
+            "analyst@example.com",
+            "hash",
+            "mfi_analyst",
+            "mfi-a",
+        )
+        result = {
+            "simulation_id": "sim-a",
+            "generated_at": "2026-06-19T12:00:00+00:00",
+            "organization_id": "mfi-a",
+            "actor_email": "analyst@example.com",
+            "portfolio_fingerprint": "a" * 64,
+            "assumptions": {"iterations": 500, "seed": 7},
+            "policy": {"name": "balanced_review"},
+            "scenarios": [],
+            "warnings": [],
+        }
+        created = self.repository.create_portfolio_simulation(
+            simulation_id="sim-a",
+            organization_id="mfi-a",
+            actor_email="analyst@example.com",
+            portfolio_fingerprint="a" * 64,
+            request_payload={"iterations": 500, "seed": 7},
+            result_payload=result,
+            created_at=result["generated_at"],
+        )
+
+        self.assertEqual(created["id"], "sim-a")
+        self.assertEqual(created["request"]["seed"], 7)
+        self.assertEqual(created["result"]["portfolio_fingerprint"], "a" * 64)
+        self.assertEqual(len(self.repository.list_portfolio_simulations("mfi-a")), 1)
+        self.assertEqual(self.repository.list_portfolio_simulations("mfi-b"), [])
+
+        reopened = MicroScoreRepository(self.db_path)
+        self.assertEqual(
+            reopened.get_portfolio_simulation("sim-a")["actor_email"],
+            "analyst@example.com",
+        )
+
     def test_score_results_segment_analytics_and_audit_events(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")
         self.repository.create_user("analyst@example.com", "password-hash", "mfi_analyst")

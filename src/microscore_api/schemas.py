@@ -353,6 +353,12 @@ class SimulationAssumptions(BaseModel):
     borrower_iterations: int = Field(ge=1)
 
 
+class SimulationDiagnostics(BaseModel):
+    portfolio_result_mean_standard_error: float = Field(ge=0.0)
+    default_count_mean_standard_error: float = Field(ge=0.0)
+    loss_probability_standard_error: float = Field(ge=0.0)
+
+
 class PortfolioSimulationScenario(BaseModel):
     scenario: StressScenario
     log_odds_shift: float
@@ -365,21 +371,46 @@ class PortfolioSimulationScenario(BaseModel):
     mean_stressed_probability: float = Field(ge=0.0, le=1.0)
     probability_of_loss: float = Field(ge=0.0, le=1.0)
     downside_p05: float
+    diagnostics: SimulationDiagnostics
 
 
 class PortfolioSimulationResponse(BaseModel):
     simulation_id: str
     generated_at: str
     organization_id: str | None = None
+    actor_email: str | None = None
     application_count: int = Field(ge=0)
     scored_application_count: int = Field(ge=0)
     unscored_application_count: int = Field(ge=0)
     model_versions: list[str] = Field(default_factory=list)
+    portfolio_fingerprint: str = Field(min_length=64, max_length=64)
     policy: SimulationPolicySummary
     assumptions: SimulationAssumptions
     scenarios: list[PortfolioSimulationScenario] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     note: str
+
+
+class PortfolioSimulationScenarioSummary(BaseModel):
+    scenario: StressScenario
+    probability_of_loss: float = Field(ge=0.0, le=1.0)
+    portfolio_result_p50: float
+
+
+class PortfolioSimulationSummary(BaseModel):
+    simulation_id: str
+    generated_at: str
+    organization_id: str | None = None
+    actor_email: str
+    portfolio_fingerprint: str = Field(min_length=64, max_length=64)
+    policy: ThresholdPolicyName
+    iterations: int = Field(ge=1)
+    seed: int = Field(ge=0)
+    scenarios: list[StressScenario] = Field(default_factory=list)
+    scored_application_count: int = Field(ge=0)
+    model_versions: list[str] = Field(default_factory=list)
+    warning_count: int = Field(ge=0)
+    scenario_summary: list[PortfolioSimulationScenarioSummary] = Field(default_factory=list)
 
 
 class DecisionAnalyticsRow(BaseModel):

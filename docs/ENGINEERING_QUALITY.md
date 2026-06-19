@@ -37,6 +37,8 @@ The smoke test verifies that the in-browser static backend can:
 - re-score with the newly active model and preserve its governance snapshot
 - reproduce a seeded Monte Carlo run and verify worsening stress scenarios do
   not reduce simulated default counts
+- verify simulation fingerprint stability, standard-error diagnostics, and
+  stored history/detail parity
 - load policy analytics
 - export a CSV sample
 - reset the static demo portfolio

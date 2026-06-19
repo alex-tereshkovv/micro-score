@@ -32,6 +32,7 @@ const state = {
   policyAnalytics: null,
   decisionAnalytics: null,
   portfolioSimulation: null,
+  simulationHistory: [],
   organizations: [],
   activeModel: null,
 };
@@ -84,6 +85,8 @@ const els = {
   simulationForm: document.querySelector("#simulationForm"),
   runSimulation: document.querySelector("#runSimulation"),
   simulationResults: document.querySelector("#simulationResults"),
+  simulationHistory: document.querySelector("#simulationHistory"),
+  refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
   staffForm: document.querySelector("#staffForm"),
@@ -602,7 +605,11 @@ async function enterDemoWorkspace(email, role) {
 
 async function loadRoleWorkspace(role) {
   if (role === "mfi_analyst") {
-    await Promise.all([refreshApplications(), refreshModelStatus()]);
+    await Promise.all([
+      refreshApplications(),
+      refreshModelStatus(),
+      refreshSimulationHistory(),
+    ]);
   } else if (role === "admin") {
     await Promise.all([
       refreshAudit(),
@@ -610,6 +617,7 @@ async function loadRoleWorkspace(role) {
       refreshOrganizations(),
       refreshModelVersions(),
       refreshModelStatus(),
+      refreshSimulationHistory(),
     ]);
   }
 }
@@ -718,6 +726,7 @@ function resetApplicationViews() {
   state.policyAnalytics = null;
   state.decisionAnalytics = null;
   state.portfolioSimulation = null;
+  state.simulationHistory = [];
 
   els.borrowerApplicationId.value = "";
   els.borrowerConsent.checked = false;
@@ -798,6 +807,8 @@ function resetApplicationViews() {
     "No Monte Carlo run yet",
     "Run the simulation after scored applications are loaded.",
   );
+  els.simulationHistory.className = "simulation-history empty";
+  els.simulationHistory.textContent = "No saved simulation runs.";
 }
 
 function renderApplication(application) {
@@ -1736,6 +1747,7 @@ async function runPortfolioSimulation() {
     });
     state.portfolioSimulation = payload;
     renderPortfolioSimulation(payload);
+    await refreshSimulationHistory();
     showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
     return payload;
   } catch (error) {
@@ -1748,6 +1760,44 @@ async function runPortfolioSimulation() {
     );
     throw error;
   }
+}
+
+async function refreshSimulationHistory() {
+  const rows = await apiFetch("/mfi/simulations");
+  state.simulationHistory = rows;
+  renderSimulationHistory(rows);
+  return rows;
+}
+
+function renderSimulationHistory(rows) {
+  if (!rows?.length) {
+    els.simulationHistory.className = "simulation-history empty";
+    els.simulationHistory.textContent = "No saved simulation runs.";
+    return;
+  }
+
+  els.simulationHistory.className = "simulation-history";
+  els.simulationHistory.innerHTML = rows.map((row) => {
+    const baseline = (row.scenario_summary || []).find((scenario) => scenario.scenario === "baseline");
+    const result = baseline ? formatAmountUnits(baseline.portfolio_result_p50) : "-";
+    const loss = baseline ? formatPercent(baseline.probability_of_loss) : "-";
+    const fingerprint = String(row.portfolio_fingerprint || "");
+    return `
+      <button class="simulation-history-row" type="button" data-simulation-id="${escapeHtml(row.simulation_id)}">
+        <span><strong>${escapeHtml(formatPolicyName(row.policy))}</strong><em>${escapeHtml(row.generated_at)}</em></span>
+        <span><strong>${result}</strong><em>Baseline / loss ${loss}</em></span>
+        <span><strong>${formatMoney(row.iterations)} draws</strong><em>${escapeHtml(fingerprint.slice(0, 12))}…</em></span>
+      </button>
+    `;
+  }).join("");
+}
+
+async function loadStoredSimulation(simulationId) {
+  const payload = await apiFetch(`/mfi/simulations/${encodeURIComponent(simulationId)}`);
+  state.portfolioSimulation = payload;
+  renderPortfolioSimulation(payload);
+  showMessage(`Loaded saved Monte Carlo run ${simulationId}`, "ok");
+  return payload;
 }
 
 function renderPortfolioSimulation(payload) {
@@ -1763,6 +1813,8 @@ function renderPortfolioSimulation(payload) {
       <div><span>Scored portfolio</span><strong>${escapeHtml(payload.scored_application_count)}</strong></div>
       <div><span>Iterations / seed</span><strong>${formatMoney(payload.assumptions.iterations)} / ${escapeHtml(payload.assumptions.seed)}</strong></div>
       <div><span>Score versions</span><strong>${escapeHtml(models)}</strong></div>
+      <div><span>Portfolio fingerprint</span><strong title="${escapeHtml(payload.portfolio_fingerprint)}">${escapeHtml(payload.portfolio_fingerprint.slice(0, 16))}…</strong></div>
+      <div><span>Saved run</span><strong>${escapeHtml(payload.simulation_id)}</strong></div>
     </div>
     ${warnings}
     <div class="simulation-scenarios">${scenarioCards}</div>
@@ -1778,6 +1830,7 @@ function renderSimulationScenario(row) {
   const approved = row.approved_count;
   const defaults = row.default_count;
   const result = row.portfolio_result;
+  const diagnostics = row.diagnostics || {};
   return `
     <article class="simulation-card ${escapeHtml(row.scenario)}">
       <div class="simulation-card-heading">
@@ -1795,6 +1848,7 @@ function renderSimulationScenario(row) {
       <div class="loss-meter" aria-label="Probability of negative portfolio result"><span style="width:${lossWidth}%"></span></div>
       <p class="simulation-range">Result P05-P95: ${formatAmountUnits(result.p05)} to ${formatAmountUnits(result.p95)}</p>
       <p class="simulation-range">Defaults P05-P95: ${Number(defaults.p05).toFixed(1)} to ${Number(defaults.p95).toFixed(1)} / approved ${Number(approved.p05).toFixed(1)} to ${Number(approved.p95).toFixed(1)}</p>
+      <p class="simulation-range">Monte Carlo SE: result mean ±${formatAmountUnits(diagnostics.portfolio_result_mean_standard_error || 0)} / defaults mean ±${Number(diagnostics.default_count_mean_standard_error || 0).toFixed(3)} / loss probability ±${formatPercent(diagnostics.loss_probability_standard_error || 0)}</p>
     </article>
   `;
 }
@@ -2200,6 +2254,16 @@ function wireEvents() {
   els.simulationForm.addEventListener("submit", (event) => {
     event.preventDefault();
     withButtonBusy(els.runSimulation, "Simulating...", () => runPortfolioSimulation())
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.refreshSimulationHistory.addEventListener("click", () => {
+    withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.simulationHistory.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-simulation-id]");
+    if (!button) return;
+    loadStoredSimulation(button.dataset.simulationId)
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshAudit.addEventListener("click", () => {

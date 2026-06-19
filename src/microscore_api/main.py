@@ -61,6 +61,7 @@ from .schemas import (
     PolicyAnalyticsResponse,
     PortfolioSimulationRequest,
     PortfolioSimulationResponse,
+    PortfolioSimulationSummary,
     RegisterRequest,
     SegmentAnalyticsRow,
     StaffUserCreate,
@@ -154,6 +155,50 @@ def _model_governance_snapshot(model: dict[str, Any]) -> dict[str, Any]:
         "activated_at": model.get("activated_at"),
         "limitations": list(model.get("limitations") or []),
     }
+
+
+def _simulation_summary(record: dict[str, Any]) -> dict[str, Any]:
+    result = record["result"]
+    assumptions = result.get("assumptions") or {}
+    policy = result.get("policy") or {}
+    return {
+        "simulation_id": record["id"],
+        "generated_at": record["created_at"],
+        "organization_id": record.get("organization_id"),
+        "actor_email": record["actor_email"],
+        "portfolio_fingerprint": record["portfolio_fingerprint"],
+        "policy": policy.get("name", "balanced_review"),
+        "iterations": assumptions.get("iterations", 0),
+        "seed": assumptions.get("seed", 0),
+        "scenarios": [row["scenario"] for row in result.get("scenarios") or []],
+        "scored_application_count": result.get("scored_application_count", 0),
+        "model_versions": list(result.get("model_versions") or []),
+        "warning_count": len(result.get("warnings") or []),
+        "scenario_summary": [
+            {
+                "scenario": row["scenario"],
+                "probability_of_loss": row["probability_of_loss"],
+                "portfolio_result_p50": row["portfolio_result"]["p50"],
+            }
+            for row in result.get("scenarios") or []
+        ],
+    }
+
+
+def _simulation_for_user(
+    simulation_id: str,
+    user: dict[str, Any],
+    repository: MicroScoreRepository,
+) -> dict[str, Any]:
+    record = repository.get_portfolio_simulation(simulation_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio simulation not found",
+        )
+    if user["role"] != "admin" and record.get("organization_id") != _mfi_organization_scope(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+    return record
 
 
 def current_user(
@@ -928,8 +973,18 @@ def portfolio_monte_carlo_simulation(
         "simulation_id": simulation_id,
         "generated_at": _utc_now_iso(),
         "organization_id": organization_id,
+        "actor_email": user["email"],
         **result,
     }
+    repository.create_portfolio_simulation(
+        simulation_id=simulation_id,
+        organization_id=organization_id,
+        actor_email=user["email"],
+        portfolio_fingerprint=result["portfolio_fingerprint"],
+        request_payload=payload.model_dump(mode="json"),
+        result_payload=response,
+        created_at=response["generated_at"],
+    )
     repository.record_audit_event(
         actor_email=user["email"],
         action="portfolio_simulation_run",
@@ -954,6 +1009,27 @@ def portfolio_monte_carlo_simulation(
         },
     )
     return response
+
+
+@app.get("/mfi/simulations", response_model=list[PortfolioSimulationSummary])
+def list_portfolio_simulations(
+    user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    records = repository.list_portfolio_simulations(_mfi_organization_scope(user))
+    return [_simulation_summary(record) for record in records]
+
+
+@app.get(
+    "/mfi/simulations/{simulation_id}",
+    response_model=PortfolioSimulationResponse,
+)
+def get_portfolio_simulation(
+    simulation_id: str,
+    user: dict[str, Any] = Depends(require_mfi_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _simulation_for_user(simulation_id, user, repository)["result"]
 
 
 @app.get("/mfi/analytics/decisions", response_model=DecisionAnalyticsResponse)

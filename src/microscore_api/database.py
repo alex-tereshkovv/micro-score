@@ -261,6 +261,16 @@ class MicroScoreRepository:
                     activated_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS portfolio_simulations (
+                    id TEXT PRIMARY KEY,
+                    organization_id TEXT REFERENCES mfi_organizations(id),
+                    actor_email TEXT NOT NULL REFERENCES users(email),
+                    portfolio_fingerprint TEXT NOT NULL,
+                    request_json TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_applications_borrower
                     ON loan_applications(borrower_email);
                 CREATE INDEX IF NOT EXISTS idx_application_decisions_application
@@ -270,6 +280,8 @@ class MicroScoreRepository:
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_model_versions_single_active
                     ON model_versions(is_active)
                     WHERE is_active = 1;
+                CREATE INDEX IF NOT EXISTS idx_portfolio_simulations_organization
+                    ON portfolio_simulations(organization_id, created_at DESC);
                 """
             )
             _ensure_column(
@@ -447,6 +459,74 @@ class MicroScoreRepository:
                 (activated_at, version),
             )
         return self.get_model_version(version)
+
+    def create_portfolio_simulation(
+        self,
+        *,
+        simulation_id: str,
+        organization_id: str | None,
+        actor_email: str,
+        portfolio_fingerprint: str,
+        request_payload: dict[str, Any],
+        result_payload: dict[str, Any],
+        created_at: str,
+    ) -> dict[str, Any]:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO portfolio_simulations (
+                    id,
+                    organization_id,
+                    actor_email,
+                    portfolio_fingerprint,
+                    request_json,
+                    result_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    simulation_id,
+                    organization_id,
+                    actor_email,
+                    portfolio_fingerprint,
+                    _json_dumps(request_payload),
+                    _json_dumps(result_payload),
+                    created_at,
+                ),
+            )
+        return self.get_portfolio_simulation(simulation_id) or {}
+
+    def get_portfolio_simulation(self, simulation_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM portfolio_simulations WHERE id = ?",
+                (simulation_id,),
+            ).fetchone()
+        return self._portfolio_simulation_from_row(row) if row else None
+
+    def list_portfolio_simulations(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            if organization_id is None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM portfolio_simulations
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM portfolio_simulations
+                    WHERE organization_id = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (organization_id,),
+                ).fetchall()
+        return [self._portfolio_simulation_from_row(row) for row in rows]
 
     def create_organization(
         self,
@@ -1147,6 +1227,13 @@ class MicroScoreRepository:
             _json_loads(model_version.pop("limitations_json")) or []
         )
         return model_version
+
+    @staticmethod
+    def _portfolio_simulation_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        simulation = dict(row)
+        simulation["request"] = _json_loads(simulation.pop("request_json")) or {}
+        simulation["result"] = _json_loads(simulation.pop("result_json")) or {}
+        return simulation
 
     def _latest_application_decision(self, application_id: str) -> dict[str, Any] | None:
         with self._connection() as connection:

@@ -96,7 +96,9 @@ For each stress scenario, the API reports:
 - mean and percentile range for portfolio result;
 - probability of a negative portfolio result;
 - mean stressed default probability;
-- downside at the 5th percentile.
+- downside at the 5th percentile;
+- Monte Carlo standard errors for mean portfolio result, mean default count,
+  and estimated loss probability.
 
 The response also echoes every assumption, the seed, iteration count, policy,
 portfolio size, model versions present in the score snapshots, and a warning
@@ -123,6 +125,22 @@ useful for review and tests; changing the seed is useful for stability checks.
 To protect the synchronous prototype API, a run is limited to 20 million
 scored-application × iteration cells. Larger portfolios must reduce iterations
 or move simulation to a background worker.
+
+The standard errors describe finite-simulation noise, not model or economic
+uncertainty. They should shrink as iterations increase. A small Monte Carlo
+standard error does not make unvalidated probabilities or assumptions accurate.
+
+Before simulation, the API builds a canonical, application-ID-sorted snapshot
+of each usable application's amount, probability, model version, and scoring
+timestamp. Its SHA-256 `portfolio_fingerprint` makes it possible to distinguish
+a repeated run on the same score snapshot from a run after the portfolio or its
+scores changed.
+
+Every successful local API run is stored as an immutable SQLite record containing
+the request, full result, actor, organization scope, timestamp, and fingerprint.
+`GET /mfi/simulations` returns compact history and
+`GET /mfi/simulations/{simulation_id}` restores the exact saved result. Analysts
+can only access their organization; administrators retain global visibility.
 
 ## Interpretation Boundaries
 

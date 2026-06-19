@@ -386,6 +386,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("SimulationDistribution", schemas)
         self.assertIn("SimulationPolicySummary", schemas)
         self.assertIn("SimulationAssumptions", schemas)
+        self.assertIn("SimulationDiagnostics", schemas)
+        self.assertIn("PortfolioSimulationScenarioSummary", schemas)
+        self.assertIn("PortfolioSimulationSummary", schemas)
         self.assertIn("AuditEventResponse", schemas)
         self.assertIn("ClearApplicationsResponse", schemas)
         self.assertIn("PilotReadinessResponse", schemas)
@@ -801,8 +804,50 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(any("excluded" in warning for warning in first_payload["warnings"]))
         self.assertEqual(first_payload["scenarios"], second_payload["scenarios"])
         self.assertEqual(first_payload["policy"], second_payload["policy"])
+        self.assertEqual(
+            first_payload["portfolio_fingerprint"],
+            second_payload["portfolio_fingerprint"],
+        )
+        self.assertEqual(len(first_payload["portfolio_fingerprint"]), 64)
         self.assertEqual(len(first_payload["scenarios"]), 3)
         self.assertIn("scenario-planning", first_payload["note"].lower())
+        self.assertIn("diagnostics", first_payload["scenarios"][0])
+
+        history = self.client.get(
+            "/mfi/simulations",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(history.status_code, 200, history.text)
+        self.assertEqual(len(history.json()), 2)
+        self.assertEqual(
+            history.json()[0]["portfolio_fingerprint"],
+            first_payload["portfolio_fingerprint"],
+        )
+        stored_detail = self.client.get(
+            f"/mfi/simulations/{first_payload['simulation_id']}",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(stored_detail.status_code, 200, stored_detail.text)
+        self.assertEqual(stored_detail.json()["scenarios"], first_payload["scenarios"])
+
+        self.repository.create_user(
+            "simulation-other-analyst@example.com",
+            hash_password(TEST_PASSWORD),
+            "mfi_analyst",
+            SECOND_ORGANIZATION_ID,
+        )
+        other_login = self.client.post(
+            "/auth/login",
+            json={
+                "email": "simulation-other-analyst@example.com",
+                "password": TEST_PASSWORD,
+            },
+        )
+        cross_tenant_history = self.client.get(
+            f"/mfi/simulations/{first_payload['simulation_id']}",
+            headers=self._headers(other_login.json()["access_token"]),
+        )
+        self.assertEqual(cross_tenant_history.status_code, 403, cross_tenant_history.text)
 
         borrower_login = self.client.post(
             "/auth/login",
@@ -853,6 +898,12 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(admin_result.status_code, 200, admin_result.text)
         self.assertIsNone(admin_result.json()["organization_id"])
         self.assertEqual(admin_result.json()["scored_application_count"], 5)
+        admin_history = self.client.get(
+            "/mfi/simulations",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(admin_history.status_code, 200, admin_history.text)
+        self.assertEqual(len(admin_history.json()), 4)
 
         audit = self.client.get(
             "/admin/audit-events",

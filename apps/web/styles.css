@@ -1321,6 +1321,65 @@ label {
   line-height: 1.45;
 }
 
+.simulation-history-heading {
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.simulation-history-heading h4 {
+  margin: 2px 0 0;
+  font-size: 17px;
+}
+
+.simulation-history {
+  display: grid;
+  gap: 8px;
+}
+
+.simulation-history.empty {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  padding: 14px;
+  color: var(--muted);
+}
+
+.simulation-history-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(170px, 1.2fr) repeat(2, minmax(140px, 0.8fr));
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 10px 12px;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.simulation-history-row:hover,
+.simulation-history-row:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 7px 20px rgba(13, 91, 99, 0.1);
+  transform: translateY(-1px);
+}
+
+.simulation-history-row span,
+.simulation-history-row code {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-history-row strong,
+.simulation-history-row code {
+  display: block;
+  margin-top: 2px;
+}
+
 .simulation-card {
   min-width: 0;
   border: 1px solid var(--line);
@@ -2123,6 +2182,10 @@ tr.selected {
   .simulation-scenarios {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
+
+  .simulation-history-row {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -2204,6 +2267,10 @@ tr.selected {
   .simulation-summary,
   .simulation-scenarios,
   .simulation-card-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-history-row {
     grid-template-columns: 1fr;
   }
 

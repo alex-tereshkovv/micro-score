@@ -89,6 +89,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="simulationForm"', html)
         self.assertIn('id="runSimulation"', html)
         self.assertIn('id="simulationResults"', html)
+        self.assertIn('id="simulationHistory"', html)
+        self.assertIn('id="refreshSimulationHistory"', html)
         self.assertIn("Monte Carlo Lab", html)
         self.assertIn("This does not change borrower scores", html)
         self.assertIn('name="organization_id"', html)
@@ -122,6 +124,7 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/analytics/segments",
             "/mfi/analytics/policies",
             "/mfi/simulations/portfolio",
+            "/mfi/simulations",
             "/mfi/analytics/decisions",
             "/admin/audit-events",
             "/admin/model-versions",
@@ -230,6 +233,10 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("runPortfolioSimulation", script)
         self.assertIn("renderPortfolioSimulation", script)
         self.assertIn("renderSimulationScenario", script)
+        self.assertIn("refreshSimulationHistory", script)
+        self.assertIn("loadStoredSimulation", script)
+        self.assertIn("portfolio_fingerprint", script)
+        self.assertIn("portfolio_result_mean_standard_error", script)
         self.assertIn("probability_of_loss", script)
         self.assertIn("simulation-warnings", script)
         self.assertIn("stale_model_version", mock_script)
@@ -242,7 +249,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn(".simulation-form", styles)
         self.assertIn(".simulation-card", styles)
         self.assertIn(".simulation-warnings", styles)
+        self.assertIn(".simulation-history-row", styles)
         self.assertIn("simulatePortfolio", mock_script)
+        self.assertIn("portfolioFingerprint", mock_script)
+        self.assertIn("simulationStandardError", mock_script)
+        self.assertIn("simulationSummary", mock_script)
         self.assertIn("seededRandom", mock_script)
         self.assertIn("scenarioShifts", mock_script)
         self.assertIn("portfolio_simulation_run", mock_script)

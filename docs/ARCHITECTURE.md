@@ -95,7 +95,8 @@ Main local components:
 - stale-score detection in review packets after an administrator activates a
   newer model version;
 - tenant-scoped, seeded Monte Carlo simulation for baseline/adverse/severe
-  portfolio outcomes with audited assumptions;
+  portfolio outcomes with audited assumptions, snapshot fingerprints, numerical
+  precision diagnostics, and an immutable run registry;
 - SQLite demo database generated under `data/app/`;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
@@ -132,10 +133,13 @@ It supports:
 5. The analyst reviews the result together with model-use notices and policy
    context.
 6. The Monte Carlo engine applies a selected policy to scored applications and
-   reports paired uncertainty ranges without changing borrower scores.
-7. A later model activation marks older scores as stale without rewriting their
+   reports paired uncertainty ranges without changing borrower scores, then
+   stores the request and exact result under a tenant-scoped run ID.
+7. Analysts can compare or reopen registered simulations; the portfolio
+   fingerprint reveals whether the underlying scored snapshot changed.
+8. A later model activation marks older scores as stale without rewriting their
    original provenance.
-8. Admin/audit views record demo actions so decisions remain inspectable.
+9. Admin/audit views record demo actions so decisions remain inspectable.
 
 ## Privacy Boundary
 

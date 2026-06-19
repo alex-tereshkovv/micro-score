@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import hashlib
+import json
 from typing import Any
 
 import numpy as np
@@ -50,13 +52,20 @@ def _distribution(values: np.ndarray) -> dict[str, float]:
     }
 
 
+def _mean_standard_error(values: np.ndarray) -> float:
+    if values.size < 2:
+        return 0.0
+    return float(np.std(values.astype(float), ddof=1) / np.sqrt(values.size))
+
+
 def _portfolio_arrays(
     applications: Iterable[dict[str, Any]],
-) -> tuple[np.ndarray, np.ndarray, list[str], int]:
+) -> tuple[np.ndarray, np.ndarray, list[str], int, str]:
     probabilities: list[float] = []
     amounts: list[float] = []
     model_versions: set[str] = set()
     application_count = 0
+    fingerprint_records: list[dict[str, Any]] = []
 
     for application in applications:
         application_count += 1
@@ -69,13 +78,32 @@ def _portfolio_arrays(
             continue
         probabilities.append(float(np.clip(float(probability), 1e-6, 1 - 1e-6)))
         amounts.append(amount)
-        model_versions.add(str(score.get("model_version") or "unknown"))
+        model_version = str(score.get("model_version") or "unknown")
+        model_versions.add(model_version)
+        fingerprint_records.append(
+            {
+                "application_id": str(application.get("id") or "unknown"),
+                "requested_amount": amount,
+                "high_risk_probability": probabilities[-1],
+                "model_version": model_version,
+                "scored_at": application.get("scored_at"),
+            }
+        )
+
+    fingerprint_payload = json.dumps(
+        sorted(fingerprint_records, key=lambda row: row["application_id"]),
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    portfolio_fingerprint = hashlib.sha256(fingerprint_payload).hexdigest()
 
     return (
         np.asarray(probabilities, dtype=float),
         np.asarray(amounts, dtype=float),
         sorted(model_versions),
         application_count,
+        portfolio_fingerprint,
     )
 
 
@@ -120,9 +148,13 @@ def simulate_portfolio(
     if unknown_scenarios:
         raise ValueError(f"Unknown stress scenarios: {', '.join(unknown_scenarios)}")
 
-    probabilities, amounts, model_versions, application_count = _portfolio_arrays(
-        applications
-    )
+    (
+        probabilities,
+        amounts,
+        model_versions,
+        application_count,
+        portfolio_fingerprint,
+    ) = _portfolio_arrays(applications)
     if probabilities.size == 0:
         raise ValueError("Monte Carlo simulation requires at least one scored application")
     simulation_cells = iterations * int(probabilities.size)
@@ -228,6 +260,21 @@ def simulate_portfolio(
                 ),
                 "probability_of_loss": float(np.mean(portfolio_result < 0.0)),
                 "downside_p05": float(np.quantile(portfolio_result, 0.05)),
+                "diagnostics": {
+                    "portfolio_result_mean_standard_error": _mean_standard_error(
+                        portfolio_result
+                    ),
+                    "default_count_mean_standard_error": _mean_standard_error(
+                        arrays["default_count"]
+                    ),
+                    "loss_probability_standard_error": float(
+                        np.sqrt(
+                            np.mean(portfolio_result < 0.0)
+                            * (1.0 - np.mean(portfolio_result < 0.0))
+                            / iterations
+                        )
+                    ),
+                },
             }
         )
 
@@ -251,6 +298,7 @@ def simulate_portfolio(
         "scored_application_count": int(probabilities.size),
         "unscored_application_count": unscored_application_count,
         "model_versions": model_versions,
+        "portfolio_fingerprint": portfolio_fingerprint,
         "policy": {
             "name": policy.name,
             "description": policy.description,
