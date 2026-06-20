@@ -128,6 +128,96 @@ async function main() {
     role: borrowerAuth.role,
     email: "borrower@test.com",
   };
+  const borrowerHistory = await api.request("/applications", {}, borrowerSession);
+  if (borrowerHistory.length !== 5 || borrowerHistory.some((row) => row.score_result)) {
+    throw new Error("Expected borrower-safe application history without internal scores");
+  }
+  const lifecycleApplication = await api.request(
+    "/applications",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        requested_amount: 2100,
+        purpose: "inventory",
+        district: "Aksu",
+        settlement_type: "urban",
+        organization_id: "pavlodar-demo-mfi",
+        consent_confirmed: true,
+        consent_version: "synthetic-demo-v1",
+        behavioral_signals: {
+          annual_income: 42000,
+          total_outstanding_debt: 2500,
+          late_payment_count: 0,
+        },
+      }),
+    },
+    borrowerSession,
+  );
+  const lifecycleScored = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/score`,
+    { method: "POST" },
+    session,
+  );
+  const lifecycleReviewed = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        decision: "review",
+        policy_name: "balanced_review",
+        note: "Verify seasonal income.",
+      }),
+    },
+    session,
+  );
+  if (lifecycleScored.status !== "scored" || lifecycleReviewed.status !== "under_review") {
+    throw new Error("Expected submitted to scored to under-review lifecycle");
+  }
+  const lifecycleRescored = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/score`,
+    { method: "POST" },
+    session,
+  );
+  if (lifecycleRescored.status !== "under_review") {
+    throw new Error("Expected rescore to preserve under-review status");
+  }
+  const lifecycleApproved = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        decision: "approve",
+        policy_name: "balanced_review",
+        note: "Evidence verified.",
+      }),
+    },
+    session,
+  );
+  if (lifecycleApproved.status !== "approved") {
+    throw new Error("Expected reviewed application to reach approved terminal state");
+  }
+  let terminalMutationRejected = false;
+  try {
+    await api.request(
+      `/mfi/applications/${lifecycleApplication.id}/score`,
+      { method: "POST" },
+      session,
+    );
+  } catch (error) {
+    terminalMutationRejected = String(error.message).includes("after it is approved");
+  }
+  if (!terminalMutationRejected) throw new Error("Expected terminal lifecycle mutation to fail");
+  const lifecycleTimeline = await api.request(
+    `/applications/${lifecycleApplication.id}/timeline`,
+    {},
+    borrowerSession,
+  );
+  if (
+    lifecycleTimeline.some((event) => event.actor_email || event.details.risk_band)
+    || lifecycleTimeline.at(-1)?.title !== "Application approved"
+  ) {
+    throw new Error("Expected borrower-safe lifecycle timeline");
+  }
 
   let privilegedRegistrationRejected = false;
   try {
@@ -391,6 +481,8 @@ async function main() {
       monte_carlo: true,
       simulation_iterations: simulation.assumptions.iterations,
       simulation_history: simulationHistory.length,
+      borrower_history: borrowerHistory.length,
+      lifecycle_terminal_guard: terminalMutationRejected,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,

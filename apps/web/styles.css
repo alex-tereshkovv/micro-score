@@ -564,6 +564,16 @@ textarea:focus {
   color: var(--green);
 }
 
+.pill.status-submitted {
+  background: #edf3f8;
+  color: var(--blue);
+}
+
+.pill.status-under_review {
+  background: #fff3dd;
+  color: #8b540f;
+}
+
 .pill.status-declined {
   border-color: rgba(181, 59, 59, 0.22);
   background: #fceeee;
@@ -937,6 +947,137 @@ label {
 .submit-wide {
   width: 100%;
   margin-top: 14px;
+}
+
+.borrower-history {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.borrower-history.empty {
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.borrower-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  padding: 10px 12px;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.borrower-history-row:hover,
+.borrower-history-row:focus-visible,
+.borrower-history-row.selected {
+  border-color: var(--teal);
+  box-shadow: 0 6px 18px rgba(13, 91, 99, 0.1);
+}
+
+.borrower-history-row span:first-child,
+.borrower-history-row > em {
+  display: grid;
+  gap: 2px;
+}
+
+.borrower-history-row em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.borrower-history-row > em {
+  grid-column: 1 / -1;
+}
+
+.lifecycle-progress {
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfd;
+  padding: 14px;
+}
+
+.lifecycle-progress ol {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lifecycle-progress li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+.lifecycle-progress li::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 16px);
+  width: calc(100% - 24px);
+  height: 2px;
+  background: var(--line);
+}
+
+.lifecycle-progress li:last-child::after {
+  display: none;
+}
+
+.lifecycle-progress li span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 800;
+}
+
+.lifecycle-progress li.complete span,
+.lifecycle-progress li.active span {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.lifecycle-progress li.complete::after {
+  background: var(--teal);
+}
+
+.lifecycle-progress li.active strong,
+.lifecycle-progress li.complete strong {
+  color: var(--ink);
+}
+
+.lifecycle-message {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .result-block,
@@ -2272,6 +2413,15 @@ tr.selected {
 
   .simulation-history-row {
     grid-template-columns: 1fr;
+  }
+
+  .lifecycle-progress ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .lifecycle-progress li::after {
+    display: none;
   }
 
   .model-version-grid {

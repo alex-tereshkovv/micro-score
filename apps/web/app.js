@@ -28,6 +28,7 @@ const state = {
   email: localStorage.getItem("microscore.email") || "",
   demoMode: forceStaticDemo || hostedStaticPage || localStorage.getItem("microscore.demoMode") === "static",
   selectedApplicationId: "",
+  borrowerApplications: [],
   applications: [],
   policyAnalytics: null,
   decisionAnalytics: null,
@@ -62,9 +63,8 @@ const els = {
   applicationForm: document.querySelector("#applicationForm"),
   fillDemoApplication: document.querySelector("#fillDemoApplication"),
   borrowerConsent: document.querySelector("#borrowerConsent"),
-  borrowerApplicationId: document.querySelector("#borrowerApplicationId"),
-  loadBorrowerApplication: document.querySelector("#loadBorrowerApplication"),
   refreshBorrowerApplication: document.querySelector("#refreshBorrowerApplication"),
+  borrowerApplicationHistory: document.querySelector("#borrowerApplicationHistory"),
   borrowerApplicationCard: document.querySelector("#borrowerApplicationCard"),
   portfolioOverview: document.querySelector("#portfolioOverview"),
   refreshApplications: document.querySelector("#refreshApplications"),
@@ -181,6 +181,8 @@ function clearSession() {
   state.token = "";
   state.role = "";
   state.email = "";
+  resetApplicationViews();
+  resetPrivilegedViews();
   saveSession();
   updateSessionStrip();
   navigateToRoute("#/login");
@@ -604,7 +606,9 @@ async function enterDemoWorkspace(email, role) {
 }
 
 async function loadRoleWorkspace(role) {
-  if (role === "mfi_analyst") {
+  if (role === "borrower") {
+    await refreshBorrowerApplications();
+  } else if (role === "mfi_analyst") {
     await Promise.all([
       refreshApplications(),
       refreshModelStatus(),
@@ -682,7 +686,6 @@ function applicationPayload() {
 
 function rememberApplication(id) {
   localStorage.setItem("microscore.lastApplicationId", id);
-  els.borrowerApplicationId.value = id;
 }
 
 function renderStateBlock(type, title, body) {
@@ -722,14 +725,16 @@ async function withButtonBusy(button, busyText, task) {
 function resetApplicationViews() {
   localStorage.removeItem("microscore.lastApplicationId");
   state.selectedApplicationId = "";
+  state.borrowerApplications = [];
   state.applications = [];
   state.policyAnalytics = null;
   state.decisionAnalytics = null;
   state.portfolioSimulation = null;
   state.simulationHistory = [];
 
-  els.borrowerApplicationId.value = "";
   els.borrowerConsent.checked = false;
+  els.borrowerApplicationHistory.className = "borrower-history empty";
+  els.borrowerApplicationHistory.textContent = "No applications submitted yet.";
   setPanelState(
     els.borrowerApplicationCard,
     "result-block",
@@ -761,6 +766,7 @@ function resetApplicationViews() {
     "Score an application, then open its governance packet.",
   );
   els.decisionForm.reset();
+  syncLifecycleControls(null);
 
   setPanelState(
     els.portfolioOverview,
@@ -811,9 +817,24 @@ function resetApplicationViews() {
   els.simulationHistory.textContent = "No saved simulation runs.";
 }
 
+function resetPrivilegedViews() {
+  for (const [container, label] of [
+    [els.auditTrail, "No audit events loaded."],
+    [els.staffUsers, "No staff users loaded."],
+    [els.organizationDirectory, "No organizations loaded."],
+    [els.modelVersionRegistry, "No model versions loaded."],
+  ]) {
+    container.className = "table-shell empty";
+    container.textContent = label;
+  }
+  els.modelStatusPill.className = "pill muted";
+  els.modelStatusPill.textContent = "Model status unavailable";
+}
+
 function renderApplication(application) {
   const score = application.score_result;
   const riskClass = score ? `risk-${score.risk_band}` : "";
+  const borrowerProjection = state.role === "borrower" && Boolean(application.status_message);
   const decision = renderRecordedDecision(application.decision_result);
   const timeline = renderApplicationTimeline(application.timeline_events);
   return `
@@ -821,13 +842,38 @@ function renderApplication(application) {
       <div class="metric"><span>Status</span><strong>${escapeHtml(application.status)}</strong></div>
       <div class="metric"><span>Amount</span><strong>${formatMoney(application.requested_amount)}</strong></div>
       <div class="metric"><span>District</span><strong>${escapeHtml(application.district || "-")}</strong></div>
-      <div class="metric"><span>Risk</span><strong class="${riskClass}">${score ? escapeHtml(score.risk_band) : "not scored"}</strong></div>
+      ${borrowerProjection
+        ? `<div class="metric"><span>MFI</span><strong>${escapeHtml(application.organization_id || "assigned")}</strong></div>`
+        : `<div class="metric"><span>Risk</span><strong class="${riskClass}">${score ? escapeHtml(score.risk_band) : "not scored"}</strong></div>`}
     </div>
     <p class="record-line"><strong>ID:</strong> ${escapeHtml(application.id)}</p>
+    ${renderLifecycleProgress(application)}
     ${decision}
     ${score ? renderScore(score) : ""}
     ${timeline}
   `;
+}
+
+function renderLifecycleProgress(application) {
+  const statuses = ["submitted", "scored", "under_review", "decision"];
+  const currentIndex = application.status === "approved" || application.status === "declined"
+    ? 3
+    : Math.max(0, statuses.indexOf(application.status));
+  const finalLabel = application.status === "approved"
+    ? "Approved"
+    : application.status === "declined"
+      ? "Declined"
+      : "Decision";
+  const labels = ["Submitted", "Scored", "Human review", finalLabel];
+  const steps = labels.map((label, index) => {
+    const stateClass = index < currentIndex ? "complete" : index === currentIndex ? "active" : "pending";
+    const current = stateClass === "active" ? ' aria-current="step"' : "";
+    return `<li class="${stateClass}"${current}><span>${index + 1}</span><strong>${escapeHtml(label)}</strong></li>`;
+  }).join("");
+  const message = application.status_message
+    ? `<p class="lifecycle-message">${escapeHtml(application.status_message)}</p>`
+    : "";
+  return `<div class="lifecycle-progress"><ol>${steps}</ol>${message}</div>`;
 }
 
 function renderApplicationTimeline(events) {
@@ -839,7 +885,7 @@ function renderApplicationTimeline(events) {
         <li>
           <div>
             <strong>${escapeHtml(event.title || formatPolicyName(event.action))}</strong>
-            <span>${escapeHtml(event.actor_email || "system")}</span>
+            <span>${escapeHtml(event.actor_email || (state.role === "borrower" ? "MFI workflow" : "system"))}</span>
           </div>
           <em>${escapeHtml(event.created_at)}</em>
           ${renderTimelineDetails(event.details)}
@@ -1050,22 +1096,59 @@ async function submitApplication(event) {
     body: JSON.stringify(applicationPayload()),
   });
   rememberApplication(application.id);
-  const applicationWithTimeline = await attachApplicationTimeline(application);
-  els.borrowerApplicationCard.classList.remove("empty");
-  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
+  await refreshBorrowerApplications(application.id);
   showMessage("Application submitted", "ok");
 }
 
-async function loadBorrowerApplication() {
-  const id = els.borrowerApplicationId.value.trim();
-  if (!id) {
-    showMessage("Enter an application ID", "error");
+async function openBorrowerApplication(id) {
+  state.selectedApplicationId = id;
+  renderBorrowerApplicationHistory(state.borrowerApplications);
+  const cached = state.borrowerApplications.find((application) => application.id === id);
+  const application = cached || await apiFetch(`/applications/${encodeURIComponent(id)}`);
+  const applicationWithTimeline = await attachApplicationTimeline(application);
+  els.borrowerApplicationCard.className = "result-block";
+  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
+  rememberApplication(id);
+  return applicationWithTimeline;
+}
+
+async function refreshBorrowerApplications(preferredId = "") {
+  const applications = await apiFetch("/applications");
+  state.borrowerApplications = applications;
+  renderBorrowerApplicationHistory(applications);
+  if (!applications.length) {
+    state.selectedApplicationId = "";
+    setPanelState(
+      els.borrowerApplicationCard,
+      "result-block",
+      "empty",
+      "No application selected",
+      "Submit an application to start its lifecycle.",
+    );
+    return applications;
+  }
+  const rememberedId = preferredId || localStorage.getItem("microscore.lastApplicationId") || "";
+  const selectedId = applications.some((application) => application.id === rememberedId)
+    ? rememberedId
+    : applications[0].id;
+  await openBorrowerApplication(selectedId);
+  return applications;
+}
+
+function renderBorrowerApplicationHistory(applications) {
+  if (!applications.length) {
+    els.borrowerApplicationHistory.className = "borrower-history empty";
+    els.borrowerApplicationHistory.textContent = "No applications submitted yet.";
     return;
   }
-  const application = await apiFetch(`/applications/${encodeURIComponent(id)}`);
-  const applicationWithTimeline = await attachApplicationTimeline(application);
-  els.borrowerApplicationCard.classList.remove("empty");
-  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
+  els.borrowerApplicationHistory.className = "borrower-history";
+  els.borrowerApplicationHistory.innerHTML = applications.map((application) => `
+    <button class="borrower-history-row ${application.id === state.selectedApplicationId ? "selected" : ""}" type="button" aria-pressed="${application.id === state.selectedApplicationId}" data-borrower-application-id="${escapeHtml(application.id)}">
+      <span><strong>${formatAmountUnits(application.requested_amount)}</strong><em>${escapeHtml(application.organization_id || "MFI")}</em></span>
+      <span class="pill status-${escapeHtml(application.status)}">${escapeHtml(formatPolicyName(application.status))}</span>
+      <em>${escapeHtml(application.created_at)}</em>
+    </button>
+  `).join("");
 }
 
 async function attachApplicationTimeline(application) {
@@ -1113,6 +1196,7 @@ function renderApplicationsTable(applications) {
 function selectApplication(applicationId) {
   state.selectedApplicationId = applicationId;
   const application = state.applications.find((item) => item.id === applicationId);
+  syncLifecycleControls(application);
   renderApplicationsTable(state.applications);
   els.scoreDetail.classList.remove("empty");
   if (application) {
@@ -1139,6 +1223,23 @@ function selectApplication(applicationId) {
       showMessage(error.message, "error"),
     );
   }
+}
+
+function syncLifecycleControls(application) {
+  const terminal = ["approved", "declined"].includes(application?.status);
+  const hasScore = Boolean(application?.score_result);
+  els.scoreSelectedApplication.disabled = !application || terminal;
+  els.scoreSelectedApplication.textContent = terminal ? "Finalized" : hasScore ? "Rescore" : "Score";
+  const decisionSelect = els.decisionForm.elements.decision;
+  const reviewOption = decisionSelect.querySelector('option[value="review"]');
+  if (reviewOption) reviewOption.disabled = application?.status === "under_review";
+  if (application?.status === "under_review" && decisionSelect.value === "review") {
+    decisionSelect.value = "approve";
+  }
+  const decisionDisabled = !application || !hasScore || terminal;
+  Array.from(els.decisionForm.elements).forEach((field) => {
+    field.disabled = decisionDisabled;
+  });
 }
 
 async function loadSelectedApplicationTimeline(applicationId) {
@@ -2223,11 +2324,15 @@ function wireEvents() {
   els.applicationForm.addEventListener("submit", (event) => {
     submitApplication(event).catch((error) => showMessage(error.message, "error"));
   });
-  els.loadBorrowerApplication.addEventListener("click", () => {
-    loadBorrowerApplication().catch((error) => showMessage(error.message, "error"));
-  });
   els.refreshBorrowerApplication.addEventListener("click", () => {
-    loadBorrowerApplication().catch((error) => showMessage(error.message, "error"));
+    withButtonBusy(els.refreshBorrowerApplication, "Refreshing...", () => refreshBorrowerApplications())
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.borrowerApplicationHistory.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-borrower-application-id]");
+    if (!button) return;
+    openBorrowerApplication(button.dataset.borrowerApplicationId)
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshApplications.addEventListener("click", () => {
     refreshApplications().catch((error) => showMessage(error.message, "error"));
@@ -2301,8 +2406,6 @@ function wireEvents() {
 function restoreState() {
   applyRoute();
   fillApplicationForm(demoApplication);
-  const lastApplicationId = localStorage.getItem("microscore.lastApplicationId");
-  if (lastApplicationId) els.borrowerApplicationId.value = lastApplicationId;
 }
 
 wireEvents();

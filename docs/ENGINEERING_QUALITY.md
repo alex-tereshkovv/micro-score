@@ -33,6 +33,8 @@ The smoke test verifies that the in-browser static backend can:
 - load the seeded application queue
 - score an application
 - open a review packet
+- list borrower-safe application history and complete a guarded lifecycle from
+  submission through review to a terminal decision
 - switch the active model registry version and detect a stale score
 - re-score with the newly active model and preserve its governance snapshot
 - reproduce a seeded Monte Carlo run and verify worsening stress scenarios do

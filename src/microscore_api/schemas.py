@@ -19,6 +19,13 @@ ThresholdPolicyName = Literal[
     "starter_loan_review",
 ]
 StressScenario = Literal["baseline", "adverse", "severe"]
+ApplicationLifecycleStatus = Literal[
+    "submitted",
+    "scored",
+    "under_review",
+    "approved",
+    "declined",
+]
 
 
 class RegisterRequest(BaseModel):
@@ -197,7 +204,7 @@ class ApplicationTimelineEventResponse(BaseModel):
 class LoanApplicationResponse(BaseModel):
     id: str
     borrower_email: str
-    status: Literal["submitted", "scored", "under_review", "approved", "declined"]
+    status: ApplicationLifecycleStatus
     requested_amount: float
     purpose: str
     district: str | None = None
@@ -208,6 +215,20 @@ class LoanApplicationResponse(BaseModel):
     decision_result: ApplicationDecisionResponse | None = None
     created_at: str
     scored_at: str | None = None
+
+
+class BorrowerApplicationResponse(BaseModel):
+    id: str
+    status: ApplicationLifecycleStatus
+    requested_amount: float
+    purpose: str
+    district: str | None = None
+    settlement_type: str | None = None
+    organization_id: str | None = None
+    created_at: str
+    scored_at: str | None = None
+    status_message: str
+    terminal: bool
 
 
 class ReviewPacketApplicationSummary(BaseModel):

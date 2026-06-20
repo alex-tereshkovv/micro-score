@@ -115,7 +115,35 @@ class ApiIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(application_response.status_code, 200, application_response.text)
-        application_id = application_response.json()["id"]
+        borrower_application = application_response.json()
+        application_id = borrower_application["id"]
+        self.assertEqual(borrower_application["status"], "submitted")
+        self.assertFalse(borrower_application["terminal"])
+        self.assertIn("waiting for MFI scoring", borrower_application["status_message"])
+        self.assertNotIn("borrower_email", borrower_application)
+        self.assertNotIn("behavioral_signals", borrower_application)
+        self.assertNotIn("score_result", borrower_application)
+
+        borrower_history = self.client.get(
+            "/applications",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(borrower_history.status_code, 200, borrower_history.text)
+        self.assertEqual([row["id"] for row in borrower_history.json()], [application_id])
+
+        other_borrower_token = self._register("other-borrower@example.com", "borrower")
+        self.assertEqual(
+            self.client.get(
+                "/applications",
+                headers=self._headers(other_borrower_token),
+            ).json(),
+            [],
+        )
+        cross_borrower_detail = self.client.get(
+            f"/applications/{application_id}",
+            headers=self._headers(other_borrower_token),
+        )
+        self.assertEqual(cross_borrower_detail.status_code, 403, cross_borrower_detail.text)
 
         analyst_token = self._register("analyst@example.com", "mfi_analyst")
         list_response = self.client.get(
@@ -152,6 +180,7 @@ class ApiIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(decision_response.status_code, 200, decision_response.text)
+        self.assertEqual(decision_response.json()["status"], "under_review")
         decision_payload = decision_response.json()["decision_result"]
         self.assertEqual(decision_payload["decision"], "review")
         self.assertEqual(decision_payload["policy_name"], "balanced_review")
@@ -171,6 +200,11 @@ class ApiIntegrationTests(unittest.TestCase):
             ],
         )
         self.assertTrue(all(event["title"] for event in timeline))
+        self.assertTrue(all(event["actor_email"] is None for event in timeline))
+        self.assertTrue(
+            all(set(event["details"]).issubset({"status"}) for event in timeline)
+        )
+        self.assertEqual(timeline[-1]["title"], "Application moved to manual review")
 
         review_packet_response = self.client.get(
             f"/mfi/applications/{application_id}/review-packet",
@@ -306,6 +340,7 @@ class ApiIntegrationTests(unittest.TestCase):
             headers=self._headers(analyst_token),
         )
         self.assertEqual(rescored_response.status_code, 200, rescored_response.text)
+        self.assertEqual(rescored_response.json()["status"], "under_review")
         rescored = rescored_response.json()["score_result"]
         self.assertEqual(rescored["model_version"], "research-v0.2")
         self.assertEqual(rescored["model_governance"]["random_state"], 77)
@@ -316,6 +351,50 @@ class ApiIntegrationTests(unittest.TestCase):
         ).json()
         self.assertNotIn("stale_model_version", current_packet["governance_flags"])
         self.assertTrue(current_packet["model_summary"]["is_current_active"])
+
+        final_decision = self.client.post(
+            f"/mfi/applications/{application_id}/decision",
+            headers=self._headers(analyst_token),
+            json={
+                "decision": "approve",
+                "policy_name": "balanced_review",
+                "note": "Affordability evidence verified.",
+            },
+        )
+        self.assertEqual(final_decision.status_code, 200, final_decision.text)
+        self.assertEqual(final_decision.json()["status"], "approved")
+
+        terminal_rescore = self.client.post(
+            f"/mfi/applications/{application_id}/score",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(terminal_rescore.status_code, 409, terminal_rescore.text)
+        terminal_reversal = self.client.post(
+            f"/mfi/applications/{application_id}/decision",
+            headers=self._headers(analyst_token),
+            json={
+                "decision": "decline",
+                "policy_name": "balanced_review",
+                "note": "Attempted reversal.",
+            },
+        )
+        self.assertEqual(terminal_reversal.status_code, 409, terminal_reversal.text)
+
+        final_borrower_history = self.client.get(
+            "/applications",
+            headers=self._headers(borrower_token),
+        ).json()
+        self.assertEqual(final_borrower_history[0]["status"], "approved")
+        self.assertTrue(final_borrower_history[0]["terminal"])
+        final_borrower_timeline = self.client.get(
+            f"/applications/{application_id}/timeline",
+            headers=self._headers(borrower_token),
+        ).json()
+        self.assertEqual(final_borrower_timeline[-1]["title"], "Application approved")
+        self.assertIn(
+            "application_rescored",
+            [event["action"] for event in final_borrower_timeline],
+        )
 
         audit_response = self.client.get(
             "/admin/audit-events",
@@ -360,6 +439,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("ModelStatusResponse", schemas)
         self.assertIn("ApplicationDecisionResponse", schemas)
         self.assertIn("ApplicationTimelineEventResponse", schemas)
+        self.assertIn("BorrowerApplicationResponse", schemas)
         self.assertIn("ApplicationReviewPacketResponse", schemas)
         self.assertIn("ReviewPacketApplicationSummary", schemas)
         self.assertIn("ReviewPacketModelSummary", schemas)

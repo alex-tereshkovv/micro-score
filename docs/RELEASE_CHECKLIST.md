@@ -40,6 +40,10 @@ git diff --check
 
 - Static demo warning is visible.
 - Borrower submission requires the synthetic-data consent checkbox.
+- Borrower history lists only the signed-in account's applications and excludes
+  internal scores, analyst identity, and review notes.
+- Lifecycle transitions preserve `under_review` during re-scoring and reject
+  mutations after `approved` or `declined`.
 - MFI score detail and review packet show the model-use notice.
 - Admin model registry shows exactly one active version.
 - Activating a candidate marks older review packets as stale until re-scored.

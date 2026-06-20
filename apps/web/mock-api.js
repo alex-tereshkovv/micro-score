@@ -13,6 +13,19 @@
     nextDecisionId: 1,
     nextApplicationNumber: 1,
   };
+  const decisionWorkflowStatuses = {
+    approve: "approved",
+    review: "under_review",
+    decline: "declined",
+  };
+  const terminalApplicationStatuses = new Set(["approved", "declined"]);
+  const borrowerStatusMessages = {
+    submitted: "Application received. It is waiting for MFI scoring.",
+    scored: "Risk assessment completed. It is waiting for analyst review.",
+    under_review: "An MFI analyst is reviewing the application.",
+    approved: "The MFI recorded an approval decision.",
+    declined: "The MFI recorded a decline decision.",
+  };
 
   const demoUsers = [
     ["borrower@test.com", "borrower", null],
@@ -314,9 +327,12 @@
           policy_name: "balanced_review",
           note: seed.decision_note || "",
         });
+        app.status = decisionWorkflowStatuses[seed.decision];
         addTimeline(app.id, "application_decision_recorded", "analyst@test.com", {
           decision: seed.decision,
           policy_name: "balanced_review",
+          previous_status: "scored",
+          status: app.status,
         });
       }
       demo.applications.push(app);
@@ -376,7 +392,7 @@
     const event = {
       id: demo.nextTimelineId++,
       action,
-      title: timelineTitle(action),
+      title: timelineTitle(action, details),
       actor_email: actorEmail,
       details,
       created_at: nowIso(),
@@ -400,10 +416,19 @@
     return event;
   }
 
-  function timelineTitle(action) {
+  function timelineTitle(action, details = {}) {
+    if (action === "application_decision_recorded") {
+      const decisionTitles = {
+        review: "Application moved to manual review",
+        approve: "Application approved",
+        decline: "Application declined",
+      };
+      if (decisionTitles[details.decision]) return decisionTitles[details.decision];
+    }
     const titles = {
       application_created: "Application submitted",
       application_scored: "Risk score generated",
+      application_rescored: "Risk score refreshed",
       application_decision_recorded: "Analyst decision recorded",
     };
     return titles[action] || action.replaceAll("_", " ");
@@ -622,6 +647,30 @@
       throw new Error("Not allowed");
     }
     return app;
+  }
+
+  function borrowerApplication(application) {
+    return {
+      id: application.id,
+      status: application.status,
+      requested_amount: application.requested_amount,
+      purpose: application.purpose,
+      district: application.district,
+      settlement_type: application.settlement_type,
+      organization_id: application.organization_id,
+      created_at: application.created_at,
+      scored_at: application.scored_at,
+      status_message: borrowerStatusMessages[application.status],
+      terminal: terminalApplicationStatuses.has(application.status),
+    };
+  }
+
+  function borrowerTimelineEvent(event) {
+    return {
+      ...event,
+      actor_email: null,
+      details: event.details?.status ? { status: event.details.status } : {},
+    };
   }
 
   function reviewPacket(application) {
@@ -1322,16 +1371,32 @@
         consent_confirmed: true,
         consent_version: body.consent_version,
       });
-      return clone(app);
+      return clone(borrowerApplication(app));
+    }
+
+    if (cleanPath === "/applications" && method === "GET") {
+      const user = currentUser(session);
+      if (user.role !== "borrower") throw new Error("Borrower account required");
+      return clone(
+        demo.applications
+          .filter((app) => app.borrower_email === user.email)
+          .map(borrowerApplication),
+      );
     }
 
     const appMatch = cleanPath.match(/^\/applications\/([^/]+)$/);
-    if (appMatch && method === "GET") return clone(visibleApplication(decodeURIComponent(appMatch[1]), session));
+    if (appMatch && method === "GET") {
+      const user = currentUser(session);
+      if (user.role !== "borrower") throw new Error("Borrower account required");
+      return clone(borrowerApplication(visibleApplication(decodeURIComponent(appMatch[1]), session)));
+    }
 
     const timelineMatch = cleanPath.match(/^\/applications\/([^/]+)\/timeline$/);
     if (timelineMatch && method === "GET") {
+      const user = currentUser(session);
       visibleApplication(decodeURIComponent(timelineMatch[1]), session);
-      return clone(demo.timelines[decodeURIComponent(timelineMatch[1])] || []);
+      const events = demo.timelines[decodeURIComponent(timelineMatch[1])] || [];
+      return clone(user.role === "borrower" ? events.map(borrowerTimelineEvent) : events);
     }
 
     if (cleanPath === "/mfi/applications" && method === "GET") {
@@ -1355,14 +1420,21 @@
     if (scoreMatch && method === "POST") {
       const user = requireMfi(session);
       const app = mfiApplication(decodeURIComponent(scoreMatch[1]), user);
+      if (terminalApplicationStatuses.has(app.status)) {
+        throw new Error(`Cannot score an application after it is ${app.status}`);
+      }
+      const previousStatus = app.status;
+      const action = app.score_result ? "application_rescored" : "application_scored";
       app.score_result = buildScore(app);
-      app.status = "scored";
+      app.status = previousStatus === "submitted" ? "scored" : previousStatus;
       app.scored_at = nowIso();
-      addTimeline(app.id, "application_scored", user.email, {
+      addTimeline(app.id, action, user.email, {
         model_version: app.score_result.model_version,
         risk_band: app.score_result.risk_band,
+        previous_status: previousStatus,
+        status: app.status,
       });
-      addAudit("application_scored", "application", app.id, user.email, { mode: "static_demo" });
+      addAudit(action, "application", app.id, user.email, { mode: "static_demo" });
       return clone(app);
     }
 
@@ -1377,10 +1449,22 @@
       const user = requireMfi(session);
       const app = mfiApplication(decodeURIComponent(decisionMatch[1]), user);
       if (!app.score_result) throw new Error("Score the application before saving a decision");
+      const allowedDecisions = app.status === "scored"
+        ? new Set(["approve", "review", "decline"])
+        : app.status === "under_review"
+          ? new Set(["approve", "decline"])
+          : new Set();
+      if (!allowedDecisions.has(body.decision)) {
+        throw new Error(`Cannot record ${body.decision} while application status is ${app.status}`);
+      }
+      const previousStatus = app.status;
       app.decision_result = createDecision(app.id, user.email, body);
+      app.status = decisionWorkflowStatuses[body.decision];
       addTimeline(app.id, "application_decision_recorded", user.email, {
         decision: body.decision,
         policy_name: body.policy_name || "balanced_review",
+        previous_status: previousStatus,
+        status: app.status,
       });
       addAudit("application_decision_recorded", "application", app.id, user.email, { decision: body.decision });
       return clone(app);

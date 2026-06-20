@@ -4,7 +4,7 @@ Target: by November 9, 2026, MicroScore should be a working web application
 where a real borrower can create an account, submit financial-behavior data, and
 an MFI user can review risk scores, explanations, and portfolio analytics.
 
-This roadmap assumes the current date is June 9, 2026.
+This roadmap was refreshed on June 20, 2026.
 
 ## Product Vision
 
@@ -245,11 +245,13 @@ severe assumptions; it is explicitly separated from borrower scoring. The
 project also now generates reproducible research artifacts under
 `reports/research-artifacts/`: model metrics, ablation results, calibration
 bins, calibration/ablation plots, and example local explanations.
+Borrower lifecycle v2 now adds automatic owned-application history, a visual status
+progression, borrower-safe API projections, and strict terminal-state guards
+across the local API and static demo.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
 - stronger client-side form validation
-- clearer borrower application status history
 - richer MFI risk detail page
 - district and settlement-type charts
 - dedicated frontend integration tests

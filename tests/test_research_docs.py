@@ -221,6 +221,23 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("loads this directory dynamically", api_contract)
         self.assertIn("not a replacement", api_contract)
 
+    def test_borrower_lifecycle_privacy_contract_is_documented(self) -> None:
+        api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")
+        architecture = (DOCS_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        roadmap = (DOCS_ROOT / "PRODUCT_ROADMAP.md").read_text(encoding="utf-8")
+        release_checklist = (DOCS_ROOT / "RELEASE_CHECKLIST.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("BorrowerApplicationResponse", api_contract)
+        self.assertIn("GET /applications/{application_id}", api_contract)
+        self.assertIn("internal score snapshots", api_contract)
+        self.assertIn("approved` and `declined` are terminal", api_contract)
+        self.assertIn("returns `409`", api_contract)
+        self.assertIn("strict lifecycle state machine", architecture)
+        self.assertIn("Borrower lifecycle v2", roadmap)
+        self.assertIn("Borrower history lists only", release_checklist)
+
     def test_model_registry_governance_is_documented(self) -> None:
         api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")
         architecture = (DOCS_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")

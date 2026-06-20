@@ -125,21 +125,25 @@ It supports:
 ## Data Flow
 
 1. A borrower submits an application with financial and behavioral fields.
-2. The app stores or simulates the application depending on runtime mode.
-3. The API resolves the single active model registry record and builds the
+2. The borrower workspace lists only that account's applications through a safe
+   projection that excludes internal scores, staff identity, and review notes.
+3. The app stores or simulates the application depending on runtime mode.
+4. The API resolves the single active model registry record and builds the
    deterministic scoring runtime from its version and random state.
-4. The scoring layer creates a probability, risk band, explanation, warnings,
+5. The scoring layer creates a probability, risk band, explanation, warnings,
    and an immutable governance snapshot.
-5. The analyst reviews the result together with model-use notices and policy
+6. The analyst reviews the result together with model-use notices and policy
    context.
-6. The Monte Carlo engine applies a selected policy to scored applications and
+7. A strict lifecycle state machine prevents terminal approvals or declines
+   from being silently re-scored or reversed.
+8. The Monte Carlo engine applies a selected policy to scored applications and
    reports paired uncertainty ranges without changing borrower scores, then
    stores the request and exact result under a tenant-scoped run ID.
-7. Analysts can compare or reopen registered simulations; the portfolio
+9. Analysts can compare or reopen registered simulations; the portfolio
    fingerprint reveals whether the underlying scored snapshot changed.
-8. A later model activation marks older scores as stale without rewriting their
+10. A later model activation marks older scores as stale without rewriting their
    original provenance.
-9. Admin/audit views record demo actions so decisions remain inspectable.
+11. Admin/audit views record demo actions so decisions remain inspectable.
 
 ## Privacy Boundary
 

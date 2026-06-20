@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from microscore_api.database import (
     DuplicateModelVersionError,
     DuplicateUserError,
+    InvalidApplicationTransitionError,
     MicroScoreRepository,
 )
 
@@ -441,6 +442,92 @@ class ApiDatabaseTests(unittest.TestCase):
             [
                 "application_created",
                 "application_scored",
+                "application_decision_recorded",
+            ],
+        )
+
+    def test_application_lifecycle_transitions_are_strict(self) -> None:
+        self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+        self.repository.create_user("analyst@example.com", "password-hash", "mfi_analyst")
+        self.repository.create_application(
+            application_id="lifecycle-app",
+            borrower_email="borrower@example.com",
+            requested_amount=120_000,
+            purpose="equipment",
+            district="Aksu",
+            settlement_type="industrial_city",
+            behavioral_signals={"loan_application_amount": 120_000},
+        )
+        first_score = {
+            "model_name": "Logistic Regression",
+            "model_version": "research-v0.1",
+            "high_risk_probability": 0.31,
+            "risk_band": "low",
+            "warnings": [],
+        }
+        scored = self.repository.update_application_score(
+            application_id="lifecycle-app",
+            actor_email="analyst@example.com",
+            score_result=first_score,
+        )
+        self.assertEqual(scored["status"], "scored")
+
+        reviewed = self.repository.record_application_decision(
+            application_id="lifecycle-app",
+            actor_email="analyst@example.com",
+            decision="review",
+            policy_name="balanced_review",
+            note="Verify seasonal income.",
+        )
+        self.assertEqual(reviewed["status"], "under_review")
+
+        rescored = self.repository.update_application_score(
+            application_id="lifecycle-app",
+            actor_email="analyst@example.com",
+            score_result={**first_score, "model_version": "research-v0.2"},
+        )
+        self.assertEqual(rescored["status"], "under_review")
+
+        with self.assertRaises(InvalidApplicationTransitionError):
+            self.repository.record_application_decision(
+                application_id="lifecycle-app",
+                actor_email="analyst@example.com",
+                decision="review",
+                policy_name="balanced_review",
+                note="Duplicate review.",
+            )
+
+        approved = self.repository.record_application_decision(
+            application_id="lifecycle-app",
+            actor_email="analyst@example.com",
+            decision="approve",
+            policy_name="balanced_review",
+            note="Affordability evidence verified.",
+        )
+        self.assertEqual(approved["status"], "approved")
+
+        with self.assertRaises(InvalidApplicationTransitionError):
+            self.repository.update_application_score(
+                application_id="lifecycle-app",
+                actor_email="analyst@example.com",
+                score_result=first_score,
+            )
+        with self.assertRaises(InvalidApplicationTransitionError):
+            self.repository.record_application_decision(
+                application_id="lifecycle-app",
+                actor_email="analyst@example.com",
+                decision="decline",
+                policy_name="balanced_review",
+                note="Attempted reversal.",
+            )
+
+        self.assertEqual(
+            [event["action"] for event in self.repository.list_application_timeline("lifecycle-app")],
+            [
+                "application_created",
+                "application_scored",
+                "application_decision_recorded",
+                "application_rescored",
                 "application_decision_recorded",
             ],
         )

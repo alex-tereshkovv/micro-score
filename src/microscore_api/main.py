@@ -34,6 +34,7 @@ from .database import (
     DuplicateModelVersionError,
     DuplicateOrganizationError,
     DuplicateUserError,
+    InvalidApplicationTransitionError,
     MicroScoreRepository,
 )
 from .analytics import policy_analytics as build_policy_analytics
@@ -46,6 +47,7 @@ from .schemas import (
     ApplicationTimelineEventResponse,
     AuditEventResponse,
     AuthResponse,
+    BorrowerApplicationResponse,
     ClearApplicationsResponse,
     DecisionAnalyticsResponse,
     HealthResponse,
@@ -284,24 +286,70 @@ def _validate_application_privacy(payload: ApplicationCreate) -> str:
     return consent_version
 
 
-def _timeline_title(action: str) -> str:
+def _timeline_title(action: str, details: dict[str, Any] | None = None) -> str:
+    details = details or {}
+    if action == "application_decision_recorded":
+        decision_titles = {
+            "review": "Application moved to manual review",
+            "approve": "Application approved",
+            "decline": "Application declined",
+        }
+        decision = str(details.get("decision") or "")
+        if decision in decision_titles:
+            return decision_titles[decision]
     titles = {
         "application_created": "Application submitted",
         "application_scored": "Risk score generated",
+        "application_rescored": "Risk score refreshed",
         "application_decision_recorded": "Analyst decision recorded",
     }
     return titles.get(action, action.replace("_", " ").title())
 
 
 def _timeline_event(event: dict[str, Any]) -> dict[str, Any]:
+    details = event.get("details") or {}
     return {
         "id": event["id"],
         "action": event["action"],
-        "title": _timeline_title(event["action"]),
+        "title": _timeline_title(event["action"], details),
         "actor_email": event.get("actor_email"),
-        "details": event.get("details") or {},
+        "details": details,
         "created_at": event["created_at"],
     }
+
+
+BORROWER_STATUS_MESSAGES = {
+    "submitted": "Application received. It is waiting for MFI scoring.",
+    "scored": "Risk assessment completed. It is waiting for analyst review.",
+    "under_review": "An MFI analyst is reviewing the application.",
+    "approved": "The MFI recorded an approval decision.",
+    "declined": "The MFI recorded a decline decision.",
+}
+
+
+def _borrower_application(application: dict[str, Any]) -> dict[str, Any]:
+    status_value = str(application["status"])
+    return {
+        "id": application["id"],
+        "status": status_value,
+        "requested_amount": application["requested_amount"],
+        "purpose": application["purpose"],
+        "district": application.get("district"),
+        "settlement_type": application.get("settlement_type"),
+        "organization_id": application.get("organization_id"),
+        "created_at": application["created_at"],
+        "scored_at": application.get("scored_at"),
+        "status_message": BORROWER_STATUS_MESSAGES[status_value],
+        "terminal": status_value in {"approved", "declined"},
+    }
+
+
+def _borrower_timeline_event(event: dict[str, Any]) -> dict[str, Any]:
+    projected = _timeline_event(event)
+    status_value = projected["details"].get("status")
+    projected["actor_email"] = None
+    projected["details"] = {"status": status_value} if status_value else {}
+    return projected
 
 
 def _review_packet(
@@ -717,7 +765,7 @@ def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     }
 
 
-@app.post("/applications", response_model=LoanApplicationResponse)
+@app.post("/applications", response_model=BorrowerApplicationResponse)
 def create_application(
     payload: ApplicationCreate,
     user: dict[str, Any] = Depends(current_user),
@@ -740,7 +788,7 @@ def create_application(
     if payload.settlement_type:
         features["settlement_type"] = payload.settlement_type
 
-    return repository.create_application(
+    application = repository.create_application(
         application_id=application_id,
         borrower_email=user["email"],
         requested_amount=payload.requested_amount,
@@ -751,9 +799,10 @@ def create_application(
         consent_version=consent_version,
         organization_id=payload.organization_id,
     )
+    return _borrower_application(application)
 
 
-@app.get("/applications", response_model=list[LoanApplicationResponse])
+@app.get("/applications", response_model=list[BorrowerApplicationResponse])
 def list_borrower_applications(
     user: dict[str, Any] = Depends(current_user),
     repository: MicroScoreRepository = Depends(get_repository),
@@ -763,16 +812,24 @@ def list_borrower_applications(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Borrower account required",
         )
-    return repository.list_borrower_applications(user["email"])
+    return [
+        _borrower_application(application)
+        for application in repository.list_borrower_applications(user["email"])
+    ]
 
 
-@app.get("/applications/{application_id}", response_model=LoanApplicationResponse)
+@app.get("/applications/{application_id}", response_model=BorrowerApplicationResponse)
 def get_application(
     application_id: str,
     user: dict[str, Any] = Depends(current_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    return _application_for_user(application_id, user, repository)
+    if user["role"] != "borrower":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Borrower account required",
+        )
+    return _borrower_application(_application_for_user(application_id, user, repository))
 
 
 @app.get(
@@ -785,8 +842,9 @@ def application_timeline(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     _application_for_user(application_id, user, repository)
+    projector = _borrower_timeline_event if user["role"] == "borrower" else _timeline_event
     return [
-        _timeline_event(event)
+        projector(event)
         for event in repository.list_application_timeline(application_id)
     ]
 
@@ -840,6 +898,11 @@ def score_application(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     application = _application_for_user(application_id, user, repository)
+    if application["status"] in {"approved", "declined"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot score an application after it is {application['status']}",
+        )
 
     active_model = _active_model_or_503(repository)
     score = get_scoring_service(
@@ -849,11 +912,14 @@ def score_application(
     ).score(application["behavioral_signals"])
     score_result = asdict(score)
     score_result["model_governance"] = _model_governance_snapshot(active_model)
-    updated = repository.update_application_score(
-        application_id=application_id,
-        score_result=score_result,
-        actor_email=user["email"],
-    )
+    try:
+        updated = repository.update_application_score(
+            application_id=application_id,
+            score_result=score_result,
+            actor_email=user["email"],
+        )
+    except InvalidApplicationTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     return updated
@@ -873,13 +939,16 @@ def record_application_decision(
             detail="Score the application before recording an MFI decision",
         )
 
-    updated = repository.record_application_decision(
-        application_id=application_id,
-        actor_email=user["email"],
-        decision=payload.decision,
-        policy_name=payload.policy_name,
-        note=payload.note.strip(),
-    )
+    try:
+        updated = repository.record_application_decision(
+            application_id=application_id,
+            actor_email=user["email"],
+            decision=payload.decision,
+            policy_name=payload.policy_name,
+            note=payload.note.strip(),
+        )
+    except InvalidApplicationTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     return updated

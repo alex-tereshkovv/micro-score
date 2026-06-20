@@ -279,8 +279,22 @@ Request example:
 
 Response schema:
 
-- `LoanApplicationResponse`
-- includes `score_result: null` until an MFI analyst scores the application
+- `BorrowerApplicationResponse`
+- contains lifecycle status, amount, purpose, organization, timestamps, a plain
+  status message, and a terminal-state flag
+- deliberately excludes behavioral signals, internal score snapshots, analyst
+  identity, policy metadata, and analyst notes
+
+Borrower history and detail:
+
+```http
+GET /applications
+GET /applications/{application_id}
+```
+
+Both endpoints require a borrower token and return only applications owned by
+that account. The collection is newest-first. Cross-borrower detail access
+returns `403`; MFI users use the tenant-scoped `/mfi/applications` contract.
 
 Application timeline:
 
@@ -295,8 +309,10 @@ Response schema:
 - currently includes application submission, scoring, and recorded analyst
   decisions when those events exist
 
-Borrowers can only access timelines for their own applications. MFI/admin users
-can access timelines for the review queue.
+Borrowers can only access timelines for their own applications. Their response
+removes staff email and internal risk/policy details, retaining only public
+lifecycle titles, timestamps, and status changes. MFI/admin users can access the
+full timeline for their authorized review queue.
 
 ## MFI Analyst Flow
 
@@ -397,6 +413,19 @@ This endpoint requires the application to be scored first. The response is a
 `LoanApplicationResponse` with `decision_result`. This field records the human
 analyst decision, not an automatic model decision. Recording a decision also
 creates an `application_decision_recorded` audit event.
+
+Lifecycle transitions are enforced as a state machine:
+
+```text
+submitted -> scored -> under_review -> approved | declined
+                  \-----------------> approved | declined
+```
+
+Re-scoring is allowed while an application is `scored` or `under_review`; it
+updates the score snapshot without moving an application backward in the
+workflow. `approved` and `declined` are terminal. Re-scoring, repeating manual
+review, or reversing a terminal decision returns `409` and does not write a new
+decision or timeline event.
 
 Open an analyst review packet:
 

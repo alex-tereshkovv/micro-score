@@ -268,19 +268,19 @@
           <section class="panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Status</p>
-                <h3>Application lookup</h3>
+                <p class="eyebrow">Lifecycle</p>
+                <h3>My applications</h3>
               </div>
-              <button id="refreshBorrowerApplication" class="icon-button" type="button" title="Refresh application">
+              <button id="refreshBorrowerApplication" class="icon-button" type="button" title="Refresh application history" aria-label="Refresh application history">
                 <span aria-hidden="true">&#8635;</span>
               </button>
             </div>
-            <label for="borrowerApplicationId">Application ID</label>
-            <div class="input-row">
-              <input id="borrowerApplicationId" type="text" placeholder="application id" />
-              <button id="loadBorrowerApplication" class="secondary-button" type="button">Load</button>
+            <div id="borrowerApplicationHistory" class="borrower-history empty">
+              No applications submitted yet.
             </div>
-            <div id="borrowerApplicationCard" class="result-block empty">No application selected.</div>
+            <div id="borrowerApplicationCard" class="result-block empty">
+              Select an application to view its lifecycle.
+            </div>
           </section>
         </section>
 

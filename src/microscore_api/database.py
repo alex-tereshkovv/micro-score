@@ -34,6 +34,10 @@ class DuplicateModelVersionError(ValueError):
     """Raised when a model version is already registered."""
 
 
+class InvalidApplicationTransitionError(ValueError):
+    """Raised when an application lifecycle transition is not allowed."""
+
+
 def default_database_path() -> Path:
     configured = os.environ.get("MICROSCORE_API_DB_PATH")
     if configured:
@@ -92,6 +96,11 @@ DECISION_WORKFLOW_STATUSES = {
     "approve": "approved",
     "review": "under_review",
     "decline": "declined",
+}
+TERMINAL_APPLICATION_STATUSES = {"approved", "declined"}
+DECISION_TRANSITIONS = {
+    "scored": {"approve", "review", "decline"},
+    "under_review": {"approve", "decline"},
 }
 PROXY_SENSITIVITY_THRESHOLD = 0.2
 
@@ -842,23 +851,38 @@ class MicroScoreRepository:
     ) -> dict[str, Any] | None:
         scored_at = _now_iso()
         with self._connection() as connection:
+            current = connection.execute(
+                "SELECT status, score_result_json FROM loan_applications WHERE id = ?",
+                (application_id,),
+            ).fetchone()
+            if current is None:
+                return None
+            previous_status = str(current["status"])
+            if previous_status in TERMINAL_APPLICATION_STATUSES:
+                raise InvalidApplicationTransitionError(
+                    f"Cannot score an application after it is {previous_status}"
+                )
+            next_status = "scored" if previous_status == "submitted" else previous_status
+            action = "application_scored" if current["score_result_json"] is None else "application_rescored"
             connection.execute(
                 """
                 UPDATE loan_applications
                 SET status = ?, score_result_json = ?, scored_at = ?
                 WHERE id = ?
                 """,
-                ("scored", _json_dumps(score_result), scored_at, application_id),
+                (next_status, _json_dumps(score_result), scored_at, application_id),
             )
 
         self.record_audit_event(
             actor_email=actor_email,
-            action="application_scored",
+            action=action,
             entity_type="loan_application",
             entity_id=application_id,
             details={
                 "model_version": score_result.get("model_version"),
                 "risk_band": score_result.get("risk_band"),
+                "previous_status": previous_status,
+                "status": next_status,
             },
         )
         return self.get_application(application_id)
@@ -872,10 +896,23 @@ class MicroScoreRepository:
         policy_name: str | None,
         note: str,
     ) -> dict[str, Any] | None:
-        if self.get_application(application_id) is None:
-            return None
-
         with self._connection() as connection:
+            current = connection.execute(
+                "SELECT status, score_result_json FROM loan_applications WHERE id = ?",
+                (application_id,),
+            ).fetchone()
+            if current is None:
+                return None
+            previous_status = str(current["status"])
+            if current["score_result_json"] is None:
+                raise InvalidApplicationTransitionError(
+                    "Score the application before recording an MFI decision"
+                )
+            if decision not in DECISION_TRANSITIONS.get(previous_status, set()):
+                raise InvalidApplicationTransitionError(
+                    f"Cannot record {decision} while application status is {previous_status}"
+                )
+            next_status = DECISION_WORKFLOW_STATUSES[decision]
             connection.execute(
                 """
                 INSERT INTO application_decisions (
@@ -899,7 +936,7 @@ class MicroScoreRepository:
             )
             connection.execute(
                 "UPDATE loan_applications SET status = ? WHERE id = ?",
-                (DECISION_WORKFLOW_STATUSES[decision], application_id),
+                (next_status, application_id),
             )
 
         self.record_audit_event(
@@ -910,6 +947,8 @@ class MicroScoreRepository:
             details={
                 "decision": decision,
                 "policy_name": policy_name,
+                "previous_status": previous_status,
+                "status": next_status,
             },
         )
         return self.get_application(application_id)

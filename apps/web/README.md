@@ -77,8 +77,10 @@ password: password123
 Applications are stored in the local SQLite database until an admin clears them
 from the Admin tab or the local database file is removed.
 
-The borrower and MFI application cards include an application timeline with
-submission, scoring, and recorded decision events. The MFI tab includes a
+The borrower workspace automatically lists the signed-in account's applications
+with a visual lifecycle from submission through a terminal MFI decision. Its
+API view excludes internal scores, staff identity, and analyst notes. MFI
+application cards retain the full scoring and decision timeline. The MFI tab includes a
 Portfolio Overview with risk-band, district, policy-mix, and analyst-decision
 charts, a CSV export for the application queue, plus a Decision Audit table
 comparing recorded analyst decisions with risk bands, districts, proxy
