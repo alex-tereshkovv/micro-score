@@ -84,9 +84,10 @@ application cards retain the full scoring and decision timeline. The MFI tab inc
 Portfolio Overview with risk-band, district, policy-mix, and analyst-decision
 charts, a CSV export for the application queue, plus a Decision Audit table
 comparing recorded analyst decisions with risk bands, districts, proxy
-sensitivity, and model recommendations. The Score Detail panel can also open a
-review packet with governance flags, top factors, timeline events, and a
-human-review checklist. The Policy Lab compares approve/review/decline
+sensitivity, and model recommendations. Selecting an application automatically
+opens Risk Detail v2 with lifecycle actions, affordability screening, governance
+flags, local explanations, timeline events, the review checklist, and the full
+decision history. The Policy Lab compares approve/review/decline
 threshold policies on scored applications. The Monte Carlo Lab adds seeded,
 paired baseline/adverse/severe portfolio simulations with explicit margin,
 LGD, operating-cost, review-conversion, macro, and calibration assumptions. It

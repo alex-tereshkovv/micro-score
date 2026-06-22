@@ -50,18 +50,19 @@ overview visible.
 
 Why it matters: this shows the project is more than a single prediction form.
 
-### 4. Score Detail + Model-Use Notice
+### 4. Risk Detail v2 + Model-Use Notice
 
-Capture score detail with probability, proxy sensitivity, scenario comparison,
-local explanation, and the model-use notice.
+Capture Risk Detail v2 with lifecycle actions, affordability screening,
+probability, proxy sensitivity, scenario comparison, local explanation, and the
+model-use notice.
 
 Why it matters: the central claim is interpretable decision support, not blind
 automation.
 
-### 5. Review Packet + Governance
+### 5. Decision History + Governance
 
-Capture the review packet with governance flags, checklist, top factors, and
-timeline.
+Capture governance flags, checklist, top factors, timeline, and the chronological
+review/approve/decline decision history.
 
 Why it matters: this is the strongest human-in-the-loop artifact in the demo.
 

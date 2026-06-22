@@ -2040,6 +2040,131 @@ label {
   word-break: break-word;
 }
 
+.risk-readiness {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.risk-readiness > div {
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.risk-readiness span,
+.lifecycle-actions span,
+.section-heading span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.risk-readiness strong,
+.lifecycle-actions strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.risk-readiness.terminal {
+  border-color: rgba(31, 122, 77, 0.28);
+}
+
+.lifecycle-actions,
+.affordability-panel,
+.decision-history-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.lifecycle-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.lifecycle-actions .packet-flags,
+.lifecycle-actions p {
+  grid-column: 1 / -1;
+}
+
+.lifecycle-actions p,
+.affordability-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.section-heading em {
+  color: var(--teal);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.affordability-panel .metric-grid {
+  margin-bottom: 10px;
+}
+
+.decision-history-panel h4 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.decision-history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  border-left: 3px solid var(--line);
+  padding-left: 10px;
+}
+
+.decision-history li > div span,
+.decision-history em,
+.decision-history p {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.decision-history li > div strong,
+.decision-history li > div span {
+  display: block;
+}
+
+.decision-history p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .packet-flags {
   display: flex;
   flex-wrap: wrap;
@@ -2382,6 +2507,8 @@ tr.selected {
   .decision-columns,
   .mfi-decision-form,
   .recorded-decision,
+  .risk-readiness,
+  .lifecycle-actions,
   .packet-columns,
   .explanation-columns,
   .explanation-summary {

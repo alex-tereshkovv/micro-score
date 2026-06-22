@@ -43,6 +43,13 @@ async function main() {
   if (!packet.checklist?.length) {
     throw new Error("Expected review packet checklist");
   }
+  if (
+    packet.lifecycle.status !== "scored"
+    || packet.affordability.completeness !== 1
+    || packet.decision_history.length !== 0
+  ) {
+    throw new Error("Expected Risk Detail v2 lifecycle and affordability contract");
+  }
 
   const policies = await api.request("/mfi/analytics/policies", {}, session);
   if (policies.policies.length < 3) {
@@ -195,6 +202,14 @@ async function main() {
   );
   if (lifecycleApproved.status !== "approved") {
     throw new Error("Expected reviewed application to reach approved terminal state");
+  }
+  const lifecyclePacket = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/review-packet`,
+    {},
+    session,
+  );
+  if (!lifecyclePacket.lifecycle.terminal || lifecyclePacket.decision_history.length !== 2) {
+    throw new Error("Expected terminal risk detail with complete decision history");
   }
   let terminalMutationRejected = false;
   try {
@@ -483,6 +498,7 @@ async function main() {
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
       lifecycle_terminal_guard: terminalMutationRejected,
+      risk_detail_v2: true,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,

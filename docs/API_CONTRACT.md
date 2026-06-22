@@ -440,6 +440,11 @@ Response schema:
 - model risk summary
 - scenario scores and local explanation factors
 - latest analyst decision, if recorded
+- chronological `decision_history`, including review-to-final transitions
+- typed `lifecycle` capabilities: terminal flag, score/rescore action, and
+  currently allowed decisions
+- `affordability` screening snapshot with submitted income, debt, open-loan
+  count, debt/income, requested-amount/income, and completeness
 - application timeline events
 - governance flags such as proxy-sensitive score, missing model features, or
   `stale_model_version`
@@ -448,6 +453,12 @@ Response schema:
 The review packet is designed as an internal MFI review aid. It summarizes what
 the model and analyst workflow currently know, but it is not a legal credit
 decision record and does not include validated repayment outcomes.
+
+Affordability ratios use the submitted `annual_income` as their denominator.
+They are screening indicators only: the prototype does not know the income
+period, loan term, living expenses, verified cash flow, or repayment schedule.
+The response therefore carries an explicit interpretation note and must not be
+treated as an affordability verdict.
 
 When the stored score version differs from the currently active registry
 version, the packet sets `model_summary.is_current_active` to `false`, adds a

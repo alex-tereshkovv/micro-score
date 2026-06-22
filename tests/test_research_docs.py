@@ -152,7 +152,8 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("not ready for real loan approval", video_script)
         self.assertIn("docs/assets/screenshots/", screenshot_checklist)
         self.assertIn("01-login-reviewer-snapshot.png", screenshot_checklist)
-        self.assertIn("Score Detail + Model-Use Notice", screenshot_checklist)
+        self.assertIn("Risk Detail v2 + Model-Use Notice", screenshot_checklist)
+        self.assertIn("affordability screening", screenshot_checklist)
         self.assertIn("No real borrower data", screenshot_checklist)
         self.assertTrue((DOCS_ROOT / "assets" / "screenshots" / ".gitkeep").exists())
 
@@ -173,6 +174,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Borrower", architecture)
         self.assertIn("MFI analyst", architecture)
         self.assertIn("Admin", architecture)
+        self.assertIn("Risk Detail v2", architecture)
         self.assertIn("FastAPI", architecture)
         self.assertIn("GitHub Pages", architecture)
         self.assertIn("public demo mode", architecture)

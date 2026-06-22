@@ -1246,6 +1246,19 @@ class MicroScoreRepository:
             events.append(event)
         return events
 
+    def list_application_decisions(self, application_id: str) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, application_id, actor_email, decision, policy_name, note, created_at
+                FROM application_decisions
+                WHERE application_id = ?
+                ORDER BY id ASC
+                """,
+                (application_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def _application_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         application = dict(row)
         application["behavioral_signals"] = _json_loads(

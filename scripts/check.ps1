@@ -101,13 +101,22 @@ try {
         Assert-LastExitCode "Frontend app.js syntax check"
         & $node --check apps\web\mock-api.js
         Assert-LastExitCode "Frontend mock-api.js syntax check"
+        & $node --check apps\web\risk-detail.js
+        Assert-LastExitCode "Frontend risk-detail.js syntax check"
         & $node --check scripts\static-demo-smoke.js
         Assert-LastExitCode "Static demo smoke syntax check"
+        & $node --check scripts\frontend-workflow-smoke.js
+        Assert-LastExitCode "Frontend workflow smoke syntax check"
     }
 
     Invoke-Step "Run static demo smoke test" {
         & $node scripts\static-demo-smoke.js
         Assert-LastExitCode "Static demo smoke test"
+    }
+
+    Invoke-Step "Run frontend workflow smoke test" {
+        & $node scripts\frontend-workflow-smoke.js
+        Assert-LastExitCode "Frontend workflow smoke test"
     }
 
     Invoke-Step "Check whitespace in git diff" {

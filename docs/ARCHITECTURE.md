@@ -133,7 +133,9 @@ It supports:
 5. The scoring layer creates a probability, risk band, explanation, warnings,
    and an immutable governance snapshot.
 6. The analyst reviews the result together with model-use notices and policy
-   context.
+   context. Risk Detail v2 combines lifecycle capabilities, affordability
+   screening indicators, governance checks, explanations, and complete human
+   decision history in one typed review packet.
 7. A strict lifecycle state machine prevents terminal approvals or declines
    from being silently re-scored or reversed.
 8. The Monte Carlo engine applies a selected policy to scored applications and

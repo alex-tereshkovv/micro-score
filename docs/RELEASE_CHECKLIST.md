@@ -21,7 +21,9 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1
 ```powershell
 node --check apps\web\app.js
 node --check apps\web\mock-api.js
+node --check apps\web\risk-detail.js
 node --check scripts\static-demo-smoke.js
+node --check scripts\frontend-workflow-smoke.js
 ```
 
 - Static demo smoke test passes:
@@ -44,6 +46,9 @@ git diff --check
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject
   mutations after `approved` or `declined`.
+- Risk Detail loads automatically and shows lifecycle actions, affordability
+  completeness, governance checks, and chronological decision history.
+- Affordability output states that it is screening context, not a verdict.
 - MFI score detail and review packet show the model-use notice.
 - Admin model registry shows exactly one active version.
 - Activating a candidate marks older review packets as stale until re-scored.

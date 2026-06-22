@@ -1193,7 +1193,8 @@ function renderApplicationsTable(applications) {
   });
 }
 
-function selectApplication(applicationId) {
+function selectApplication(applicationId, options = {}) {
+  const { loadDetail = true } = options;
   state.selectedApplicationId = applicationId;
   const application = state.applications.find((item) => item.id === applicationId);
   syncLifecycleControls(application);
@@ -1211,15 +1212,8 @@ function selectApplication(applicationId) {
       "Choose a queue row to inspect score detail and timeline.",
     );
   }
-  setPanelState(
-    els.reviewPacket,
-    "result-block",
-    "empty",
-    "Open a review packet",
-    "Score an application, then open its governance packet.",
-  );
-  if (application) {
-    loadSelectedApplicationTimeline(application.id).catch((error) =>
+  if (application && loadDetail) {
+    loadReviewPacket(application.id).catch((error) =>
       showMessage(error.message, "error"),
     );
   }
@@ -1240,19 +1234,6 @@ function syncLifecycleControls(application) {
   Array.from(els.decisionForm.elements).forEach((field) => {
     field.disabled = decisionDisabled;
   });
-}
-
-async function loadSelectedApplicationTimeline(applicationId) {
-  const timeline = await apiFetch(`/applications/${encodeURIComponent(applicationId)}/timeline`);
-  state.applications = state.applications.map((item) =>
-    item.id === applicationId ? { ...item, timeline_events: timeline } : item,
-  );
-  if (state.selectedApplicationId !== applicationId) return;
-  const application = state.applications.find((item) => item.id === applicationId);
-  if (application) {
-    els.scoreDetail.className = "result-block";
-    els.scoreDetail.innerHTML = renderApplication(application);
-  }
 }
 
 function scoredApplications(applications) {
@@ -1542,8 +1523,8 @@ async function scoreSelectedApplication() {
   });
 }
 
-async function loadReviewPacket() {
-  if (!state.selectedApplicationId) {
+async function loadReviewPacket(applicationId = state.selectedApplicationId) {
+  if (!applicationId) {
     showMessage("Select an application first", "error");
     return;
   }
@@ -1558,11 +1539,14 @@ async function loadReviewPacket() {
     );
     try {
       const packet = await apiFetch(
-        `/mfi/applications/${encodeURIComponent(state.selectedApplicationId)}/review-packet`,
+        `/mfi/applications/${encodeURIComponent(applicationId)}/review-packet`,
       );
+      if (state.selectedApplicationId !== applicationId) return packet;
       els.reviewPacket.className = "result-block";
       els.reviewPacket.innerHTML = renderReviewPacket(packet);
+      return packet;
     } catch (error) {
+      if (state.selectedApplicationId !== applicationId) return null;
       setPanelState(
         els.reviewPacket,
         "result-block",
@@ -1578,6 +1562,14 @@ async function loadReviewPacket() {
 function renderReviewPacket(packet) {
   const model = packet.model_summary;
   const decision = packet.analyst_decision;
+  const affordability = packet.affordability || {};
+  const lifecycle = packet.lifecycle || {};
+  const detailSummary = window.MicroScoreRiskDetail?.summarizeReviewPacket(packet) || {
+    readiness_label: "Review detail",
+    required_checks: 0,
+    completed_checks: 0,
+    decision_count: (packet.decision_history || []).length,
+  };
   const flags = (packet.governance_flags || [])
     .map((flag) => `<span>${escapeHtml(formatPolicyName(flag))}</span>`)
     .join("");
@@ -1595,6 +1587,18 @@ function renderReviewPacket(packet) {
   const protectiveFactors = renderPacketFactors(packet.top_protective_factors, "Reduces risk");
   const modelUseNotice = renderModelUseNotice(model);
   const timeline = renderApplicationTimeline(packet.timeline_events);
+  const allowedActions = (lifecycle.allowed_decisions || []).length
+    ? lifecycle.allowed_decisions.map((action) => `<span>${escapeHtml(formatPolicyName(action))}</span>`).join("")
+    : "<span>No decision mutations allowed</span>";
+  const decisionHistory = (packet.decision_history || []).length
+    ? `<ol class="decision-history">${packet.decision_history.map((row) => `
+        <li class="decision-${escapeHtml(row.decision)}">
+          <div><strong>${escapeHtml(formatPolicyName(row.decision))}</strong><span>${escapeHtml(row.actor_email)}</span></div>
+          <em>${escapeHtml(row.created_at)}</em>
+          <p>${escapeHtml(row.note || "No note recorded.")}</p>
+        </li>
+      `).join("")}</ol>`
+    : "<p class=\"tiny-text\">No analyst decisions recorded.</p>";
 
   return `
     <div class="review-packet">
@@ -1605,6 +1609,11 @@ function renderReviewPacket(packet) {
         </div>
         <em>${escapeHtml(packet.generated_at)}</em>
       </div>
+      <div class="risk-readiness ${lifecycle.terminal ? "terminal" : "open"}">
+        <div><span>Review readiness</span><strong>${escapeHtml(detailSummary.readiness_label)}</strong></div>
+        <div><span>Required / complete</span><strong>${detailSummary.required_checks} / ${detailSummary.completed_checks}</strong></div>
+        <div><span>Decision history</span><strong>${detailSummary.decision_count}</strong></div>
+      </div>
       <div class="metric-grid">
         <div class="metric"><span>Risk</span><strong class="${model ? `risk-${escapeHtml(model.risk_band)}` : ""}">${model ? escapeHtml(model.risk_band) : "not scored"}</strong></div>
         <div class="metric"><span>Probability</span><strong>${model ? formatPercent(model.high_risk_probability) : "-"}</strong></div>
@@ -1612,7 +1621,23 @@ function renderReviewPacket(packet) {
         <div class="metric"><span>Decision</span><strong>${decision ? escapeHtml(formatPolicyName(decision.decision)) : "not recorded"}</strong></div>
       </div>
       ${modelUseNotice}
+      <section class="lifecycle-actions">
+        <div><span>Lifecycle</span><strong>${escapeHtml(formatPolicyName(lifecycle.status || packet.application.status))}</strong></div>
+        <div><span>Scoring</span><strong>${escapeHtml(formatPolicyName(lifecycle.scoring_action || "locked"))}</strong></div>
+        <div class="packet-flags">${allowedActions}</div>
+        <p>${escapeHtml(lifecycle.status_note || "")}</p>
+      </section>
       <div class="packet-flags">${flags || "<span>No governance flags</span>"}</div>
+      <section class="affordability-panel">
+        <div class="section-heading"><span>Affordability snapshot</span><em>${formatPercent(affordability.completeness)}</em></div>
+        <div class="metric-grid">
+          <div class="metric"><span>Annual income</span><strong>${formatAmountUnits(affordability.annual_income)}</strong></div>
+          <div class="metric"><span>Outstanding debt</span><strong>${formatAmountUnits(affordability.total_outstanding_debt)}</strong></div>
+          <div class="metric"><span>Debt / income</span><strong>${formatPercent(affordability.debt_to_income_ratio)}</strong></div>
+          <div class="metric"><span>Request / income</span><strong>${formatPercent(affordability.requested_amount_to_income_ratio)}</strong></div>
+        </div>
+        <p>${escapeHtml(affordability.note || "")}</p>
+      </section>
       <div class="packet-columns">
         <section>
           <h4>Checklist</h4>
@@ -1624,6 +1649,7 @@ function renderReviewPacket(packet) {
           ${protectiveFactors}
         </section>
       </div>
+      <section class="decision-history-panel"><h4>Decision history</h4>${decisionHistory}</section>
       ${timeline}
       <p class="packet-note">${escapeHtml(packet.audit_note)}</p>
     </div>
@@ -1677,9 +1703,9 @@ async function saveApplicationDecision() {
     body: JSON.stringify(decisionPayload()),
   });
   state.applications = state.applications.map((item) => (item.id === updated.id ? updated : item));
-  selectApplication(updated.id);
+  selectApplication(updated.id, { loadDetail: false });
   await refreshDecisionAnalytics();
-  await loadReviewPacket();
+  await loadReviewPacket(updated.id);
   showMessage("MFI decision saved", "ok");
 }
 

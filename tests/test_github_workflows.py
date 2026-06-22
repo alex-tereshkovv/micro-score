@@ -24,7 +24,9 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("python -m microscore --regional --decision", workflow)
         self.assertIn("node --check apps/web/app.js", workflow)
         self.assertIn("node --check apps/web/mock-api.js", workflow)
+        self.assertIn("node --check apps/web/risk-detail.js", workflow)
         self.assertIn("node scripts/static-demo-smoke.js", workflow)
+        self.assertIn("node scripts/frontend-workflow-smoke.js", workflow)
 
     def test_static_demo_smoke_script_exercises_reviewer_flow(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "static-demo-smoke.js").read_text(
@@ -57,6 +59,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("--check apps\\web\\app.js", script)
         self.assertIn("--check apps\\web\\mock-api.js", script)
         self.assertIn("scripts\\static-demo-smoke.js", script)
+        self.assertIn("scripts\\frontend-workflow-smoke.js", script)
+        self.assertIn("apps\\web\\risk-detail.js", script)
         self.assertIn("git diff --check", script)
         self.assertIn("Assert-LastExitCode", script)
         self.assertIn('throw "$Name failed with exit code $LASTEXITCODE."', script)

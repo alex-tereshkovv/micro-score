@@ -505,6 +505,10 @@ class ApiDatabaseTests(unittest.TestCase):
             note="Affordability evidence verified.",
         )
         self.assertEqual(approved["status"], "approved")
+        self.assertEqual(
+            [row["decision"] for row in self.repository.list_application_decisions("lifecycle-app")],
+            ["review", "approve"],
+        )
 
         with self.assertRaises(InvalidApplicationTransitionError):
             self.repository.update_application_score(

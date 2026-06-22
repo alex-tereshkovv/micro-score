@@ -167,7 +167,7 @@ The web prototype supports:
 - risk scoring with local explanations
 - standard vs thin-file scoring scenario
 - analyst decision capture
-- MFI review packet with governance flags and checklist items
+- MFI Risk Detail v2 with lifecycle actions, affordability screening, governance flags, and decision history
 - decision audit by risk band, district, proxy sensitivity, and recommendation
 - Policy Lab for threshold trade-offs and seeded Monte Carlo portfolio uncertainty
 - model registry with audited activation, immutable provenance, and stale-score re-checks

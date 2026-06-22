@@ -5,6 +5,7 @@
     modelVersions: {},
     sessions: {},
     applications: [],
+    decisions: {},
     simulations: [],
     timelines: {},
     auditEvents: [],
@@ -262,6 +263,7 @@
       },
     };
     demo.applications = [];
+    demo.decisions = {};
     demo.simulations = [];
     demo.modelVersions = {
       "static-demo-v1": {
@@ -377,6 +379,7 @@
       scored_at: null,
     };
     demo.timelines[application.id] = [];
+    demo.decisions[application.id] = [];
     addTimeline(application.id, "application_created", borrowerEmail, {
       requested_amount: payload.requested_amount,
       district: payload.district || "unknown",
@@ -581,7 +584,7 @@
   }
 
   function createDecision(applicationId, actorEmail, payload) {
-    return {
+    const decision = {
       id: demo.nextDecisionId++,
       application_id: applicationId,
       actor_email: actorEmail,
@@ -590,6 +593,9 @@
       note: payload.note || "",
       created_at: nowIso(),
     };
+    demo.decisions[applicationId] = demo.decisions[applicationId] || [];
+    demo.decisions[applicationId].push(decision);
+    return decision;
   }
 
   function currentUser(session) {
@@ -673,6 +679,65 @@
     };
   }
 
+  function lifecycleSummary(application) {
+    const status = application.status;
+    const terminal = terminalApplicationStatuses.has(status);
+    const allowedDecisions = status === "scored"
+      ? ["review", "approve", "decline"]
+      : status === "under_review"
+        ? ["approve", "decline"]
+        : [];
+    const notes = {
+      submitted: "Application is ready for its first governed score.",
+      scored: "Score is available; complete human review before a final decision.",
+      under_review: "Manual review is open; record approve or decline after checks.",
+      approved: "Approval is terminal in the prototype and cannot be silently reversed.",
+      declined: "Decline is terminal in the prototype and cannot be silently reversed.",
+    };
+    return {
+      status,
+      terminal,
+      scoring_action: terminal ? null : application.score_result ? "rescore" : "score",
+      allowed_decisions: allowedDecisions,
+      status_note: notes[status],
+    };
+  }
+
+  function affordabilitySnapshot(application) {
+    const signals = application.behavioral_signals || {};
+    const optionalNumber = (field) => {
+      if (signals[field] === null || signals[field] === undefined || signals[field] === "") return null;
+      const value = Number(signals[field]);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    const annualIncome = optionalNumber("annual_income");
+    const outstandingDebt = optionalNumber("total_outstanding_debt");
+    const openLoans = optionalNumber("num_open_loans");
+    const values = {
+      annual_income: annualIncome,
+      total_outstanding_debt: outstandingDebt,
+      num_open_loans: openLoans,
+    };
+    const missingFields = Object.entries(values)
+      .filter(([, value]) => value === null)
+      .map(([field]) => field);
+    const incomeDenominator = annualIncome > 0 ? annualIncome : null;
+    return {
+      annual_income: annualIncome,
+      total_outstanding_debt: outstandingDebt,
+      num_open_loans: openLoans === null ? null : Math.trunc(openLoans),
+      debt_to_income_ratio: incomeDenominator && outstandingDebt !== null
+        ? outstandingDebt / incomeDenominator
+        : null,
+      requested_amount_to_income_ratio: incomeDenominator
+        ? Number(application.requested_amount) / incomeDenominator
+        : null,
+      completeness: (Object.keys(values).length - missingFields.length) / Object.keys(values).length,
+      missing_fields: missingFields,
+      note: "Screening indicators only. Income period, loan term, expenses, and verified cash flow are required before any real affordability conclusion.",
+    };
+  }
+
   function reviewPacket(application) {
     const score = application.score_result;
     const flags = governanceFlags(application);
@@ -707,6 +772,9 @@
         : null,
       decision_support: score?.decision_support || null,
       analyst_decision: application.decision_result,
+      decision_history: demo.decisions[application.id] || [],
+      lifecycle: lifecycleSummary(application),
+      affordability: affordabilitySnapshot(application),
       timeline_events: demo.timelines[application.id] || [],
       scenario_scores: score?.scenario_scores || [],
       top_risk_factors: score?.explanation?.top_positive_factors || [],
@@ -1655,6 +1723,7 @@
       const user = requireAdmin(session);
       const deletedCount = demo.applications.length;
       demo.applications = [];
+      demo.decisions = {};
       demo.timelines = {};
       addAudit("applications_cleared", "portfolio", "static-demo", user.email, { deleted_count: deletedCount });
       return { deleted_count: deletedCount };

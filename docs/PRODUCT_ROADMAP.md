@@ -247,14 +247,15 @@ project also now generates reproducible research artifacts under
 bins, calibration/ablation plots, and example local explanations.
 Borrower lifecycle v2 now adds automatic owned-application history, a visual status
 progression, borrower-safe API projections, and strict terminal-state guards
-across the local API and static demo.
+across the local API and static demo. MFI Risk Detail v2 now adds an automatic
+review workspace with affordability screening, lifecycle capabilities, and full
+decision history. A dedicated Node frontend workflow smoke test validates this
+contract in both local and CI release gates.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
 - stronger client-side form validation
-- richer MFI risk detail page
 - district and settlement-type charts
-- dedicated frontend integration tests
 - screenshot-ready dashboard states for portfolio review
 - public demo plan: Vercel/Netlify frontend plus hosted API or Streamlit review app
 - two-minute demo video script

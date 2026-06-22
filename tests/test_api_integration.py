@@ -215,6 +215,15 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(review_packet["application_id"], application_id)
         self.assertEqual(review_packet["application"]["borrower_email"], "borrower@example.com")
         self.assertEqual(review_packet["analyst_decision"]["decision"], "review")
+        self.assertEqual(review_packet["lifecycle"]["status"], "under_review")
+        self.assertEqual(review_packet["lifecycle"]["scoring_action"], "rescore")
+        self.assertEqual(review_packet["lifecycle"]["allowed_decisions"], ["approve", "decline"])
+        self.assertEqual(len(review_packet["decision_history"]), 1)
+        self.assertEqual(review_packet["affordability"]["completeness"], 1.0)
+        self.assertAlmostEqual(
+            review_packet["affordability"]["debt_to_income_ratio"],
+            650_000 / 4_200_000,
+        )
         self.assertEqual(len(review_packet["timeline_events"]), 3)
         self.assertTrue(review_packet["checklist"])
         self.assertIn("audit_note", review_packet)
@@ -363,6 +372,17 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(final_decision.status_code, 200, final_decision.text)
         self.assertEqual(final_decision.json()["status"], "approved")
+        final_packet = self.client.get(
+            f"/mfi/applications/{application_id}/review-packet",
+            headers=self._headers(analyst_token),
+        ).json()
+        self.assertTrue(final_packet["lifecycle"]["terminal"])
+        self.assertIsNone(final_packet["lifecycle"]["scoring_action"])
+        self.assertEqual(final_packet["lifecycle"]["allowed_decisions"], [])
+        self.assertEqual(
+            [row["decision"] for row in final_packet["decision_history"]],
+            ["review", "approve"],
+        )
 
         terminal_rescore = self.client.post(
             f"/mfi/applications/{application_id}/score",
@@ -440,6 +460,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("ApplicationDecisionResponse", schemas)
         self.assertIn("ApplicationTimelineEventResponse", schemas)
         self.assertIn("BorrowerApplicationResponse", schemas)
+        self.assertIn("ApplicationLifecycleSummary", schemas)
+        self.assertIn("AffordabilitySnapshot", schemas)
         self.assertIn("ApplicationReviewPacketResponse", schemas)
         self.assertIn("ReviewPacketApplicationSummary", schemas)
         self.assertIn("ReviewPacketModelSummary", schemas)

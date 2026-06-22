@@ -26,6 +26,7 @@ ApplicationLifecycleStatus = Literal[
     "approved",
     "declined",
 ]
+LifecycleScoringAction = Literal["score", "rescore"]
 
 
 class RegisterRequest(BaseModel):
@@ -264,6 +265,25 @@ class ReviewChecklistItem(BaseModel):
     evidence: str | None = None
 
 
+class ApplicationLifecycleSummary(BaseModel):
+    status: ApplicationLifecycleStatus
+    terminal: bool
+    scoring_action: LifecycleScoringAction | None = None
+    allowed_decisions: list[ApplicationDecision] = Field(default_factory=list)
+    status_note: str
+
+
+class AffordabilitySnapshot(BaseModel):
+    annual_income: float | None = Field(default=None, ge=0.0)
+    total_outstanding_debt: float | None = Field(default=None, ge=0.0)
+    num_open_loans: int | None = Field(default=None, ge=0)
+    debt_to_income_ratio: float | None = Field(default=None, ge=0.0)
+    requested_amount_to_income_ratio: float | None = Field(default=None, ge=0.0)
+    completeness: float = Field(ge=0.0, le=1.0)
+    missing_fields: list[str] = Field(default_factory=list)
+    note: str
+
+
 class ApplicationReviewPacketResponse(BaseModel):
     application_id: str
     generated_at: str
@@ -271,6 +291,9 @@ class ApplicationReviewPacketResponse(BaseModel):
     model_summary: ReviewPacketModelSummary | None = None
     decision_support: DecisionSupportResponse | None = None
     analyst_decision: ApplicationDecisionResponse | None = None
+    decision_history: list[ApplicationDecisionResponse] = Field(default_factory=list)
+    lifecycle: ApplicationLifecycleSummary
+    affordability: AffordabilitySnapshot
     timeline_events: list[ApplicationTimelineEventResponse] = Field(default_factory=list)
     scenario_scores: list[ScenarioScoreResponse] = Field(default_factory=list)
     top_risk_factors: list[ScoreFactor] = Field(default_factory=list)

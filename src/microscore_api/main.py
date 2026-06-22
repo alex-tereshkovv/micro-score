@@ -352,10 +352,90 @@ def _borrower_timeline_event(event: dict[str, Any]) -> dict[str, Any]:
     return projected
 
 
+MFI_LIFECYCLE_NOTES = {
+    "submitted": "Application is ready for its first governed score.",
+    "scored": "Score is available; complete human review before a final decision.",
+    "under_review": "Manual review is open; record approve or decline after checks.",
+    "approved": "Approval is terminal in the prototype and cannot be silently reversed.",
+    "declined": "Decline is terminal in the prototype and cannot be silently reversed.",
+}
+
+
+def _application_lifecycle_summary(application: dict[str, Any]) -> dict[str, Any]:
+    status_value = str(application["status"])
+    terminal = status_value in {"approved", "declined"}
+    if status_value == "submitted":
+        scoring_action = "score"
+        allowed_decisions: list[str] = []
+    elif status_value == "scored":
+        scoring_action = "rescore"
+        allowed_decisions = ["review", "approve", "decline"]
+    elif status_value == "under_review":
+        scoring_action = "rescore"
+        allowed_decisions = ["approve", "decline"]
+    else:
+        scoring_action = None
+        allowed_decisions = []
+    return {
+        "status": status_value,
+        "terminal": terminal,
+        "scoring_action": scoring_action,
+        "allowed_decisions": allowed_decisions,
+        "status_note": MFI_LIFECYCLE_NOTES[status_value],
+    }
+
+
+def _optional_nonnegative_number(signals: dict[str, Any], field: str) -> float | None:
+    value = signals.get(field)
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _affordability_snapshot(application: dict[str, Any]) -> dict[str, Any]:
+    signals = application.get("behavioral_signals") or {}
+    annual_income = _optional_nonnegative_number(signals, "annual_income")
+    outstanding_debt = _optional_nonnegative_number(signals, "total_outstanding_debt")
+    open_loans_value = _optional_nonnegative_number(signals, "num_open_loans")
+    open_loans = int(open_loans_value) if open_loans_value is not None else None
+    requested_amount = float(application["requested_amount"])
+    required = {
+        "annual_income": annual_income,
+        "total_outstanding_debt": outstanding_debt,
+        "num_open_loans": open_loans_value,
+    }
+    missing_fields = [field for field, value in required.items() if value is None]
+    income_denominator = annual_income if annual_income and annual_income > 0 else None
+    return {
+        "annual_income": annual_income,
+        "total_outstanding_debt": outstanding_debt,
+        "num_open_loans": open_loans,
+        "debt_to_income_ratio": (
+            outstanding_debt / income_denominator
+            if outstanding_debt is not None and income_denominator
+            else None
+        ),
+        "requested_amount_to_income_ratio": (
+            requested_amount / income_denominator if income_denominator else None
+        ),
+        "completeness": (len(required) - len(missing_fields)) / len(required),
+        "missing_fields": missing_fields,
+        "note": (
+            "Screening indicators only. Income period, loan term, expenses, and verified "
+            "cash flow are required before any real affordability conclusion."
+        ),
+    }
+
+
 def _review_packet(
     application: dict[str, Any],
     timeline_events: list[dict[str, Any]] | None = None,
     active_model_version: str | None = None,
+    decision_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     score = application.get("score_result")
     decision = application.get("decision_result")
@@ -379,6 +459,9 @@ def _review_packet(
         "model_summary": _review_model_summary(score, active_model_version),
         "decision_support": (score or {}).get("decision_support") if score else None,
         "analyst_decision": decision,
+        "decision_history": decision_history or [],
+        "lifecycle": _application_lifecycle_summary(application),
+        "affordability": _affordability_snapshot(application),
         "timeline_events": timeline_events or [],
         "scenario_scores": (score or {}).get("scenario_scores") or [],
         "top_risk_factors": _top_explanation_factors(score, "top_positive_factors"),
@@ -973,6 +1056,7 @@ def application_review_packet(
         application,
         timeline,
         active_model["version"] if active_model else None,
+        repository.list_application_decisions(application_id),
     )
 
 

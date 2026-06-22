@@ -45,6 +45,16 @@ The smoke test verifies that the in-browser static backend can:
 - export a CSV sample
 - reset the static demo portfolio
 
+The dedicated frontend workflow contract test is:
+
+```powershell
+node scripts\frontend-workflow-smoke.js
+```
+
+It exercises the static API together with the shared Risk Detail view-model:
+borrower-safe history, affordability completeness, manual-review transition,
+chronological decision history, and terminal-state locking.
+
 ## GitHub Actions CI
 
 The CI workflow is defined in:
