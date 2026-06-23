@@ -30,6 +30,16 @@ node scripts\application-intake-smoke.js
 It verifies accepted input plus amount boundaries, district/settlement
 consistency, whole-number counts, unknown-signal rejection, and consent.
 
+The Portfolio Dashboard v2 summary has a focused Node test:
+
+```powershell
+node scripts\portfolio-dashboard-smoke.js
+```
+
+It verifies risk-band counts, district risk ordering, top-district
+concentration, settlement-type ordering, rural/peri-urban contextual share, and
+static demo seed-data consistency.
+
 The public-demo layer has its own Node smoke test:
 
 ```powershell
@@ -50,6 +60,7 @@ The smoke test verifies that the in-browser static backend can:
   not reduce simulated default counts
 - verify simulation fingerprint stability, standard-error diagnostics, and
   stored history/detail parity
+- verify Portfolio Dashboard v2 district and settlement summary rows
 - load policy analytics
 - export a CSV sample
 - reset the static demo portfolio
@@ -81,6 +92,7 @@ It runs on pushes and pull requests to `main` and checks:
 - regional decision smoke test
 - frontend JavaScript syntax
 - application intake contract smoke test
+- portfolio dashboard smoke test
 - static demo smoke test
 
 ## Deployment Gate

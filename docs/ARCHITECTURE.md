@@ -57,6 +57,7 @@ What it can show:
 - role-based login flow;
 - borrower application form;
 - MFI queue and score detail;
+- Portfolio Dashboard v2 with district and settlement-type summaries;
 - policy analytics and static explanations;
 - admin audit trail;
 - safe reset of synthetic demo state.
@@ -89,6 +90,8 @@ Main local components:
   analytics, with global visibility reserved for admins;
 - dynamic organization discovery for borrower routing and admin staff
   provisioning;
+- client-side Portfolio Dashboard v2 summaries derived from the scoped MFI
+  queue, with static-demo parity for district risk and settlement-type mix;
 - persistent model registry with candidate/active/inactive lifecycle states,
   deterministic runtime configuration, activation audit events, and immutable
   score provenance snapshots;

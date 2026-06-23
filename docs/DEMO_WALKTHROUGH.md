@@ -71,8 +71,10 @@ analyst@test.com
 
 Show the application queue, portfolio overview, score detail, scenario
 comparison, local explanation, review packet, and decision form. Point out the
-model-use notice in score detail: the score is decision support, proxy-sensitive
-cases require manual review, and a human analyst records the decision.
+Portfolio Dashboard v2 cards for district risk and settlement mix before
+opening the individual score detail. Point out the model-use notice in score
+detail: the score is decision support, proxy-sensitive cases require manual
+review, and a human analyst records the decision.
 
 ### 1:20 - 1:40 Monte Carlo + Governance
 

@@ -22,16 +22,24 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1
 node --check apps\web\app.js
 node --check apps\web\mock-api.js
 node --check apps\web\application-intake.js
+node --check apps\web\portfolio-dashboard.js
 node --check apps\web\risk-detail.js
 node --check scripts\static-demo-smoke.js
 node --check scripts\frontend-workflow-smoke.js
 node --check scripts\application-intake-smoke.js
+node --check scripts\portfolio-dashboard-smoke.js
 ```
 
 - Application intake smoke test passes:
 
 ```powershell
 node scripts\application-intake-smoke.js
+```
+
+- Portfolio dashboard smoke test passes:
+
+```powershell
+node scripts\portfolio-dashboard-smoke.js
 ```
 
 - Static demo smoke test passes:
@@ -62,6 +70,8 @@ git diff --check
   completeness, governance checks, and chronological decision history.
 - Affordability output states that it is screening context, not a verdict.
 - MFI score detail and review packet show the model-use notice.
+- Portfolio Overview shows risk bands, district risk, settlement mix, policy
+  mix, analyst decisions, and the screenshot snapshot note.
 - Admin model registry shows exactly one active version.
 - Activating a candidate marks older review packets as stale until re-scored.
 - Monte Carlo output says scenario planning, not forecast or borrower score.
@@ -86,6 +96,8 @@ git diff --check
 - `Reset demo` restores the synthetic portfolio.
 - MFI queue, score detail, review packet, and analytics show clear loading,
   empty, and error states.
+- Portfolio dashboard charts are populated from synthetic scored applications
+  and do not imply real regional calibration.
 
 ## Reviewer Assets
 

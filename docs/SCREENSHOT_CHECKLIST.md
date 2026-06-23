@@ -17,7 +17,7 @@ Suggested filenames:
 ```text
 01-login-reviewer-snapshot.png
 02-borrower-application-consent.png
-03-mfi-portfolio-queue.png
+03-mfi-portfolio-dashboard-v2.png
 04-score-detail-model-use-notice.png
 05-review-packet-governance.png
 06-policy-lab-decision-audit.png
@@ -45,10 +45,13 @@ application data.
 
 ### 3. MFI Portfolio + Queue
 
-Capture the MFI analyst workspace with the application queue and portfolio
-overview visible.
+Capture the MFI analyst workspace with the application queue and Portfolio
+Dashboard v2 visible: risk bands, district risk, settlement mix, top district,
+rural/peri share, and screenshot snapshot note.
 
-Why it matters: this shows the project is more than a single prediction form.
+Why it matters: this shows the project is more than a single prediction form
+and makes regional/settlement context visible without claiming real
+calibration.
 
 ### 4. Risk Detail v2 + Model-Use Notice
 

@@ -53,13 +53,18 @@ jobs:
           node --check apps/web/app.js
           node --check apps/web/mock-api.js
           node --check apps/web/application-intake.js
+          node --check apps/web/portfolio-dashboard.js
           node --check apps/web/risk-detail.js
           node --check scripts/static-demo-smoke.js
           node --check scripts/frontend-workflow-smoke.js
           node --check scripts/application-intake-smoke.js
+          node --check scripts/portfolio-dashboard-smoke.js
 
       - name: Run application intake smoke test
         run: node scripts/application-intake-smoke.js
+
+      - name: Run portfolio dashboard smoke test
+        run: node scripts/portfolio-dashboard-smoke.js
 
       - name: Run static demo smoke test
         run: node scripts/static-demo-smoke.js

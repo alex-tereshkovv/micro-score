@@ -84,10 +84,11 @@ Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
 count fields, categories, and district/settlement consistency; the FastAPI
 schema remains authoritative. MFI
 application cards retain the full scoring and decision timeline. The MFI tab includes a
-Portfolio Overview with risk-band, district, policy-mix, and analyst-decision
-charts, a CSV export for the application queue, plus a Decision Audit table
-comparing recorded analyst decisions with risk bands, districts, proxy
-sensitivity, and model recommendations. Selecting an application automatically
+Portfolio Dashboard v2 with risk-band, district-risk, settlement-type mix,
+policy-mix, analyst-decision, and screenshot-snapshot summaries, a CSV export
+for the application queue, plus a Decision Audit table comparing recorded
+analyst decisions with risk bands, districts, proxy sensitivity, and model
+recommendations. Selecting an application automatically
 opens Risk Detail v2 with lifecycle actions, affordability screening, governance
 flags, local explanations, timeline events, the review checklist, and the full
 decision history. The Policy Lab compares approve/review/decline

@@ -14,7 +14,8 @@ minutes:
 - MFI analyst sees a scored queue
 - analyst opens a review packet
 - analyst records a decision
-- dashboard shows portfolio analytics and decision audit
+- dashboard shows district risk, settlement mix, portfolio analytics, and
+  decision audit
 
 The public demo must clearly state that it uses demo or synthetic data and is
 not a lending service.
@@ -33,7 +34,8 @@ Best first step because it is simple and stable.
 - Use synthetic in-browser demo data.
 - Host only the frontend interaction on GitHub Pages or Vercel.
 - Label accounts as demo personas and keep the synthetic-data warning visible.
-- Show portfolio overview, review packet, decision audit, and CSV export sample.
+- Show Portfolio Dashboard v2, review packet, decision audit, and CSV export
+  sample.
 
 Trade-off: not a real backend, but very easy for a reviewer to open.
 
@@ -78,8 +80,8 @@ Trade-off: closest to product, but more deployment/security work.
    credit history requirements.
 2. Research finding: synthetic-data model is fragile because `late_payment_count`
    dominates.
-3. Product flow: borrower application, MFI review queue, score detail, review
-   packet, human decision.
+3. Product flow: borrower application, MFI review queue, Portfolio Dashboard
+   v2, score detail, review packet, human decision.
 4. Governance: proxy warning, timeline, audit trail, decision analytics.
 5. Limitation and next step: public benchmark validation and eventual local
    pilot data.

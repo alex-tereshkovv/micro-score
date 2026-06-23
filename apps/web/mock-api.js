@@ -222,7 +222,7 @@
       requested_amount: 1800,
       purpose: "education fees",
       district: "Aksu",
-      settlement_type: "urban",
+      settlement_type: "industrial_city",
       annual_income: 44000,
       total_outstanding_debt: 3100,
       mobile_banking_logins: 15,

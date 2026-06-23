@@ -103,6 +103,8 @@ try {
         Assert-LastExitCode "Frontend mock-api.js syntax check"
         & $node --check apps\web\application-intake.js
         Assert-LastExitCode "Frontend application-intake.js syntax check"
+        & $node --check apps\web\portfolio-dashboard.js
+        Assert-LastExitCode "Frontend portfolio-dashboard.js syntax check"
         & $node --check apps\web\risk-detail.js
         Assert-LastExitCode "Frontend risk-detail.js syntax check"
         & $node --check scripts\static-demo-smoke.js
@@ -111,11 +113,18 @@ try {
         Assert-LastExitCode "Frontend workflow smoke syntax check"
         & $node --check scripts\application-intake-smoke.js
         Assert-LastExitCode "Application intake smoke syntax check"
+        & $node --check scripts\portfolio-dashboard-smoke.js
+        Assert-LastExitCode "Portfolio dashboard smoke syntax check"
     }
 
     Invoke-Step "Run application intake smoke test" {
         & $node scripts\application-intake-smoke.js
         Assert-LastExitCode "Application intake smoke test"
+    }
+
+    Invoke-Step "Run portfolio dashboard smoke test" {
+        & $node scripts\portfolio-dashboard-smoke.js
+        Assert-LastExitCode "Portfolio dashboard smoke test"
     }
 
     Invoke-Step "Run static demo smoke test" {

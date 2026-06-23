@@ -14,6 +14,7 @@ const hostedStaticPage = !LOCAL_HOSTNAMES.has(window.location.hostname);
 // A 15-point proxy swing is enough to make an analyst slow down. Real pilot data should get the final vote here.
 const HIGH_PROXY_SENSITIVITY_DELTA = 0.15;
 const DEMO_CONSENT_VERSION = "synthetic-demo-v1";
+const portfolioDashboard = window.MicroScorePortfolioDashboard || {};
 
 function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/$/, "");
@@ -1329,42 +1330,41 @@ function renderPortfolioOverview() {
     return;
   }
 
-  const scored = scoredApplications(state.applications);
-  const probabilities = scored.map((application) => application.score_result.high_risk_probability);
-  const avgRisk = average(probabilities);
-  const highRiskShare = scored.length
-    ? scored.filter((application) => application.score_result.risk_band === "high").length / scored.length
-    : 0;
-  const riskCounts = {
-    low: 0,
-    medium: 0,
-    high: 0,
-    ...countBy(scored, (application) => application.score_result.risk_band),
-  };
-  const districtRows = renderDistrictRiskRows(scored);
+  const dashboard = portfolioDashboard.summarizePortfolioDashboard
+    ? portfolioDashboard.summarizePortfolioDashboard(state.applications)
+    : summarizePortfolioDashboardFallback(state.applications);
+  const districtRows = renderDistrictRiskRows(dashboard.districtRows);
+  const settlementRows = renderSettlementTypeRows(dashboard.settlementRows);
   const policySnapshot = renderPortfolioPolicySnapshot(state.policyAnalytics);
   const decisionSnapshot = renderPortfolioDecisionSnapshot(state.decisionAnalytics);
+  const topDistrict = dashboard.topDistrict
+    ? `${dashboard.topDistrict.key} (${formatPercent(dashboard.topDistrict.share)})`
+    : "-";
 
   els.portfolioOverview.className = "portfolio-overview";
   els.portfolioOverview.innerHTML = `
     <div class="portfolio-metrics">
-      <div class="metric"><span>Applications</span><strong>${state.applications.length}</strong></div>
-      <div class="metric"><span>Scored</span><strong>${scored.length}</strong></div>
-      <div class="metric"><span>Avg risk</span><strong>${formatPercent(avgRisk)}</strong></div>
-      <div class="metric"><span>High risk</span><strong class="risk-high">${formatPercent(highRiskShare)}</strong></div>
+      <div class="metric"><span>Applications</span><strong>${dashboard.applicationCount}</strong></div>
+      <div class="metric"><span>Scored</span><strong>${dashboard.scoredCount}</strong></div>
+      <div class="metric"><span>Avg risk</span><strong>${formatPercent(dashboard.avgRisk)}</strong></div>
+      <div class="metric"><span>High risk</span><strong class="risk-high">${formatPercent(dashboard.highRiskShare)}</strong></div>
+      <div class="metric"><span>Top district</span><strong>${escapeHtml(topDistrict)}</strong></div>
+      <div class="metric"><span>Rural/peri share</span><strong>${formatPercent(dashboard.contextualSettlementShare)}</strong></div>
     </div>
     <div class="portfolio-grid">
       <section class="portfolio-card">
         <h4>Risk bands</h4>
         <div class="risk-band-chart">
-          ${renderRiskBandBar("low", riskCounts.low, scored.length)}
-          ${renderRiskBandBar("medium", riskCounts.medium, scored.length)}
-          ${renderRiskBandBar("high", riskCounts.high, scored.length)}
+          ${dashboard.riskBandRows.map(renderRiskBandBar).join("")}
         </div>
       </section>
       <section class="portfolio-card">
         <h4>District risk</h4>
         <div class="district-bars">${districtRows}</div>
+      </section>
+      <section class="portfolio-card">
+        <h4>Settlement mix</h4>
+        <div class="settlement-bars">${settlementRows}</div>
       </section>
       <section class="portfolio-card portfolio-policy-card">
         <h4>Policy mix</h4>
@@ -1375,11 +1375,93 @@ function renderPortfolioOverview() {
         ${decisionSnapshot}
       </section>
     </div>
+    <p class="portfolio-snapshot-note">
+      Screenshot snapshot: ${dashboard.scoredCount} scored applications, top district ${escapeHtml(topDistrict)}, contextual rural/peri-urban share ${formatPercent(dashboard.contextualSettlementShare)}.
+      Synthetic demo analytics only.
+    </p>
   `;
 }
 
-function renderRiskBandBar(label, count, total) {
-  const rate = total ? count / total : 0;
+function summarizePortfolioDashboardFallback(applications) {
+  const scored = scoredApplications(applications);
+  const probabilities = scored.map((application) => application.score_result.high_risk_probability);
+  const highRiskShare = scored.length
+    ? scored.filter((application) => application.score_result.risk_band === "high").length / scored.length
+    : 0;
+  const riskCounts = {
+    low: 0,
+    medium: 0,
+    high: 0,
+    ...countBy(scored, (application) => application.score_result.risk_band),
+  };
+  const districtRows = portfolioSegmentRowsFallback(
+    scored,
+    (application) => application.district || application.behavioral_signals?.pavlodar_district,
+    { limit: 7 },
+  );
+  const allDistrictRows = portfolioSegmentRowsFallback(
+    scored,
+    (application) => application.district || application.behavioral_signals?.pavlodar_district,
+    { sort: "count" },
+  );
+  const settlementRows = portfolioSegmentRowsFallback(
+    scored,
+    (application) => application.settlement_type || application.behavioral_signals?.settlement_type,
+    { order: ["urban", "industrial_city", "peri_urban", "rural", "unknown"] },
+  );
+  const contextualCount = settlementRows
+    .filter((row) => ["rural", "peri_urban"].includes(row.key))
+    .reduce((total, row) => total + row.count, 0);
+
+  return {
+    applicationCount: applications.length,
+    scoredCount: scored.length,
+    avgRisk: average(probabilities),
+    highRiskShare,
+    contextualSettlementShare: scored.length ? contextualCount / scored.length : 0,
+    topDistrict: allDistrictRows[0] || null,
+    riskBandRows: ["low", "medium", "high"].map((band) => ({
+      key: band,
+      count: riskCounts[band],
+      share: scored.length ? riskCounts[band] / scored.length : 0,
+    })),
+    districtRows,
+    settlementRows,
+  };
+}
+
+function portfolioSegmentRowsFallback(scored, getKey, options = {}) {
+  if (!scored.length) return [];
+  const groups = {};
+  scored.forEach((application) => {
+    const key = getKey(application) || "unknown";
+    groups[key] = groups[key] || [];
+    groups[key].push(application.score_result.high_risk_probability);
+  });
+  const rows = Object.entries(groups).map(([key, values]) => ({
+    key,
+    count: values.length,
+    share: values.length / scored.length,
+    avgRisk: average(values),
+  }));
+  if (options.order) {
+    const orderMap = new Map(options.order.map((item, index) => [item, index]));
+    rows.sort((left, right) => (
+      (orderMap.get(left.key) ?? options.order.length) - (orderMap.get(right.key) ?? options.order.length)
+      || right.count - left.count
+    ));
+  } else if (options.sort === "count") {
+    rows.sort((left, right) => right.count - left.count || right.avgRisk - left.avgRisk);
+  } else {
+    rows.sort((left, right) => right.avgRisk - left.avgRisk || right.count - left.count);
+  }
+  return typeof options.limit === "number" ? rows.slice(0, options.limit) : rows;
+}
+
+function renderRiskBandBar(row) {
+  const label = row.key;
+  const count = row.count || 0;
+  const rate = row.share || 0;
   return `
     <div class="risk-band-row">
       <div>
@@ -1394,35 +1476,42 @@ function renderRiskBandBar(label, count, total) {
   `;
 }
 
-function renderDistrictRiskRows(scored) {
-  if (!scored.length) return "<p class=\"empty tiny-text\">No scored applications yet.</p>";
+function renderDistrictRiskRows(rows) {
+  if (!rows.length) return "<p class=\"empty tiny-text\">No scored applications yet.</p>";
 
-  const groups = {};
-  scored.forEach((application) => {
-    const district = application.district || application.behavioral_signals?.pavlodar_district || "unknown";
-    groups[district] = groups[district] || [];
-    groups[district].push(application.score_result.high_risk_probability);
-  });
-
-  return Object.entries(groups)
-    .map(([district, values]) => ({
-      district,
-      n: values.length,
-      avgRisk: average(values),
-    }))
-    .sort((left, right) => right.avgRisk - left.avgRisk || right.n - left.n)
-    .slice(0, 7)
+  return rows
     .map(
       (row) => `
         <div class="district-risk-row">
           <div>
-            <strong>${escapeHtml(row.district)}</strong>
-            <span>${row.n} applications</span>
+            <strong>${escapeHtml(row.key)}</strong>
+            <span>${row.count} applications · ${formatPercent(row.share)} of scored</span>
           </div>
           <div class="portfolio-bar">
             <span class="district-risk-fill" style="width: ${clampPercent(row.avgRisk)}%"></span>
           </div>
           <em>${formatPercent(row.avgRisk)}</em>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderSettlementTypeRows(rows) {
+  if (!rows.length) return "<p class=\"empty tiny-text\">No scored applications yet.</p>";
+
+  return rows
+    .map(
+      (row) => `
+        <div class="settlement-risk-row">
+          <div>
+            <strong>${escapeHtml(formatPolicyName(row.key))}</strong>
+            <span>${row.count} applications · avg risk ${formatPercent(row.avgRisk)}</span>
+          </div>
+          <div class="portfolio-bar">
+            <span class="settlement-fill-${escapeHtml(row.key)}" style="width: ${clampPercent(row.share)}%"></span>
+          </div>
+          <em>${formatPercent(row.share)}</em>
         </div>
       `,
     )

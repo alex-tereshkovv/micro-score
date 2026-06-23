@@ -253,11 +253,12 @@ decision history. A dedicated Node frontend workflow smoke test validates this
 contract in both local and CI release gates. Application Intake v2 now adds a
 typed backend signal allowlist, shared browser/static validation, field-level
 feedback, safe numeric bounds, and district/settlement consistency checks.
+Portfolio Dashboard v2 now adds screenshot-ready MFI portfolio summaries with
+risk-band, district-risk, settlement-type mix, policy-mix, analyst-decision,
+top-district, and rural/peri-urban contextual-share views.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
-- district and settlement-type charts
-- screenshot-ready dashboard states for portfolio review
 - public demo plan: Vercel/Netlify frontend plus hosted API or Streamlit review app
 - two-minute demo video script
 - stakeholder interviews and validation tracker updates

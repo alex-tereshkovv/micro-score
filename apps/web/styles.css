@@ -1219,13 +1219,13 @@ label {
 
 .portfolio-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
 .portfolio-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -1245,13 +1245,15 @@ label {
 }
 
 .risk-band-chart,
-.district-bars {
+.district-bars,
+.settlement-bars {
   display: grid;
   gap: 10px;
 }
 
 .risk-band-row,
-.district-risk-row {
+.district-risk-row,
+.settlement-risk-row {
   display: grid;
   grid-template-columns: minmax(92px, 0.8fr) minmax(120px, 1fr) 48px;
   gap: 10px;
@@ -1259,7 +1261,8 @@ label {
 }
 
 .risk-band-row strong,
-.district-risk-row strong {
+.district-risk-row strong,
+.settlement-risk-row strong {
   display: block;
   font-size: 13px;
   line-height: 1.2;
@@ -1268,6 +1271,7 @@ label {
 
 .risk-band-row span,
 .district-risk-row span,
+.settlement-risk-row span,
 .portfolio-policy-heading span {
   display: block;
   margin-top: 2px;
@@ -1276,7 +1280,8 @@ label {
 }
 
 .risk-band-row em,
-.district-risk-row em {
+.district-risk-row em,
+.settlement-risk-row em {
   color: var(--ink);
   font-size: 12px;
   font-style: normal;
@@ -1311,6 +1316,37 @@ label {
 
 .district-risk-fill {
   background: linear-gradient(90deg, var(--teal) 0%, var(--amber) 68%, var(--red) 100%);
+}
+
+.settlement-fill-urban {
+  background: var(--blue);
+}
+
+.settlement-fill-industrial_city {
+  background: #667eea;
+}
+
+.settlement-fill-peri_urban {
+  background: var(--teal);
+}
+
+.settlement-fill-rural {
+  background: var(--green);
+}
+
+.settlement-fill-unknown {
+  background: var(--muted);
+}
+
+.portfolio-snapshot-note {
+  margin: 0;
+  border: 1px dashed #b9d9dd;
+  border-radius: 8px;
+  background: #f7fbfb;
+  color: var(--muted);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .portfolio-policy-card {

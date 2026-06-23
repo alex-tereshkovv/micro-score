@@ -162,12 +162,12 @@ The web prototype supports:
 
 - borrower login/register and Application Intake v2 with typed signal validation
 - borrower-safe owned-application history with guarded lifecycle states
-- MFI application queue
-- MFI portfolio CSV export
+- MFI application queue and portfolio CSV export
 - risk scoring with local explanations
 - standard vs thin-file scoring scenario
 - analyst decision capture
 - MFI Risk Detail v2 with lifecycle actions, affordability screening, governance flags, and decision history
+- Portfolio Dashboard v2 with district risk, settlement mix, and screenshot-ready review summaries
 - decision audit by risk band, district, proxy sensitivity, and recommendation
 - Policy Lab for threshold trade-offs and seeded Monte Carlo portfolio uncertainty
 - model registry with audited activation, immutable provenance, and stale-score re-checks

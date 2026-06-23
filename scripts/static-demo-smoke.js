@@ -3,6 +3,7 @@ const vm = require("vm");
 
 global.window = {};
 window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js");
+window.MicroScorePortfolioDashboard = require("../apps/web/portfolio-dashboard.js");
 vm.runInThisContext(fs.readFileSync("apps/web/mock-api.js", "utf8"));
 
 async function main() {
@@ -25,6 +26,14 @@ async function main() {
   const applications = await api.request("/mfi/applications", {}, session);
   if (applications.length < 3) {
     throw new Error(`Expected seeded applications, got ${applications.length}`);
+  }
+  const portfolioDashboard = window.MicroScorePortfolioDashboard.summarizePortfolioDashboard(applications);
+  if (
+    portfolioDashboard.scoredCount < 3
+    || !portfolioDashboard.settlementRows.some((row) => row.key === "industrial_city")
+    || !portfolioDashboard.topDistrict
+  ) {
+    throw new Error("Expected Portfolio Dashboard v2 summary with district and settlement rows");
   }
 
   const scored = await api.request(
@@ -541,6 +550,8 @@ async function main() {
       checklist_items: packet.checklist.length,
       policies: policies.policies.length,
       monte_carlo: true,
+      portfolio_dashboard_v2: true,
+      portfolio_settlement_rows: portfolioDashboard.settlementRows.length,
       simulation_iterations: simulation.assumptions.iterations,
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
