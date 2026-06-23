@@ -160,7 +160,7 @@ Demo accounts use password `password123`:
 
 The web prototype supports:
 
-- borrower login/register and loan application submission
+- borrower login/register and Application Intake v2 with typed signal validation
 - borrower-safe owned-application history with guarded lifecycle states
 - MFI application queue
 - MFI portfolio CSV export

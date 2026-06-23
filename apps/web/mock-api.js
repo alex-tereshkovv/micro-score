@@ -129,6 +129,15 @@
     }
   }
 
+  function validateApplicationContract(payload) {
+    const intake = window.MicroScoreApplicationIntake || globalThis.MicroScoreApplicationIntake;
+    if (!intake) throw new Error("Application intake validation is unavailable");
+    const result = intake.validateApplicationIntake(payload);
+    if (!result.valid) {
+      throw new Error(`Application validation failed: ${intake.formatApplicationIntakeErrors(result.errors)}`);
+    }
+  }
+
   const seedApplications = [
     {
       borrower_email: "borrower@test.com",
@@ -1431,6 +1440,7 @@
       const user = currentUser(session);
       if (user.role !== "borrower") throw new Error("Borrower account required");
       validateApplicationPrivacy(body);
+      validateApplicationContract(body);
       if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
       const app = createApplicationRecord(body, user.email);
       demo.applications.unshift(app);

@@ -21,9 +21,17 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1
 ```powershell
 node --check apps\web\app.js
 node --check apps\web\mock-api.js
+node --check apps\web\application-intake.js
 node --check apps\web\risk-detail.js
 node --check scripts\static-demo-smoke.js
 node --check scripts\frontend-workflow-smoke.js
+node --check scripts\application-intake-smoke.js
+```
+
+- Application intake smoke test passes:
+
+```powershell
+node scripts\application-intake-smoke.js
 ```
 
 - Static demo smoke test passes:
@@ -42,6 +50,10 @@ git diff --check
 
 - Static demo warning is visible.
 - Borrower submission requires the synthetic-data consent checkbox.
+- Invalid borrower fields are highlighted with a visible summary and are rejected
+  by the same intake contract in static mode and the typed API.
+- Unknown behavioral fields and district/settlement mismatches return validation
+  errors instead of entering the scoring pipeline.
 - Borrower history lists only the signed-in account's applications and excludes
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject

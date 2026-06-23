@@ -225,12 +225,28 @@ Required fields:
 - `organization_id`
 - `consent_confirmed: true`
 - `consent_version`
-- `behavioral_signals`
+
+`behavioral_signals` is an optional typed object so an empty thin-file
+application can still enter human review.
 
 The API rejects the request with `422` when consent is missing or when
 `behavioral_signals` contains sensitive keys such as IIN, passport, phone,
 address, raw bank-statement, precise-geolocation, or biometric fields. The
 consent version is written to the application audit event.
+
+Application Intake v2 also rejects:
+
+- unknown top-level or behavioral fields;
+- a requested amount outside `1,000` to `100,000,000`;
+- negative, non-finite, fractional count, or over-limit signal values;
+- unsupported district, settlement, gender, or employment categories;
+- district/settlement mismatches such as `Aksu` with `urban` instead of
+  `industrial_city`;
+- purpose text longer than 200 characters.
+
+`BehavioralSignalsCreate` is the typed allowlist used by OpenAPI, FastAPI, the
+browser form, and the static demo. Missing optional signals remain valid so the
+thin-file review path still works; unreviewed proxy fields do not.
 
 Recommended borrower form fields for the first frontend:
 

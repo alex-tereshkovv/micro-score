@@ -21,6 +21,15 @@ It runs:
 
 ## Static Demo Smoke Test
 
+The shared borrower intake contract has a focused Node test:
+
+```powershell
+node scripts\application-intake-smoke.js
+```
+
+It verifies accepted input plus amount boundaries, district/settlement
+consistency, whole-number counts, unknown-signal rejection, and consent.
+
 The public-demo layer has its own Node smoke test:
 
 ```powershell
@@ -71,6 +80,7 @@ It runs on pushes and pull requests to `main` and checks:
 - research smoke test
 - regional decision smoke test
 - frontend JavaScript syntax
+- application intake contract smoke test
 - static demo smoke test
 
 ## Deployment Gate

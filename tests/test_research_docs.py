@@ -236,9 +236,15 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("internal score snapshots", api_contract)
         self.assertIn("approved` and `declined` are terminal", api_contract)
         self.assertIn("returns `409`", api_contract)
+        self.assertIn("Application Intake v2", api_contract)
+        self.assertIn("BehavioralSignalsCreate", api_contract)
+        self.assertIn("unknown top-level or behavioral fields", api_contract)
         self.assertIn("strict lifecycle state machine", architecture)
+        self.assertIn("Application Intake v2", architecture)
         self.assertIn("Borrower lifecycle v2", roadmap)
+        self.assertIn("typed backend signal allowlist", roadmap)
         self.assertIn("Borrower history lists only", release_checklist)
+        self.assertIn("district/settlement mismatches", release_checklist)
 
     def test_model_registry_governance_is_documented(self) -> None:
         api_contract = (DOCS_ROOT / "API_CONTRACT.md").read_text(encoding="utf-8")

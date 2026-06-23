@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .privacy import find_forbidden_signal_paths
 
 Role = Literal["borrower", "mfi_analyst", "admin"]
 RiskBand = Literal["low", "medium", "high"]
@@ -27,6 +29,38 @@ ApplicationLifecycleStatus = Literal[
     "declined",
 ]
 LifecycleScoringAction = Literal["score", "rescore"]
+PavlodarDistrict = Literal[
+    "Pavlodar city",
+    "Ekibastuz",
+    "Aksu",
+    "Pavlodar district",
+    "Bayanaul",
+    "Sharbakty",
+    "Terenkol",
+    "Irtysh",
+    "Zhelezinka",
+    "Aktogay",
+    "Akkuly",
+    "Uspenka",
+    "May district",
+]
+SettlementType = Literal["urban", "industrial_city", "peri_urban", "rural"]
+
+DISTRICT_SETTLEMENT_TYPES: dict[str, SettlementType] = {
+    "Pavlodar city": "urban",
+    "Ekibastuz": "industrial_city",
+    "Aksu": "industrial_city",
+    "Pavlodar district": "peri_urban",
+    "Bayanaul": "rural",
+    "Sharbakty": "rural",
+    "Terenkol": "rural",
+    "Irtysh": "rural",
+    "Zhelezinka": "rural",
+    "Aktogay": "rural",
+    "Akkuly": "rural",
+    "Uspenka": "rural",
+    "May district": "rural",
+}
 
 
 class RegisterRequest(BaseModel):
@@ -116,15 +150,62 @@ class ModelStatusResponse(BaseModel):
     note: str
 
 
+class BehavioralSignalsCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    annual_income: float | None = Field(
+        default=None, ge=0, le=10_000_000_000, allow_inf_nan=False
+    )
+    total_outstanding_debt: float | None = Field(
+        default=None, ge=0, le=10_000_000_000, allow_inf_nan=False
+    )
+    mobile_banking_logins: int | None = Field(default=None, ge=0, le=10_000)
+    online_transfer_frequency: int | None = Field(default=None, ge=0, le=10_000)
+    atm_withdrawal_frequency: int | None = Field(default=None, ge=0, le=10_000)
+    avg_deposit_amount: float | None = Field(
+        default=None, ge=0, le=10_000_000_000, allow_inf_nan=False
+    )
+    debit_card_spending: float | None = Field(
+        default=None, ge=0, le=10_000_000_000, allow_inf_nan=False
+    )
+    num_open_loans: int | None = Field(default=None, ge=0, le=100)
+    late_payment_count: int | None = Field(default=None, ge=0, le=1_000)
+    gender: Literal["Female", "Male", "Other"] | None = None
+    employment_status: Literal["Self-employed", "Employed", "Unemployed"] | None = None
+
+
 class ApplicationCreate(BaseModel):
-    requested_amount: float = Field(gt=0)
-    purpose: str = ""
-    district: str | None = None
-    settlement_type: str | None = None
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    requested_amount: float = Field(ge=1_000, le=100_000_000, allow_inf_nan=False)
+    purpose: str = Field(default="", max_length=200)
+    district: PavlodarDistrict | None = None
+    settlement_type: SettlementType | None = None
     organization_id: str = Field(min_length=1, max_length=100)
     consent_confirmed: bool = False
     consent_version: str | None = Field(default=None, max_length=64)
-    behavioral_signals: dict[str, Any] = Field(default_factory=dict)
+    behavioral_signals: BehavioralSignalsCreate = Field(default_factory=BehavioralSignalsCreate)
+
+    @field_validator("behavioral_signals", mode="before")
+    @classmethod
+    def reject_sensitive_signal_fields(cls, value: Any) -> Any:
+        forbidden_paths = find_forbidden_signal_paths(value or {})
+        if forbidden_paths:
+            raise ValueError(
+                "Remove sensitive personal fields before submitting: "
+                + ", ".join(forbidden_paths)
+            )
+        return value
+
+    @model_validator(mode="after")
+    def validate_district_settlement_pair(self) -> "ApplicationCreate":
+        if self.district and self.settlement_type:
+            expected = DISTRICT_SETTLEMENT_TYPES[self.district]
+            if self.settlement_type != expected:
+                raise ValueError(
+                    f"Settlement type for {self.district} must be {expected}"
+                )
+        return self
 
 
 class ScoreFactor(BaseModel):

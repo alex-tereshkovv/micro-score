@@ -4,6 +4,7 @@ const vm = require("vm");
 const { summarizeReviewPacket } = require("../apps/web/risk-detail.js");
 
 global.window = {};
+window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js");
 vm.runInThisContext(fs.readFileSync("apps/web/mock-api.js", "utf8"));
 
 async function login(api, email) {

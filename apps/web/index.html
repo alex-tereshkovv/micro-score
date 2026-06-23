@@ -158,7 +158,8 @@
               </div>
               <button id="fillDemoApplication" class="secondary-button" type="button">Fill demo</button>
             </div>
-            <form id="applicationForm" class="application-form">
+            <form id="applicationForm" class="application-form" novalidate>
+              <div id="applicationValidationSummary" class="validation-summary" role="alert" tabindex="-1" hidden></div>
               <div class="form-grid">
                 <label>
                   MFI organization
@@ -168,11 +169,11 @@
                 </label>
                 <label>
                   Requested amount
-                  <input name="requested_amount" type="number" min="1000" step="1" required />
+                  <input name="requested_amount" type="number" min="1000" max="100000000" step="1" required />
                 </label>
                 <label>
                   Purpose
-                  <input name="purpose" type="text" />
+                  <input name="purpose" type="text" maxlength="200" />
                 </label>
                 <label>
                   District
@@ -203,39 +204,39 @@
                 </label>
                 <label>
                   Annual income
-                  <input name="annual_income" type="number" min="0" step="1" />
+                  <input name="annual_income" type="number" min="0" max="10000000000" step="1" />
                 </label>
                 <label>
                   Outstanding debt
-                  <input name="total_outstanding_debt" type="number" min="0" step="1" />
+                  <input name="total_outstanding_debt" type="number" min="0" max="10000000000" step="1" />
                 </label>
                 <label>
                   Mobile logins
-                  <input name="mobile_banking_logins" type="number" min="0" step="1" />
+                  <input name="mobile_banking_logins" type="number" min="0" max="10000" step="1" />
                 </label>
                 <label>
                   Online transfers
-                  <input name="online_transfer_frequency" type="number" min="0" step="1" />
+                  <input name="online_transfer_frequency" type="number" min="0" max="10000" step="1" />
                 </label>
                 <label>
                   ATM withdrawals
-                  <input name="atm_withdrawal_frequency" type="number" min="0" step="1" />
+                  <input name="atm_withdrawal_frequency" type="number" min="0" max="10000" step="1" />
                 </label>
                 <label>
                   Average deposits
-                  <input name="avg_deposit_amount" type="number" min="0" step="1" />
+                  <input name="avg_deposit_amount" type="number" min="0" max="10000000000" step="1" />
                 </label>
                 <label>
                   Card spending
-                  <input name="debit_card_spending" type="number" min="0" step="1" />
+                  <input name="debit_card_spending" type="number" min="0" max="10000000000" step="1" />
                 </label>
                 <label>
                   Open loans
-                  <input name="num_open_loans" type="number" min="0" step="1" />
+                  <input name="num_open_loans" type="number" min="0" max="100" step="1" />
                 </label>
                 <label>
                   Late payments
-                  <input name="late_payment_count" type="number" min="0" step="1" />
+                  <input name="late_payment_count" type="number" min="0" max="1000" step="1" />
                 </label>
                 <label>
                   Gender
@@ -601,8 +602,9 @@ Human review is required.</textarea>
       </main>
     </div>
 
-    <script src="./risk-detail.js?v=20260622-risk-detail"></script>
-    <script src="./mock-api.js?v=20260622-risk-detail"></script>
-    <script src="./app.js?v=20260622-risk-detail"></script>
+    <script src="./application-intake.js?v=20260622-intake"></script>
+    <script src="./risk-detail.js?v=20260622-intake"></script>
+    <script src="./mock-api.js?v=20260622-intake"></script>
+    <script src="./app.js?v=20260622-intake"></script>
   </body>
 </html>

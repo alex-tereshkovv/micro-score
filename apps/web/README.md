@@ -79,7 +79,10 @@ from the Admin tab or the local database file is removed.
 
 The borrower workspace automatically lists the signed-in account's applications
 with a visual lifecycle from submission through a terminal MFI decision. Its
-API view excludes internal scores, staff identity, and analyst notes. MFI
+API view excludes internal scores, staff identity, and analyst notes. Application
+Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
+count fields, categories, and district/settlement consistency; the FastAPI
+schema remains authoritative. MFI
 application cards retain the full scoring and decision timeline. The MFI tab includes a
 Portfolio Overview with risk-band, district, policy-mix, and analyst-decision
 charts, a CSV export for the application queue, plus a Decision Audit table

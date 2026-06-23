@@ -2,6 +2,7 @@ const fs = require("fs");
 const vm = require("vm");
 
 global.window = {};
+window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js");
 vm.runInThisContext(fs.readFileSync("apps/web/mock-api.js", "utf8"));
 
 async function main() {
@@ -147,7 +148,7 @@ async function main() {
         requested_amount: 2100,
         purpose: "inventory",
         district: "Aksu",
-        settlement_type: "urban",
+        settlement_type: "industrial_city",
         organization_id: "pavlodar-demo-mfi",
         consent_confirmed: true,
         consent_version: "synthetic-demo-v1",
@@ -469,6 +470,52 @@ async function main() {
   }
   if (!sensitiveFieldRejected) throw new Error("Expected sensitive field to be rejected");
 
+  let mismatchedSettlementRejected = false;
+  try {
+    await api.request(
+      "/applications",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requested_amount: 2500,
+          district: "Aksu",
+          settlement_type: "urban",
+          organization_id: "pavlodar-demo-mfi",
+          consent_confirmed: true,
+          consent_version: "synthetic-demo-v1",
+          behavioral_signals: {},
+        }),
+      },
+      borrowerSession,
+    );
+  } catch (error) {
+    mismatchedSettlementRejected = String(error.message).includes("industrial_city");
+  }
+  if (!mismatchedSettlementRejected) {
+    throw new Error("Expected inconsistent district and settlement type to be rejected");
+  }
+
+  let unknownSignalRejected = false;
+  try {
+    await api.request(
+      "/applications",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requested_amount: 2500,
+          organization_id: "pavlodar-demo-mfi",
+          consent_confirmed: true,
+          consent_version: "synthetic-demo-v1",
+          behavioral_signals: { unreviewed_proxy: 1 },
+        }),
+      },
+      borrowerSession,
+    );
+  } catch (error) {
+    unknownSignalRejected = String(error.message).includes("unreviewed_proxy");
+  }
+  if (!unknownSignalRejected) throw new Error("Expected unknown signal to be rejected");
+
   api.resetDemo();
   const resetApplications = await api.request("/mfi/applications", {}, session);
   if (resetApplications.length !== applications.length) {
@@ -498,7 +545,8 @@ async function main() {
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
       lifecycle_terminal_guard: terminalMutationRejected,
-      risk_detail_v2: true,
+    risk_detail_v2: true,
+    intake_contract_v2: true,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,

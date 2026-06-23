@@ -457,6 +457,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("ModelVersionCreate", schemas)
         self.assertIn("ModelVersionPublic", schemas)
         self.assertIn("ModelStatusResponse", schemas)
+        self.assertIn("ApplicationCreate", schemas)
+        self.assertIn("BehavioralSignalsCreate", schemas)
+        self.assertFalse(schemas["ApplicationCreate"]["additionalProperties"])
+        self.assertFalse(schemas["BehavioralSignalsCreate"]["additionalProperties"])
         self.assertIn("ApplicationDecisionResponse", schemas)
         self.assertIn("ApplicationTimelineEventResponse", schemas)
         self.assertIn("BorrowerApplicationResponse", schemas)
@@ -574,13 +578,48 @@ class ApiIntegrationTests(unittest.TestCase):
             json=sensitive_payload,
         )
         self.assertEqual(sensitive_response.status_code, 422, sensitive_response.text)
-        self.assertIn(
-            "behavioral_signals.identity.passport_number",
-            sensitive_response.json()["detail"]["forbidden_fields"],
-        )
+        self.assertIn("behavioral_signals.identity.passport_number", sensitive_response.text)
 
         safe_payload["consent_confirmed"] = True
         safe_payload["consent_version"] = "synthetic-demo-v1"
+        invalid_cases = [
+            ({**safe_payload, "requested_amount": 999}, "requested_amount"),
+            (
+                {**safe_payload, "district": "Aksu", "settlement_type": "urban"},
+                "Settlement type for Aksu must be industrial_city",
+            ),
+            (
+                {
+                    **safe_payload,
+                    "behavioral_signals": {
+                        **safe_payload["behavioral_signals"],
+                        "num_open_loans": 1.5,
+                    },
+                },
+                "num_open_loans",
+            ),
+            (
+                {
+                    **safe_payload,
+                    "behavioral_signals": {
+                        **safe_payload["behavioral_signals"],
+                        "unreviewed_proxy": 1,
+                    },
+                },
+                "unreviewed_proxy",
+            ),
+            ({**safe_payload, "purpose": "x" * 201}, "purpose"),
+        ]
+        for invalid_payload, expected_error in invalid_cases:
+            with self.subTest(expected_error=expected_error):
+                rejected = self.client.post(
+                    "/applications",
+                    headers=headers,
+                    json=invalid_payload,
+                )
+                self.assertEqual(rejected.status_code, 422, rejected.text)
+                self.assertIn(expected_error, rejected.text)
+
         accepted = self.client.post(
             "/applications",
             headers=headers,
@@ -1060,7 +1099,7 @@ class ApiIntegrationTests(unittest.TestCase):
                 "organization_id": TEST_ORGANIZATION_ID,
                 "consent_confirmed": True,
                 "consent_version": "synthetic-demo-v1",
-                "behavioral_signals": {"loan_application_amount": 300_000},
+                "behavioral_signals": {},
             },
         )
         self.assertEqual(application_response.status_code, 200, application_response.text)

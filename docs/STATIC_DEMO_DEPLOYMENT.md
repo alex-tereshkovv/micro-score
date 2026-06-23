@@ -10,6 +10,7 @@ The GitHub Pages workflow publishes the `apps/web/` directory:
 
 - `index.html`
 - `app.js`
+- `application-intake.js`
 - `risk-detail.js`
 - `mock-api.js`
 - `styles.css`

@@ -36,6 +36,7 @@ const state = {
   simulationHistory: [],
   organizations: [],
   activeModel: null,
+  applicationValidationErrors: [],
 };
 
 const els = {
@@ -61,6 +62,7 @@ const els = {
   messageArea: document.querySelector("#messageArea"),
   demoButtons: document.querySelectorAll("[data-demo]"),
   applicationForm: document.querySelector("#applicationForm"),
+  applicationValidationSummary: document.querySelector("#applicationValidationSummary"),
   fillDemoApplication: document.querySelector("#fillDemoApplication"),
   borrowerConsent: document.querySelector("#borrowerConsent"),
   refreshBorrowerApplication: document.querySelector("#refreshBorrowerApplication"),
@@ -684,6 +686,64 @@ function applicationPayload() {
   };
 }
 
+function intakeFormFieldName(path) {
+  if (path === "consent_version") return "borrower_consent";
+  if (path.startsWith("behavioral_signals.")) return path.split(".").pop();
+  return path;
+}
+
+function renderApplicationValidation(errors = state.applicationValidationErrors) {
+  state.applicationValidationErrors = errors;
+  const form = els.applicationForm;
+  form.querySelectorAll(".field-error").forEach((node) => node.remove());
+  form.querySelectorAll(".field-invalid").forEach((node) => node.classList.remove("field-invalid"));
+  Array.from(form.elements).forEach((control) => control.removeAttribute?.("aria-invalid"));
+
+  if (!errors.length) {
+    els.applicationValidationSummary.hidden = true;
+    els.applicationValidationSummary.replaceChildren();
+    return;
+  }
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Check the application before submitting";
+  const list = document.createElement("ul");
+  errors.forEach((error) => {
+    const item = document.createElement("li");
+    item.textContent = error.message;
+    list.appendChild(item);
+
+    const fieldName = intakeFormFieldName(error.field);
+    const control = form.elements[fieldName];
+    const label = control?.closest("label");
+    if (!control || !label || label.querySelector(`[data-validation-for="${fieldName}"]`)) return;
+    control.setAttribute("aria-invalid", "true");
+    label.classList.add("field-invalid");
+    const fieldError = document.createElement("span");
+    fieldError.className = "field-error";
+    fieldError.dataset.validationFor = fieldName;
+    fieldError.textContent = error.message;
+    label.appendChild(fieldError);
+  });
+  els.applicationValidationSummary.replaceChildren(heading, list);
+  els.applicationValidationSummary.hidden = false;
+}
+
+function validateApplicationPayload(payload) {
+  const intake = window.MicroScoreApplicationIntake;
+  if (!intake) throw new Error("Application intake validation is unavailable");
+  const result = intake.validateApplicationIntake(payload);
+  renderApplicationValidation(result.errors);
+  return result;
+}
+
+function clearApplicationFieldValidation(fieldName) {
+  const remaining = state.applicationValidationErrors.filter(
+    (error) => intakeFormFieldName(error.field) !== fieldName,
+  );
+  renderApplicationValidation(remaining);
+}
+
 function rememberApplication(id) {
   localStorage.setItem("microscore.lastApplicationId", id);
 }
@@ -733,6 +793,7 @@ function resetApplicationViews() {
   state.simulationHistory = [];
 
   els.borrowerConsent.checked = false;
+  renderApplicationValidation([]);
   els.borrowerApplicationHistory.className = "borrower-history empty";
   els.borrowerApplicationHistory.textContent = "No applications submitted yet.";
   setPanelState(
@@ -1086,15 +1147,18 @@ function renderScenarioScores(score) {
 
 async function submitApplication(event) {
   event.preventDefault();
-  if (!borrowerConsentAcknowledged()) {
-    showMessage("Confirm demo data consent before submitting", "error");
-    els.borrowerConsent.focus();
+  const payload = applicationPayload();
+  const validation = validateApplicationPayload(payload);
+  if (!validation.valid) {
+    showMessage("Check the highlighted application fields", "error");
+    els.applicationValidationSummary.focus();
     return;
   }
   const application = await apiFetch("/applications", {
     method: "POST",
-    body: JSON.stringify(applicationPayload()),
+    body: JSON.stringify(payload),
   });
+  renderApplicationValidation([]);
   rememberApplication(application.id);
   await refreshBorrowerApplications(application.id);
   showMessage("Application submitted", "ok");
@@ -2346,9 +2410,22 @@ function wireEvents() {
   els.fillDemoApplication.addEventListener("click", () => {
     fillApplicationForm(demoApplication);
     els.borrowerConsent.checked = true;
+    renderApplicationValidation([]);
   });
   els.applicationForm.addEventListener("submit", (event) => {
     submitApplication(event).catch((error) => showMessage(error.message, "error"));
+  });
+  ["input", "change"].forEach((eventName) => {
+    els.applicationForm.addEventListener(eventName, (event) => {
+      const fieldName = event.target?.name;
+      if (!fieldName) return;
+      if (fieldName === "district") {
+        const expected = window.MicroScoreApplicationIntake?.DISTRICT_SETTLEMENT_TYPES[event.target.value];
+        if (expected) els.applicationForm.elements.settlement_type.value = expected;
+        clearApplicationFieldValidation("settlement_type");
+      }
+      clearApplicationFieldValidation(fieldName);
+    });
   });
   els.refreshBorrowerApplication.addEventListener("click", () => {
     withButtonBusy(els.refreshBorrowerApplication, "Refreshing...", () => refreshBorrowerApplications())

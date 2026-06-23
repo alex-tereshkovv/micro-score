@@ -101,12 +101,21 @@ try {
         Assert-LastExitCode "Frontend app.js syntax check"
         & $node --check apps\web\mock-api.js
         Assert-LastExitCode "Frontend mock-api.js syntax check"
+        & $node --check apps\web\application-intake.js
+        Assert-LastExitCode "Frontend application-intake.js syntax check"
         & $node --check apps\web\risk-detail.js
         Assert-LastExitCode "Frontend risk-detail.js syntax check"
         & $node --check scripts\static-demo-smoke.js
         Assert-LastExitCode "Static demo smoke syntax check"
         & $node --check scripts\frontend-workflow-smoke.js
         Assert-LastExitCode "Frontend workflow smoke syntax check"
+        & $node --check scripts\application-intake-smoke.js
+        Assert-LastExitCode "Application intake smoke syntax check"
+    }
+
+    Invoke-Step "Run application intake smoke test" {
+        & $node scripts\application-intake-smoke.js
+        Assert-LastExitCode "Application intake smoke test"
     }
 
     Invoke-Step "Run static demo smoke test" {

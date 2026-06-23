@@ -274,7 +274,8 @@ def _validate_application_privacy(payload: ApplicationCreate) -> str:
             detail="A consent version is required for auditability",
         )
 
-    forbidden_paths = find_forbidden_signal_paths(payload.behavioral_signals)
+    signal_values = payload.behavioral_signals.model_dump(exclude_none=True)
+    forbidden_paths = find_forbidden_signal_paths(signal_values)
     if forbidden_paths:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -864,7 +865,7 @@ def create_application(
             detail="Select a valid MFI organization",
         )
     application_id = str(uuid4())
-    features = dict(payload.behavioral_signals)
+    features = payload.behavioral_signals.model_dump(exclude_none=True)
     features["loan_application_amount"] = payload.requested_amount
     if payload.district:
         features["pavlodar_district"] = payload.district

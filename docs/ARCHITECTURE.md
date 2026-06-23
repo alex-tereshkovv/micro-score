@@ -124,7 +124,10 @@ It supports:
 
 ## Data Flow
 
-1. A borrower submits an application with financial and behavioral fields.
+1. A borrower submits an application through Application Intake v2. A shared
+   browser/static contract provides field feedback, while the typed API remains
+   authoritative and rejects unknown signals, unsafe ranges, and inconsistent
+   district/settlement pairs.
 2. The borrower workspace lists only that account's applications through a safe
    projection that excludes internal scores, staff identity, and review notes.
 3. The app stores or simulates the application depending on runtime mode.

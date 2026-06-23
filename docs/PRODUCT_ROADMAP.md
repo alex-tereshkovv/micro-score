@@ -250,11 +250,12 @@ progression, borrower-safe API projections, and strict terminal-state guards
 across the local API and static demo. MFI Risk Detail v2 now adds an automatic
 review workspace with affordability screening, lifecycle capabilities, and full
 decision history. A dedicated Node frontend workflow smoke test validates this
-contract in both local and CI release gates.
+contract in both local and CI release gates. Application Intake v2 now adds a
+typed backend signal allowlist, shared browser/static validation, field-level
+feedback, safe numeric bounds, and district/settlement consistency checks.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
-- stronger client-side form validation
 - district and settlement-type charts
 - screenshot-ready dashboard states for portfolio review
 - public demo plan: Vercel/Netlify frontend plus hosted API or Streamlit review app
