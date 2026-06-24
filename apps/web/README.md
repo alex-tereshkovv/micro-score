@@ -79,7 +79,9 @@ from the Admin tab or the local database file is removed.
 
 The borrower workspace automatically lists the signed-in account's applications
 with a visual lifecycle from submission through a terminal MFI decision. Its
-API view excludes internal scores, staff identity, and analyst notes. Application
+API view excludes internal scores, staff identity, and analyst notes. Session
+Security v2 exposes token expiry in API/static auth responses and the session
+pill so reviewer sessions are not treated as indefinite. Application
 Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
 count fields, categories, and district/settlement consistency; the FastAPI
 schema remains authoritative. MFI

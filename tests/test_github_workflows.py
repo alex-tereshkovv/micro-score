@@ -44,6 +44,7 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("/mfi/analytics/policies", script)
         self.assertIn("MicroScorePortfolioDashboard", script)
         self.assertIn("portfolio_dashboard_v2", script)
+        self.assertIn("session_expiry_visible", script)
         self.assertIn("/mfi/applications/export.csv", script)
         self.assertIn("/auth/logout", script)
         self.assertIn("logout_guard", script)

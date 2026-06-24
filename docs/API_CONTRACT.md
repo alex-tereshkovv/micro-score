@@ -138,7 +138,10 @@ Response:
 {
   "access_token": "...",
   "token_type": "bearer",
-  "role": "borrower"
+  "role": "borrower",
+  "organization_id": null,
+  "session_expires_at": "2026-06-24T20:00:00+00:00",
+  "session_ttl_seconds": 28800
 }
 ```
 
@@ -154,6 +157,11 @@ environment with:
 ```powershell
 $env:MICROSCORE_SESSION_TTL_HOURS = "4"
 ```
+
+`POST /auth/register`, `POST /auth/login`, and `GET /me` return the current
+session expiry metadata through `session_expires_at` and
+`session_ttl_seconds`, so the browser can make token lifetime visible instead
+of treating sessions as indefinite.
 
 Logout and revoke the current token:
 

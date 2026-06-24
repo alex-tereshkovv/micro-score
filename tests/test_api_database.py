@@ -167,18 +167,21 @@ class ApiDatabaseTests(unittest.TestCase):
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")
         now = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
 
-        self.repository.create_session(
+        session = self.repository.create_session(
             "active-token",
             "borrower@example.com",
             created_at=(now - timedelta(hours=1)).isoformat(),
         )
-        self.assertIsNotNone(
-            self.repository.get_user_by_token(
-                "active-token",
-                now=now,
-                ttl_hours=8,
-            )
+        self.assertEqual(session["session_ttl_seconds"], 8 * 60 * 60)
+        self.assertIn("session_expires_at", session)
+        active_user = self.repository.get_user_by_token(
+            "active-token",
+            now=now,
+            ttl_hours=8,
         )
+        self.assertIsNotNone(active_user)
+        self.assertEqual(active_user["session_ttl_seconds"], 8 * 60 * 60)
+        self.assertIn("session_expires_at", active_user)
         self.assertTrue(self.repository.revoke_session("active-token"))
         self.assertIsNone(
             self.repository.get_user_by_token(

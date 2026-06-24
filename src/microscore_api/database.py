@@ -60,6 +60,23 @@ def configured_session_ttl_hours() -> float:
     return value if value > 0 else DEFAULT_SESSION_TTL_HOURS
 
 
+def session_expiry_metadata(
+    created_at: str | None = None,
+    *,
+    ttl_hours: float | None = None,
+) -> dict[str, Any]:
+    session_created_at = (
+        _parse_utc_datetime(created_at) if created_at else datetime.now(timezone.utc)
+    )
+    ttl = ttl_hours if ttl_hours is not None else configured_session_ttl_hours()
+    expires_at = session_created_at + timedelta(hours=ttl)
+    return {
+        "session_created_at": session_created_at.isoformat(),
+        "session_expires_at": expires_at.isoformat(),
+        "session_ttl_seconds": max(1, int(round(ttl * 3600))),
+    }
+
+
 def _parse_utc_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -651,15 +668,17 @@ class MicroScoreRepository:
         email: str,
         *,
         created_at: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
+        stored_created_at = created_at or _now_iso()
         with self._connection() as connection:
             connection.execute(
                 """
                 INSERT INTO sessions (token, email, created_at)
                 VALUES (?, ?, ?)
                 """,
-                (token, email, created_at or _now_iso()),
+                (token, email, stored_created_at),
             )
+        return session_expiry_metadata(stored_created_at)
 
     def get_user_by_token(
         self,
@@ -687,16 +706,14 @@ class MicroScoreRepository:
         if row is None:
             return None
 
-        session_created_at = _parse_utc_datetime(row["session_created_at"])
-        expires_at = session_created_at + timedelta(
-            hours=ttl_hours if ttl_hours is not None else configured_session_ttl_hours()
-        )
+        metadata = session_expiry_metadata(row["session_created_at"], ttl_hours=ttl_hours)
+        expires_at = _parse_utc_datetime(metadata["session_expires_at"])
         if expires_at <= (now or datetime.now(timezone.utc)):
             self.revoke_session(token)
             return None
 
         user = dict(row)
-        user.pop("session_created_at", None)
+        user.update(metadata)
         return user
 
     def revoke_session(self, token: str) -> bool:

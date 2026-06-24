@@ -20,6 +20,7 @@
     decline: "declined",
   };
   const terminalApplicationStatuses = new Set(["approved", "declined"]);
+  const DEMO_SESSION_TTL_SECONDS = 8 * 60 * 60;
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for MFI scoring.",
     scored: "Risk assessment completed. It is waiting for analyst review.",
@@ -241,6 +242,23 @@
 
   function nowIso() {
     return new Date().toISOString();
+  }
+
+  function sessionMetadata(createdAt = new Date()) {
+    const created = createdAt instanceof Date ? createdAt : new Date(createdAt);
+    const expiresAt = new Date(created.getTime() + DEMO_SESSION_TTL_SECONDS * 1000);
+    return {
+      session_created_at: created.toISOString(),
+      session_expires_at: expiresAt.toISOString(),
+      session_ttl_seconds: DEMO_SESSION_TTL_SECONDS,
+    };
+  }
+
+  function createDemoSession(email) {
+    const token = `mock-token-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const metadata = sessionMetadata();
+    demo.sessions[token] = { email, ...metadata };
+    return { token, ...metadata };
   }
 
   function clone(value) {
@@ -608,7 +626,13 @@
   }
 
   function currentUser(session) {
-    const sessionEmail = session?.token ? demo.sessions[session.token] : null;
+    const sessionRecord = session?.token ? demo.sessions[session.token] : null;
+    const sessionEmail = typeof sessionRecord === "string" ? sessionRecord : sessionRecord?.email;
+    const expiresAt = typeof sessionRecord === "object" ? sessionRecord.session_expires_at : null;
+    if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
+      delete demo.sessions[session.token];
+      throw new Error("Demo session expired. Sign in again.");
+    }
     const user = sessionEmail ? demo.users[sessionEmail] : null;
     if (!user || user.email !== session?.email || user.role !== session?.role) {
       throw new Error("Demo session expired. Sign in again.");
@@ -617,6 +641,9 @@
       email: user.email,
       role: user.role,
       organization_id: user.organization_id || null,
+      created_at: user.created_at,
+      session_expires_at: expiresAt,
+      session_ttl_seconds: DEMO_SESSION_TTL_SECONDS,
     };
   }
 
@@ -1387,13 +1414,14 @@
       const email = String(body.email || "").trim().toLowerCase();
       const user = demo.users[email];
       if (!user || user.password !== body.password) throw new Error("Invalid demo credentials");
-      const token = `mock-token-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      demo.sessions[token] = email;
+      const sessionRecord = createDemoSession(email);
       return {
-        access_token: token,
+        access_token: sessionRecord.token,
         token_type: "bearer",
         role: user.role,
         organization_id: user.organization_id || null,
+        session_expires_at: sessionRecord.session_expires_at,
+        session_ttl_seconds: sessionRecord.session_ttl_seconds,
       };
     }
 
@@ -1414,13 +1442,14 @@
         password: body.password || "",
         created_at: nowIso(),
       };
-      const token = `mock-token-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      demo.sessions[token] = email;
+      const sessionRecord = createDemoSession(email);
       return {
-        access_token: token,
+        access_token: sessionRecord.token,
         token_type: "bearer",
         role: demo.users[email].role,
         organization_id: null,
+        session_expires_at: sessionRecord.session_expires_at,
+        session_ttl_seconds: sessionRecord.session_ttl_seconds,
       };
     }
 
@@ -1430,6 +1459,10 @@
       delete demo.sessions[session.token];
       addAudit("user_logged_out", "session", user.email, user.email, { role: user.role });
       return { revoked };
+    }
+
+    if (cleanPath === "/me" && method === "GET") {
+      return clone(currentUser(session));
     }
 
     if (cleanPath === "/organizations" && method === "GET") {

@@ -54,6 +54,7 @@ from .schemas import (
     LoanApplicationResponse,
     LoginRequest,
     LogoutResponse,
+    MeResponse,
     ModelStatusResponse,
     ModelVersionCreate,
     ModelVersionPublic,
@@ -788,8 +789,14 @@ def register(
     except DuplicateUserError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
 
-    repository.create_session(token, email)
-    return AuthResponse(access_token=token, role=payload.role, organization_id=None)
+    session = repository.create_session(token, email)
+    return AuthResponse(
+        access_token=token,
+        role=payload.role,
+        organization_id=None,
+        session_expires_at=session["session_expires_at"],
+        session_ttl_seconds=session["session_ttl_seconds"],
+    )
 
 
 @app.post("/auth/login", response_model=AuthResponse)
@@ -814,11 +821,13 @@ def login(
 
     limiter.record_success(rate_key)
     token = create_token()
-    repository.create_session(token, email)
+    session = repository.create_session(token, email)
     return AuthResponse(
         access_token=token,
         role=user["role"],
         organization_id=user.get("organization_id"),
+        session_expires_at=session["session_expires_at"],
+        session_ttl_seconds=session["session_ttl_seconds"],
     )
 
 
@@ -839,13 +848,15 @@ def logout(
     return LogoutResponse(revoked=revoked)
 
 
-@app.get("/me", response_model=UserPublic)
+@app.get("/me", response_model=MeResponse)
 def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     return {
         "email": user["email"],
         "role": user["role"],
         "organization_id": user.get("organization_id"),
         "created_at": user["created_at"],
+        "session_expires_at": user["session_expires_at"],
+        "session_ttl_seconds": user["session_ttl_seconds"],
     }
 
 

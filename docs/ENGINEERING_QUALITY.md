@@ -49,6 +49,7 @@ node scripts\static-demo-smoke.js
 The smoke test verifies that the in-browser static backend can:
 
 - sign in as an MFI analyst
+- verify auth/session expiry metadata in the static contract
 - load the seeded application queue
 - score an application
 - open a review packet

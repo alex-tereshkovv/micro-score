@@ -62,6 +62,8 @@ git diff --check
   by the same intake contract in static mode and the typed API.
 - Unknown behavioral fields and district/settlement mismatches return validation
   errors instead of entering the scoring pipeline.
+- Auth responses and `/me` expose `session_expires_at` and
+  `session_ttl_seconds`; the session pill makes token expiry visible.
 - Borrower history lists only the signed-in account's applications and excludes
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject

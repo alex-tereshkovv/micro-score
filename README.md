@@ -160,7 +160,7 @@ Demo accounts use password `password123`:
 
 The web prototype supports:
 
-- borrower login/register and Application Intake v2 with typed signal validation
+- borrower login/register, Session Security v2, and Application Intake v2
 - borrower-safe owned-application history with guarded lifecycle states
 - MFI application queue and portfolio CSV export
 - risk scoring with local explanations

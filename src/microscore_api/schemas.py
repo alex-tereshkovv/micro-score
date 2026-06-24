@@ -79,6 +79,8 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
     role: Role
     organization_id: str | None = None
+    session_expires_at: str
+    session_ttl_seconds: int = Field(ge=1)
 
 
 class LogoutResponse(BaseModel):
@@ -96,6 +98,11 @@ class UserPublic(BaseModel):
     role: Role
     organization_id: str | None = None
     created_at: str
+
+
+class MeResponse(UserPublic):
+    session_expires_at: str
+    session_ttl_seconds: int = Field(ge=1)
 
 
 class StaffUserCreate(BaseModel):

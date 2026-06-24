@@ -17,6 +17,9 @@ async function main() {
       password: "password123",
     }),
   });
+  if (!auth.session_expires_at || auth.session_ttl_seconds !== 8 * 60 * 60) {
+    throw new Error("Expected static auth response to include session expiry metadata");
+  }
   const session = {
     token: auth.access_token,
     role: auth.role,
@@ -566,6 +569,7 @@ async function main() {
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,
       logout_guard: true,
+      session_expiry_visible: true,
       reset_applications: resetApplications.length,
     }),
   );

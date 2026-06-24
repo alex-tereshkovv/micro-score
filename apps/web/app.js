@@ -27,6 +27,8 @@ const state = {
   token: localStorage.getItem("microscore.token") || "",
   role: localStorage.getItem("microscore.role") || "",
   email: localStorage.getItem("microscore.email") || "",
+  sessionExpiresAt: localStorage.getItem("microscore.sessionExpiresAt") || "",
+  sessionTtlSeconds: Number(localStorage.getItem("microscore.sessionTtlSeconds") || 0),
   demoMode: forceStaticDemo || hostedStaticPage || localStorage.getItem("microscore.demoMode") === "static",
   selectedApplicationId: "",
   borrowerApplications: [],
@@ -173,6 +175,13 @@ function saveSession() {
   localStorage.setItem("microscore.token", state.token);
   localStorage.setItem("microscore.role", state.role);
   localStorage.setItem("microscore.email", state.email);
+  if (state.sessionExpiresAt) {
+    localStorage.setItem("microscore.sessionExpiresAt", state.sessionExpiresAt);
+    localStorage.setItem("microscore.sessionTtlSeconds", String(state.sessionTtlSeconds || ""));
+  } else {
+    localStorage.removeItem("microscore.sessionExpiresAt");
+    localStorage.removeItem("microscore.sessionTtlSeconds");
+  }
   if (state.demoMode) {
     localStorage.setItem("microscore.demoMode", "static");
   } else {
@@ -184,6 +193,8 @@ function clearSession() {
   state.token = "";
   state.role = "";
   state.email = "";
+  state.sessionExpiresAt = "";
+  state.sessionTtlSeconds = 0;
   resetApplicationViews();
   resetPrivilegedViews();
   saveSession();
@@ -209,11 +220,18 @@ function updateSessionStrip() {
   els.resetDemoData.hidden = !state.demoMode;
   syncConnectionPanel();
   if (state.token) {
-    els.sessionRole.textContent = `${state.role} - ${state.email}`;
+    const expiryLabel = formatSessionExpiry(state.sessionExpiresAt);
+    els.sessionRole.textContent = expiryLabel
+      ? `${state.role} - ${state.email} · expires ${expiryLabel}`
+      : `${state.role} - ${state.email}`;
+    els.sessionRole.title = state.sessionTtlSeconds
+      ? `Session TTL: ${Math.round(state.sessionTtlSeconds / 60)} minutes`
+      : "";
     els.sessionRole.classList.remove("muted");
     els.workspaceRoleLabel.textContent = roleLabels[state.role] || "Personal workspace";
   } else {
     els.sessionRole.textContent = "No session";
+    els.sessionRole.title = "";
     els.sessionRole.classList.add("muted");
     els.workspaceRoleLabel.textContent = "Personal workspace";
   }
@@ -391,6 +409,18 @@ function formatAmountUnits(value) {
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
   return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function formatSessionExpiry(value) {
+  if (!value) return "";
+  const expiresAt = new Date(value);
+  if (Number.isNaN(expiresAt.getTime())) return "";
+  return expiresAt.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatPolicyName(value) {
@@ -586,6 +616,8 @@ async function authenticate(mode) {
   state.token = auth.access_token;
   state.role = auth.role;
   state.email = payload.email;
+  state.sessionExpiresAt = auth.session_expires_at || "";
+  state.sessionTtlSeconds = Number(auth.session_ttl_seconds || 0);
   saveSession();
   navigateToRole(auth.role);
   showMessage(`Signed in as ${auth.role}`, "ok");

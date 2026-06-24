@@ -81,8 +81,8 @@ Main local components:
 
 - `src/microscore_api/` for authentication, applications, scoring, decisions,
   and audit endpoints;
-- expiring bearer sessions, backend token revocation, and restricted browser
-  origins for the current prototype boundary;
+- expiring bearer sessions with visible expiry metadata, backend token
+  revocation, and restricted browser origins for the current prototype boundary;
 - borrower-only public registration, staff-role provisioning, password policy,
   and a single-process login attempt limiter;
 - admin-only MFI analyst creation with public user listings and audit events;

@@ -450,6 +450,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         schemas = response.json()["components"]["schemas"]
         self.assertIn("ApplicationDecisionCreate", schemas)
+        self.assertIn("AuthResponse", schemas)
+        self.assertIn("MeResponse", schemas)
         self.assertIn("LogoutResponse", schemas)
         self.assertIn("StaffUserCreate", schemas)
         self.assertIn("OrganizationCreate", schemas)
@@ -499,6 +501,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("ClearApplicationsResponse", schemas)
         self.assertIn("PilotReadinessResponse", schemas)
         self.assertIn("PilotDataClassRow", schemas)
+        self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
+        self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
+        self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
+        self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
 
     def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
         response = self.client.get("/governance/pilot-readiness")
@@ -631,7 +637,10 @@ class ApiIntegrationTests(unittest.TestCase):
         token = self._register("logout@example.com", "borrower")
         headers = self._headers(token)
 
-        self.assertEqual(self.client.get("/me", headers=headers).status_code, 200)
+        me_response = self.client.get("/me", headers=headers)
+        self.assertEqual(me_response.status_code, 200, me_response.text)
+        self.assertIn("session_expires_at", me_response.json())
+        self.assertEqual(me_response.json()["session_ttl_seconds"], 8 * 60 * 60)
         logout_response = self.client.post("/auth/logout", headers=headers)
         self.assertEqual(logout_response.status_code, 200, logout_response.text)
         self.assertTrue(logout_response.json()["revoked"])
@@ -679,6 +688,8 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(borrower.status_code, 200, borrower.text)
         self.assertEqual(borrower.json()["role"], "borrower")
+        self.assertIn("session_expires_at", borrower.json())
+        self.assertEqual(borrower.json()["session_ttl_seconds"], 8 * 60 * 60)
 
     def test_login_rate_limit_blocks_repeated_failures(self) -> None:
         self.repository.create_user(
