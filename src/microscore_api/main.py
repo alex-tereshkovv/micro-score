@@ -858,6 +858,11 @@ def accept_staff_invite(
             status_code=status.HTTP_409_CONFLICT,
             detail="Staff invite has already been accepted",
         )
+    if invite.get("revoked_at"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Staff invite has been revoked",
+        )
     if _parse_utc_datetime(invite["expires_at"]) <= datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
@@ -1357,6 +1362,51 @@ def create_staff_invite(
         },
     )
     return created
+
+
+@app.delete("/admin/staff-invites/{token}", response_model=StaffInviteResponse)
+def revoke_staff_invite(
+    token: str,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    invite = repository.get_staff_invite(token)
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if invite.get("accepted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted staff invite cannot be revoked",
+        )
+    if invite.get("revoked_at"):
+        return invite
+
+    revoked = repository.mark_staff_invite_revoked(token, user["email"])
+    if not revoked:
+        refreshed = repository.get_staff_invite(token)
+        if refreshed and refreshed.get("revoked_at"):
+            return refreshed
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Staff invite can no longer be revoked",
+        )
+
+    updated = repository.get_staff_invite(token)
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="staff_invite_revoked",
+        entity_type="staff_invite",
+        entity_id=token,
+        details={
+            "email": invite["email"],
+            "role": invite["role"],
+            "organization_id": invite["organization_id"],
+        },
+    )
+    return updated or invite
 
 
 @app.get("/admin/model-versions", response_model=list[ModelVersionPublic])

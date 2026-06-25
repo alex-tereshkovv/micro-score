@@ -134,6 +134,8 @@ class StaffInviteResponse(BaseModel):
     expires_at: str
     accepted_at: str | None = None
     accepted_by: str | None = None
+    revoked_at: str | None = None
+    revoked_by: str | None = None
 
 
 class OrganizationCreate(BaseModel):

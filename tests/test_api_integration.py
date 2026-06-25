@@ -508,8 +508,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
+        self.assertIn("revoked_at", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("revoked_by", schemas["StaffInviteResponse"]["properties"])
         paths = response.json()["paths"]
         self.assertIn("/admin/staff-invites", paths)
+        self.assertIn("/admin/staff-invites/{token}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
 
     def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
@@ -787,6 +790,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(invite_payload["role"], "mfi_analyst")
         self.assertEqual(invite_payload["organization_id"], TEST_ORGANIZATION_ID)
         self.assertIsNone(invite_payload["accepted_at"])
+        self.assertIsNone(invite_payload["revoked_at"])
         self.assertIn("token", invite_payload)
         self.assertNotIn("password", invite_payload)
 
@@ -812,6 +816,12 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(reused.status_code, 409, reused.text)
 
+        accepted_revoke = self.client.delete(
+            f"/admin/staff-invites/{invite_payload['token']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(accepted_revoke.status_code, 409, accepted_revoke.text)
+
         invites = self.client.get(
             "/admin/staff-invites",
             headers=self._headers(admin_token),
@@ -825,6 +835,38 @@ class ApiIntegrationTests(unittest.TestCase):
                 for row in invites.json()
             )
         )
+
+        revokable = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "revoked-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "expires_in_hours": 24,
+            },
+        )
+        self.assertEqual(revokable.status_code, 201, revokable.text)
+        revoked = self.client.delete(
+            f"/admin/staff-invites/{revokable.json()['token']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+        self.assertIsNotNone(revoked.json()["revoked_at"])
+        self.assertEqual(revoked.json()["revoked_by"], "provisioning-admin@example.com")
+
+        repeated_revoke = self.client.delete(
+            f"/admin/staff-invites/{revokable.json()['token']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(repeated_revoke.status_code, 200, repeated_revoke.text)
+        self.assertEqual(repeated_revoke.json()["revoked_at"], revoked.json()["revoked_at"])
+
+        revoked_accept = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": revokable.json()["token"], "password": TEST_PASSWORD},
+        )
+        self.assertEqual(revoked_accept.status_code, 410, revoked_accept.text)
 
         self.repository.create_staff_invite(
             token="expired-staff-invite-token",
@@ -850,7 +892,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(provisioning_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(provisioning_event["entity_id"], "new-analyst@example.com")
         invite_created_event = next(
-            event for event in audit if event["action"] == "staff_invite_created"
+            event
+            for event in audit
+            if event["action"] == "staff_invite_created"
+            and event["details"]["email"] == "invited-analyst@example.com"
         )
         self.assertEqual(invite_created_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(invite_created_event["details"]["email"], "invited-analyst@example.com")
@@ -858,6 +903,11 @@ class ApiIntegrationTests(unittest.TestCase):
             event for event in audit if event["action"] == "staff_invite_accepted"
         )
         self.assertEqual(invite_accepted_event["actor_email"], "invited-analyst@example.com")
+        invite_revoked_event = next(
+            event for event in audit if event["action"] == "staff_invite_revoked"
+        )
+        self.assertEqual(invite_revoked_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(invite_revoked_event["details"]["email"], "revoked-analyst@example.com")
 
     def test_admin_can_create_publicly_listed_organization(self) -> None:
         public_before = self.client.get("/organizations")

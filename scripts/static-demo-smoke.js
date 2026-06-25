@@ -372,6 +372,56 @@ async function main() {
   if (!staffInvites.some((invite) => invite.token === staffInvite.token && invite.accepted_at)) {
     throw new Error("Expected accepted staff invite in admin invite list");
   }
+  let acceptedInviteRevokeRejected = false;
+  try {
+    await api.request(
+      `/admin/staff-invites/${encodeURIComponent(staffInvite.token)}`,
+      { method: "DELETE" },
+      adminSession,
+    );
+  } catch (error) {
+    acceptedInviteRevokeRejected = String(error.message).includes("cannot be revoked");
+  }
+  if (!acceptedInviteRevokeRejected) {
+    throw new Error("Expected accepted staff invite revoke to be rejected");
+  }
+
+  const revokeInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "revoked-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 24,
+      }),
+    },
+    adminSession,
+  );
+  const revokedInvite = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(revokeInvite.token)}`,
+    { method: "DELETE" },
+    adminSession,
+  );
+  if (!revokedInvite.revoked_at || revokedInvite.revoked_by !== "admin@test.com") {
+    throw new Error("Expected revoked staff invite metadata");
+  }
+  let revokedInviteAcceptanceRejected = false;
+  try {
+    await api.request("/auth/accept-staff-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        token: revokeInvite.token,
+        password: "StrongPassword1!",
+      }),
+    });
+  } catch (error) {
+    revokedInviteAcceptanceRejected = String(error.message).includes("revoked");
+  }
+  if (!revokedInviteAcceptanceRejected) {
+    throw new Error("Expected revoked staff invite acceptance to fail");
+  }
   const adminAudit = await api.request("/admin/audit-events", {}, adminSession);
   if (!adminAudit.some((event) => event.action === "staff_user_created")) {
     throw new Error("Expected staff provisioning audit event");
@@ -381,6 +431,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_accepted")) {
     throw new Error("Expected staff invite acceptance audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_revoked")) {
+    throw new Error("Expected staff invite revocation audit event");
   }
 
   const modelVersionsBefore = await api.request("/admin/model-versions", {}, adminSession);
@@ -622,6 +675,7 @@ async function main() {
       registration_guards: 3,
       staff_provisioning: true,
       staff_invites: true,
+      staff_invite_revocation: true,
       model_registry: true,
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,

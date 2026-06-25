@@ -140,6 +140,7 @@ class ApiDatabaseTests(unittest.TestCase):
 
         self.assertEqual(created["email"], "invited@example.com")
         self.assertIsNone(created["accepted_at"])
+        self.assertIsNone(created["revoked_at"])
         self.assertEqual(self.repository.get_staff_invite("staff-invite-token")["role"], "mfi_analyst")
         self.assertEqual(len(self.repository.list_staff_invites()), 1)
         self.repository.create_user(
@@ -165,6 +166,43 @@ class ApiDatabaseTests(unittest.TestCase):
         accepted = reopened.get_staff_invite("staff-invite-token")
         self.assertEqual(accepted["accepted_by"], "invited@example.com")
         self.assertIsNotNone(accepted["accepted_at"])
+        self.assertFalse(
+            reopened.mark_staff_invite_revoked(
+                "staff-invite-token",
+                "admin@example.com",
+            )
+        )
+
+        revoked_created = reopened.create_staff_invite(
+            token="revoked-staff-invite-token",
+            email="revoked@example.com",
+            role="mfi_analyst",
+            organization_id="mfi-a",
+            created_by="admin@example.com",
+            expires_at="2026-06-26T00:00:00+00:00",
+        )
+        self.assertIsNone(revoked_created["revoked_at"])
+        self.assertTrue(
+            reopened.mark_staff_invite_revoked(
+                "revoked-staff-invite-token",
+                "admin@example.com",
+            )
+        )
+        self.assertFalse(
+            reopened.mark_staff_invite_revoked(
+                "revoked-staff-invite-token",
+                "admin@example.com",
+            )
+        )
+        self.assertFalse(
+            reopened.mark_staff_invite_accepted(
+                "revoked-staff-invite-token",
+                "revoked@example.com",
+            )
+        )
+        revoked = MicroScoreRepository(self.db_path).get_staff_invite("revoked-staff-invite-token")
+        self.assertEqual(revoked["revoked_by"], "admin@example.com")
+        self.assertIsNotNone(revoked["revoked_at"])
 
     def test_organization_membership_scopes_application_listing(self) -> None:
         for organization_id, name in (("mfi-a", "MFI A"), ("mfi-b", "MFI B")):

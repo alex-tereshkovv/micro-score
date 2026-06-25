@@ -81,9 +81,9 @@ The borrower workspace automatically lists the signed-in account's applications
 with a visual lifecycle from submission through a terminal MFI decision. Its
 API view excludes internal scores, staff identity, and analyst notes. Session
 Security v2 exposes token expiry in API/static auth responses and the session
-pill so reviewer sessions are not treated as indefinite. Staff Invite v1 mirrors
-the API contract for expiring analyst invites, password setup at acceptance,
-and invite audit events in the static backend. Application
+pill so reviewer sessions are not treated as indefinite. Staff Invite v2 mirrors
+the API contract for expiring/revocable analyst invites, password setup at
+acceptance, and invite audit events in the static backend. Application
 Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
 count fields, categories, and district/settlement consistency; the FastAPI
 schema remains authoritative. MFI

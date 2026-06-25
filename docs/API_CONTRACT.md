@@ -216,8 +216,9 @@ operation. Password hashes are never returned. Successful provisioning records
 a `staff_user_created` audit event with the acting administrator.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
-default for new staff is Staff Invite v1: administrators create an expiring
-invite, and the analyst sets their own password during acceptance.
+default for new staff is Staff Invite v2: administrators create an expiring
+invite, can revoke it before use, and the analyst sets their own password
+during acceptance.
 
 List staff invites:
 
@@ -242,7 +243,19 @@ POST /admin/staff-invites
 
 `expires_in_hours` can be 1 to 168 hours and defaults to 48. Successful invite
 creation records `staff_invite_created` and returns the invite token plus
-`created_at`, `expires_at`, `accepted_at`, and `accepted_by` metadata.
+`created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`, and
+`revoked_by` metadata.
+
+Revoke an unused invite:
+
+```http
+DELETE /admin/staff-invites/{token}
+```
+
+Revocation requires an `admin` bearer token, records `staff_invite_revoked`,
+and returns the updated invite. Accepted invites cannot be revoked. Repeating a
+revoke for an already revoked invite is idempotent and returns the existing
+revoked record.
 
 Accept an invite and set the staff password:
 
@@ -257,14 +270,14 @@ POST /auth/accept-staff-invite
 }
 ```
 
-Acceptance uses the same password policy as registration, rejects expired or
-already accepted invites, creates an `mfi_analyst` user in the invite's
-organization, records `staff_invite_accepted`, and returns the same auth
-response shape as login, including session expiry metadata.
+Acceptance uses the same password policy as registration, rejects expired,
+revoked, or already accepted invites, creates an `mfi_analyst` user in the
+invite's organization, records `staff_invite_accepted`, and returns the same
+auth response shape as login, including session expiry metadata.
 
 Before any real user data, the production version still needs MFA, an external
 identity provider, email delivery, HTTPS-only links, and operational invite
-revocation/rotation.
+rotation monitoring.
 
 ## Borrower Application Form
 
@@ -751,6 +764,7 @@ Current audited actions:
 - `staff_user_created`
 - `staff_invite_created`
 - `staff_invite_accepted`
+- `staff_invite_revoked`
 - `organization_created`
 - `user_logged_out`
 - `applications_cleared`

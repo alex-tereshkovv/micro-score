@@ -85,9 +85,9 @@ Main local components:
   revocation, and restricted browser origins for the current prototype boundary;
 - borrower-only public registration, staff-role provisioning, password policy,
   and a single-process login attempt limiter;
-- admin-only MFI analyst creation plus expiring staff invites with analyst-side
-  password setup, public user listings, invite status listings, and audit
-  events;
+- admin-only MFI analyst creation plus expiring/revocable staff invites with
+  analyst-side password setup, public user listings, invite status listings,
+  and audit events;
 - organization-scoped applications, queues, review packets, exports, and
   analytics, with global visibility reserved for admins;
 - dynamic organization discovery for borrower routing and admin staff

@@ -259,10 +259,10 @@ top-district, and rural/peri-urban contextual-share views.
 Session Security v2 now makes session expiry explicit in API and static-demo
 auth responses, exposes `/me` session metadata, and shows token lifetime in the
 browser session pill.
-Staff Invite v1 now adds admin-created, expiring MFI analyst invitations with
-password setup at acceptance time, invite status listing, and
-`staff_invite_created`/`staff_invite_accepted` audit events across the API and
-static demo.
+Staff Invite v2 now adds admin-created, expiring MFI analyst invitations with
+password setup at acceptance time, invite status listing, admin revocation, and
+`staff_invite_created`/`staff_invite_accepted`/`staff_invite_revoked` audit
+events across the API and static demo.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
@@ -272,5 +272,5 @@ frontend and scoring review flow into a more production-like application:
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL
-- MFA, email delivery, invite revocation, and external identity-provider
-  integration before any real user data
+- MFA, email delivery, invite rotation monitoring, and external
+  identity-provider integration before any real user data

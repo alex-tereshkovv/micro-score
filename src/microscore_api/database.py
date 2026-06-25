@@ -244,7 +244,9 @@ class MicroScoreRepository:
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     accepted_at TEXT,
-                    accepted_by TEXT REFERENCES users(email)
+                    accepted_by TEXT REFERENCES users(email),
+                    revoked_at TEXT,
+                    revoked_by TEXT REFERENCES users(email)
                 );
 
                 CREATE TABLE IF NOT EXISTS loan_applications (
@@ -335,6 +337,13 @@ class MicroScoreRepository:
                 "loan_applications",
                 "organization_id",
                 "TEXT REFERENCES mfi_organizations(id)",
+            )
+            _ensure_column(connection, "staff_invites", "revoked_at", "TEXT")
+            _ensure_column(
+                connection,
+                "staff_invites",
+                "revoked_by",
+                "TEXT REFERENCES users(email)",
             )
             connection.execute(
                 """
@@ -711,7 +720,9 @@ class MicroScoreRepository:
                     created_at,
                     expires_at,
                     accepted_at,
-                    accepted_by
+                    accepted_by,
+                    revoked_at,
+                    revoked_by
                 FROM staff_invites
                 WHERE token = ?
                 """,
@@ -732,7 +743,9 @@ class MicroScoreRepository:
                     created_at,
                     expires_at,
                     accepted_at,
-                    accepted_by
+                    accepted_by,
+                    revoked_at,
+                    revoked_by
                 FROM staff_invites
                 ORDER BY created_at DESC
                 """
@@ -746,9 +759,22 @@ class MicroScoreRepository:
                 """
                 UPDATE staff_invites
                 SET accepted_at = ?, accepted_by = ?
-                WHERE token = ? AND accepted_at IS NULL
+                WHERE token = ? AND accepted_at IS NULL AND revoked_at IS NULL
                 """,
                 (now, accepted_by, token),
+            )
+        return cursor.rowcount > 0
+
+    def mark_staff_invite_revoked(self, token: str, revoked_by: str) -> bool:
+        now = _now_iso()
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE staff_invites
+                SET revoked_at = ?, revoked_by = ?
+                WHERE token = ? AND accepted_at IS NULL AND revoked_at IS NULL
+                """,
+                (now, revoked_by, token),
             )
         return cursor.rowcount > 0
 

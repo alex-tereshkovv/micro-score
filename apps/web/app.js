@@ -2301,28 +2301,66 @@ async function refreshStaffUsers() {
 }
 
 function staffInviteStatus(invite) {
+  if (invite.revoked_at) return "revoked";
   if (invite.accepted_at) return "accepted";
   if (invite.expires_at && Date.parse(invite.expires_at) <= Date.now()) return "expired";
   return "pending";
 }
 
+function renderStaffInvites(rows) {
+  if (!rows.length) {
+    setPanelState(
+      els.staffInvites,
+      "table-shell",
+      "empty",
+      "No staff invites loaded",
+      "Create an expiring invite to onboard an MFI analyst without a temporary password.",
+    );
+    return;
+  }
+
+  els.staffInvites.className = "table-shell";
+  const body = rows
+    .map((invite) => {
+      const status = staffInviteStatus(invite);
+      const canRevoke = status === "pending";
+      const action = canRevoke
+        ? `<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token)}">Revoke</button>`
+        : "-";
+      return `
+        <tr>
+          <td>${escapeHtml(invite.email)}</td>
+          <td>${escapeHtml(formatPolicyName(status))}</td>
+          <td>${escapeHtml(invite.organization_id)}</td>
+          <td>${escapeHtml(invite.expires_at || "-")}</td>
+          <td>${escapeHtml(invite.accepted_at || invite.revoked_at || "-")}</td>
+          <td>${escapeHtml(invite.token)}</td>
+          <td>${action}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  els.staffInvites.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Organization</th>
+          <th>Expires</th>
+          <th>Closed</th>
+          <th>Invite token</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+
 async function refreshStaffInvites() {
   const rows = await apiFetch("/admin/staff-invites");
-  renderSimpleTable(
-    els.staffInvites,
-    rows.map((invite) => ({
-      ...invite,
-      status: staffInviteStatus(invite),
-    })),
-    [
-      ["email", "Email"],
-      ["status", "Status", formatPolicyName],
-      ["organization_id", "Organization"],
-      ["expires_at", "Expires"],
-      ["accepted_at", "Accepted"],
-      ["token", "Invite token"],
-    ],
-  );
+  renderStaffInvites(rows);
 }
 
 async function refreshModelStatus() {
@@ -2506,6 +2544,14 @@ async function createStaffInvite(event) {
   await Promise.all([refreshStaffInvites(), refreshAudit()]);
 }
 
+async function revokeStaffInvite(token) {
+  const revoked = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}`, {
+    method: "DELETE",
+  });
+  await Promise.all([refreshStaffInvites(), refreshAudit()]);
+  showMessage(`Revoked invite for ${revoked.email}`, "ok");
+}
+
 async function clearApplications() {
   const confirmed = window.confirm("Clear all loan applications from the local demo database?");
   if (!confirmed) return;
@@ -2654,6 +2700,12 @@ function wireEvents() {
   });
   els.refreshStaffInvites.addEventListener("click", () => {
     refreshStaffInvites().catch((error) => showMessage(error.message, "error"));
+  });
+  els.staffInvites.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-revoke-invite-token]");
+    if (!button) return;
+    revokeStaffInvite(button.dataset.revokeInviteToken)
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshModelVersions.addEventListener("click", () => {
     refreshModelVersions().catch((error) => showMessage(error.message, "error"));

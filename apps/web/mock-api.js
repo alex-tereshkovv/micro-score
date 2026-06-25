@@ -279,6 +279,8 @@
       expires_at: expiresAt.toISOString(),
       accepted_at: null,
       accepted_by: null,
+      revoked_at: null,
+      revoked_by: null,
     };
     demo.staffInvites[token] = invite;
     return invite;
@@ -1482,6 +1484,7 @@
       const invite = demo.staffInvites[token];
       if (!invite) throw new Error("Staff invite not found");
       if (invite.accepted_at) throw new Error("Staff invite has already been accepted");
+      if (invite.revoked_at) throw new Error("Staff invite has been revoked");
       if (Date.parse(invite.expires_at) <= Date.now()) throw new Error("Staff invite has expired");
       const passwordViolations = passwordPolicyViolations(body.password);
       if (passwordViolations.length) {
@@ -1730,6 +1733,24 @@
         role: invite.role,
         organization_id: invite.organization_id,
         expires_at: invite.expires_at,
+      });
+      return clone(invite);
+    }
+
+    const revokeStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)$/);
+    if (revokeStaffInviteMatch && method === "DELETE") {
+      const user = requireAdmin(session);
+      const token = decodeURIComponent(revokeStaffInviteMatch[1]);
+      const invite = demo.staffInvites[token];
+      if (!invite) throw new Error("Staff invite not found");
+      if (invite.accepted_at) throw new Error("Accepted staff invite cannot be revoked");
+      if (invite.revoked_at) return clone(invite);
+      invite.revoked_at = nowIso();
+      invite.revoked_by = user.email;
+      addAudit("staff_invite_revoked", "staff_invite", token, user.email, {
+        email: invite.email,
+        role: invite.role,
+        organization_id: invite.organization_id,
       });
       return clone(invite);
     }
