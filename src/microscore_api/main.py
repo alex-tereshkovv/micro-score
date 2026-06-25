@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from io import StringIO
 import os
@@ -67,6 +67,9 @@ from .schemas import (
     PortfolioSimulationSummary,
     RegisterRequest,
     SegmentAnalyticsRow,
+    StaffInviteAccept,
+    StaffInviteCreate,
+    StaffInviteResponse,
     StaffUserCreate,
     UserPublic,
 )
@@ -137,6 +140,13 @@ def _validate_new_password(password: str) -> None:
                 "requirements": violations,
             },
         )
+
+
+def _parse_utc_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _active_model_or_503(repository: MicroScoreRepository) -> dict[str, Any]:
@@ -831,6 +841,78 @@ def login(
     )
 
 
+@app.post("/auth/accept-staff-invite", response_model=AuthResponse)
+def accept_staff_invite(
+    payload: StaffInviteAccept,
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> AuthResponse:
+    token = payload.token.strip()
+    invite = repository.get_staff_invite(token)
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if invite.get("accepted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Staff invite has already been accepted",
+        )
+    if _parse_utc_datetime(invite["expires_at"]) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Staff invite has expired",
+        )
+
+    _validate_new_password(payload.password)
+    email = invite["email"].strip().lower()
+    if repository.get_user(email) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists",
+        )
+
+    try:
+        created = repository.create_user(
+            email,
+            hash_password(payload.password),
+            invite["role"],
+            invite["organization_id"],
+        )
+    except DuplicateUserError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists",
+        )
+    accepted = repository.mark_staff_invite_accepted(token, email)
+    if not accepted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Staff invite has already been accepted",
+        )
+
+    repository.record_audit_event(
+        actor_email=email,
+        action="staff_invite_accepted",
+        entity_type="staff_invite",
+        entity_id=token,
+        details={
+            "email": email,
+            "role": created["role"],
+            "organization_id": created.get("organization_id"),
+        },
+    )
+    access_token = create_token()
+    session = repository.create_session(access_token, email)
+    return AuthResponse(
+        access_token=access_token,
+        role=created["role"],
+        organization_id=created.get("organization_id"),
+        session_expires_at=session["session_expires_at"],
+        session_ttl_seconds=session["session_ttl_seconds"],
+    )
+
+
 @app.post("/auth/logout", response_model=LogoutResponse)
 def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -1219,6 +1301,62 @@ def list_admin_users(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_users()
+
+
+@app.get("/admin/staff-invites", response_model=list[StaffInviteResponse])
+def list_staff_invites(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    return repository.list_staff_invites()
+
+
+@app.post(
+    "/admin/staff-invites",
+    response_model=StaffInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_staff_invite(
+    payload: StaffInviteCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    email = payload.email.strip().lower()
+    if repository.get_organization(payload.organization_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Select a valid MFI organization",
+        )
+    if repository.get_user(email) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists",
+        )
+
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
+    ).isoformat()
+    created = repository.create_staff_invite(
+        token=create_token(),
+        email=email,
+        role=payload.role,
+        organization_id=payload.organization_id,
+        created_by=user["email"],
+        expires_at=expires_at,
+    )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="staff_invite_created",
+        entity_type="staff_invite",
+        entity_id=created["token"],
+        details={
+            "email": email,
+            "role": payload.role,
+            "organization_id": payload.organization_id,
+            "expires_at": expires_at,
+        },
+    )
+    return created
 
 
 @app.get("/admin/model-versions", response_model=list[ModelVersionPublic])

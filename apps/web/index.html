@@ -500,9 +500,12 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">MFI access</p>
-                <h3>Create analyst</h3>
+                <h3>Create analyst directly</h3>
               </div>
             </div>
+            <p class="tiny-text">
+              Prototype fallback for local testing. Prefer expiring staff invites for new analyst access.
+            </p>
             <form id="staffForm" class="staff-form">
               <label>
                 Email
@@ -525,6 +528,32 @@
           <section class="panel">
             <div class="panel-heading">
               <div>
+                <p class="eyebrow">Staff Invite v1</p>
+                <h3>Invite analyst</h3>
+              </div>
+            </div>
+            <form id="staffInviteForm" class="staff-form">
+              <label>
+                Email
+                <input name="email" type="email" autocomplete="off" required />
+              </label>
+              <label>
+                Organization
+                <select id="staffInviteOrganization" name="organization_id" required>
+                  <option value="pavlodar-demo-mfi">Pavlodar Demo MFI</option>
+                </select>
+              </label>
+              <label>
+                Expires in hours
+                <input name="expires_in_hours" type="number" min="1" max="168" step="1" value="48" required />
+              </label>
+              <button class="primary-button" type="submit">Create invite</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
                 <p class="eyebrow">Access</p>
                 <h3>User accounts</h3>
               </div>
@@ -534,6 +563,20 @@
             </div>
             <div id="staffUsers" class="table-shell empty">No users loaded.</div>
           </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Access</p>
+                <h3>Staff invites</h3>
+              </div>
+              <button id="refreshStaffInvites" class="icon-button" type="button" title="Refresh staff invites" aria-label="Refresh staff invites">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="staffInvites" class="table-shell empty">No invites loaded.</div>
+          </section>
+
 
           <section class="panel wide-panel model-registry-panel">
             <div class="panel-heading">
@@ -604,8 +647,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260623-dashboard"></script>
-    <script src="./mock-api.js?v=20260624-session"></script>
+    <script src="./mock-api.js?v=20260625-invites"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260624-session"></script>
+    <script src="./app.js?v=20260625-invites"></script>
   </body>
 </html>

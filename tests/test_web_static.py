@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./mock-api.js?v=20260624-session"', html)
+        self.assertIn('src="./mock-api.js?v=20260625-invites"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260624-session"', html)
+        self.assertIn('src="./app.js?v=20260625-invites"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -144,6 +144,7 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/simulations",
             "/mfi/analytics/decisions",
             "/admin/audit-events",
+            "/admin/staff-invites",
             "/admin/model-versions",
             "/admin/applications",
         ]
@@ -275,8 +276,16 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
         self.assertIn("staff_user_created", mock_script)
+        self.assertIn('"/admin/staff-invites"', mock_script)
+        self.assertIn('"/auth/accept-staff-invite"', mock_script)
+        self.assertIn("staff_invite_created", mock_script)
+        self.assertIn("staff_invite_accepted", mock_script)
+        self.assertIn("Staff invite has expired", mock_script)
         self.assertIn("refreshStaffUsers", script)
         self.assertIn("createStaffUser", script)
+        self.assertIn("refreshStaffInvites", script)
+        self.assertIn("createStaffInvite", script)
+        self.assertIn("Staff Invite v1", markup)
         self.assertIn("organization_id", script)
         self.assertIn("mfiApplications", mock_script)
         self.assertIn("pavlodar-demo-mfi", mock_script)

@@ -95,10 +95,14 @@ const els = {
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
   staffForm: document.querySelector("#staffForm"),
+  staffInviteForm: document.querySelector("#staffInviteForm"),
   staffUsers: document.querySelector("#staffUsers"),
+  staffInvites: document.querySelector("#staffInvites"),
   refreshUsers: document.querySelector("#refreshUsers"),
+  refreshStaffInvites: document.querySelector("#refreshStaffInvites"),
   applicationOrganization: document.querySelector("#applicationOrganization"),
   staffOrganization: document.querySelector("#staffOrganization"),
+  staffInviteOrganization: document.querySelector("#staffInviteOrganization"),
   organizationForm: document.querySelector("#organizationForm"),
   organizationDirectory: document.querySelector("#organizationDirectory"),
   refreshOrganizations: document.querySelector("#refreshOrganizations"),
@@ -653,6 +657,7 @@ async function loadRoleWorkspace(role) {
     await Promise.all([
       refreshAudit(),
       refreshStaffUsers(),
+      refreshStaffInvites(),
       refreshOrganizations(),
       refreshModelVersions(),
       refreshModelStatus(),
@@ -915,6 +920,7 @@ function resetPrivilegedViews() {
   for (const [container, label] of [
     [els.auditTrail, "No audit events loaded."],
     [els.staffUsers, "No staff users loaded."],
+    [els.staffInvites, "No staff invites loaded."],
     [els.organizationDirectory, "No organizations loaded."],
     [els.modelVersionRegistry, "No model versions loaded."],
   ]) {
@@ -2294,6 +2300,31 @@ async function refreshStaffUsers() {
   ]);
 }
 
+function staffInviteStatus(invite) {
+  if (invite.accepted_at) return "accepted";
+  if (invite.expires_at && Date.parse(invite.expires_at) <= Date.now()) return "expired";
+  return "pending";
+}
+
+async function refreshStaffInvites() {
+  const rows = await apiFetch("/admin/staff-invites");
+  renderSimpleTable(
+    els.staffInvites,
+    rows.map((invite) => ({
+      ...invite,
+      status: staffInviteStatus(invite),
+    })),
+    [
+      ["email", "Email"],
+      ["status", "Status", formatPolicyName],
+      ["organization_id", "Organization"],
+      ["expires_at", "Expires"],
+      ["accepted_at", "Accepted"],
+      ["token", "Invite token"],
+    ],
+  );
+}
+
 async function refreshModelStatus() {
   const payload = await apiFetch("/mfi/model-status");
   state.activeModel = payload.active_model || null;
@@ -2412,6 +2443,7 @@ async function refreshOrganizations() {
   state.organizations = organizations;
   syncOrganizationSelect(els.applicationOrganization, organizations);
   syncOrganizationSelect(els.staffOrganization, organizations);
+  syncOrganizationSelect(els.staffInviteOrganization, organizations);
   renderSimpleTable(els.organizationDirectory, organizations, [
     ["name", "Organization"],
     ["id", "ID"],
@@ -2435,6 +2467,7 @@ async function createOrganization(event) {
   form.elements.region.value = "Pavlodar region, Kazakhstan";
   await Promise.all([refreshOrganizations(), refreshAudit()]);
   els.staffOrganization.value = created.id;
+  els.staffInviteOrganization.value = created.id;
   showMessage(`Created ${created.name}`, "ok");
 }
 
@@ -2453,6 +2486,24 @@ async function createStaffUser(event) {
   form.reset();
   showMessage(`Created ${created.email}`, "ok");
   await Promise.all([refreshStaffUsers(), refreshAudit()]);
+}
+
+async function createStaffInvite(event) {
+  event.preventDefault();
+  const form = els.staffInviteForm;
+  const created = await apiFetch("/admin/staff-invites", {
+    method: "POST",
+    body: JSON.stringify({
+      email: form.elements.email.value.trim(),
+      role: "mfi_analyst",
+      organization_id: form.elements.organization_id.value,
+      expires_in_hours: Number(form.elements.expires_in_hours.value || 48),
+    }),
+  });
+  form.reset();
+  form.elements.expires_in_hours.value = "48";
+  showMessage(`Created invite for ${created.email}. Token is visible in the Staff invites table.`, "ok");
+  await Promise.all([refreshStaffInvites(), refreshAudit()]);
 }
 
 async function clearApplications() {
@@ -2601,6 +2652,9 @@ function wireEvents() {
   els.refreshUsers.addEventListener("click", () => {
     refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
   });
+  els.refreshStaffInvites.addEventListener("click", () => {
+    refreshStaffInvites().catch((error) => showMessage(error.message, "error"));
+  });
   els.refreshModelVersions.addEventListener("click", () => {
     refreshModelVersions().catch((error) => showMessage(error.message, "error"));
   });
@@ -2621,6 +2675,9 @@ function wireEvents() {
   });
   els.staffForm.addEventListener("submit", (event) => {
     createStaffUser(event).catch((error) => showMessage(error.message, "error"));
+  });
+  els.staffInviteForm.addEventListener("submit", (event) => {
+    createStaffInvite(event).catch((error) => showMessage(error.message, "error"));
   });
   els.clearApplications.addEventListener("click", () => {
     clearApplications().catch((error) => showMessage(error.message, "error"));

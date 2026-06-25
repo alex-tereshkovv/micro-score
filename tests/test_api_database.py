@@ -122,6 +122,50 @@ class ApiDatabaseTests(unittest.TestCase):
             {"borrower@example.com", "analyst@example.com"},
         )
 
+    def test_staff_invites_persist_and_accept_once(self) -> None:
+        self.repository.create_organization(
+            organization_id="mfi-a",
+            name="MFI A",
+            region="Pavlodar region",
+        )
+        self.repository.create_user("admin@example.com", "admin-hash", "admin")
+        created = self.repository.create_staff_invite(
+            token="staff-invite-token",
+            email="invited@example.com",
+            role="mfi_analyst",
+            organization_id="mfi-a",
+            created_by="admin@example.com",
+            expires_at="2026-06-26T00:00:00+00:00",
+        )
+
+        self.assertEqual(created["email"], "invited@example.com")
+        self.assertIsNone(created["accepted_at"])
+        self.assertEqual(self.repository.get_staff_invite("staff-invite-token")["role"], "mfi_analyst")
+        self.assertEqual(len(self.repository.list_staff_invites()), 1)
+        self.repository.create_user(
+            "invited@example.com",
+            "analyst-hash",
+            "mfi_analyst",
+            "mfi-a",
+        )
+        self.assertTrue(
+            self.repository.mark_staff_invite_accepted(
+                "staff-invite-token",
+                "invited@example.com",
+            )
+        )
+        self.assertFalse(
+            self.repository.mark_staff_invite_accepted(
+                "staff-invite-token",
+                "invited@example.com",
+            )
+        )
+
+        reopened = MicroScoreRepository(self.db_path)
+        accepted = reopened.get_staff_invite("staff-invite-token")
+        self.assertEqual(accepted["accepted_by"], "invited@example.com")
+        self.assertIsNotNone(accepted["accepted_at"])
+
     def test_organization_membership_scopes_application_listing(self) -> None:
         for organization_id, name in (("mfi-a", "MFI A"), ("mfi-b", "MFI B")):
             self.repository.create_organization(

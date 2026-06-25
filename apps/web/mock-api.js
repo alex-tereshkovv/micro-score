@@ -4,6 +4,7 @@
     organizations: {},
     modelVersions: {},
     sessions: {},
+    staffInvites: {},
     applications: [],
     decisions: {},
     simulations: [],
@@ -261,6 +262,28 @@
     return { token, ...metadata };
   }
 
+  function createStaffInviteRecord(payload, actorEmail) {
+    const email = String(payload.email || "").trim().toLowerCase();
+    if (!email) throw new Error("Invite email is required");
+    const createdAt = new Date();
+    const expiresInHours = clamp(number(payload.expires_in_hours, 48), 1, 168);
+    const expiresAt = new Date(createdAt.getTime() + expiresInHours * 60 * 60 * 1000);
+    const token = `staff-invite-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const invite = {
+      token,
+      email,
+      role: payload.role || "mfi_analyst",
+      organization_id: payload.organization_id,
+      created_by: actorEmail,
+      created_at: createdAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      accepted_at: null,
+      accepted_by: null,
+    };
+    demo.staffInvites[token] = invite;
+    return invite;
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -292,6 +315,7 @@
     demo.applications = [];
     demo.decisions = {};
     demo.simulations = [];
+    demo.staffInvites = {};
     demo.modelVersions = {
       "static-demo-v1": {
         version: "static-demo-v1",
@@ -1453,6 +1477,42 @@
       };
     }
 
+    if (cleanPath === "/auth/accept-staff-invite" && method === "POST") {
+      const token = String(body.token || "").trim();
+      const invite = demo.staffInvites[token];
+      if (!invite) throw new Error("Staff invite not found");
+      if (invite.accepted_at) throw new Error("Staff invite has already been accepted");
+      if (Date.parse(invite.expires_at) <= Date.now()) throw new Error("Staff invite has expired");
+      const passwordViolations = passwordPolicyViolations(body.password);
+      if (passwordViolations.length) {
+        throw new Error(`Password does not meet the registration policy: ${passwordViolations.join(", ")}`);
+      }
+      if (demo.users[invite.email]) throw new Error("User already exists in static demo");
+      demo.users[invite.email] = {
+        email: invite.email,
+        role: invite.role,
+        organization_id: invite.organization_id,
+        password: body.password || "",
+        created_at: nowIso(),
+      };
+      invite.accepted_at = nowIso();
+      invite.accepted_by = invite.email;
+      addAudit("staff_invite_accepted", "staff_invite", token, invite.email, {
+        email: invite.email,
+        role: invite.role,
+        organization_id: invite.organization_id,
+      });
+      const sessionRecord = createDemoSession(invite.email);
+      return {
+        access_token: sessionRecord.token,
+        token_type: "bearer",
+        role: invite.role,
+        organization_id: invite.organization_id,
+        session_expires_at: sessionRecord.session_expires_at,
+        session_ttl_seconds: sessionRecord.session_ttl_seconds,
+      };
+    }
+
     if (cleanPath === "/auth/logout" && method === "POST") {
       const user = currentUser(session);
       const revoked = Boolean(demo.sessions[session.token]);
@@ -1646,6 +1706,32 @@
           }))
           .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
       );
+    }
+
+    if (cleanPath === "/admin/staff-invites" && method === "GET") {
+      requireAdmin(session);
+      return clone(
+        Object.values(demo.staffInvites)
+          .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+      );
+    }
+
+    if (cleanPath === "/admin/staff-invites" && method === "POST") {
+      const user = requireAdmin(session);
+      const email = String(body.email || "").trim().toLowerCase();
+      if (body.role && body.role !== "mfi_analyst") {
+        throw new Error("Only MFI analyst invites can be created");
+      }
+      if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
+      if (demo.users[email]) throw new Error("User already exists in static demo");
+      const invite = createStaffInviteRecord({ ...body, email, role: "mfi_analyst" }, user.email);
+      addAudit("staff_invite_created", "staff_invite", invite.token, user.email, {
+        email: invite.email,
+        role: invite.role,
+        organization_id: invite.organization_id,
+        expires_at: invite.expires_at,
+      });
+      return clone(invite);
     }
 
     if (cleanPath === "/admin/model-versions" && method === "GET") {

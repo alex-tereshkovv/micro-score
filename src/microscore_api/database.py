@@ -235,6 +235,18 @@ class MicroScoreRepository:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS staff_invites (
+                    token TEXT PRIMARY KEY,
+                    email TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    organization_id TEXT NOT NULL REFERENCES mfi_organizations(id),
+                    created_by TEXT REFERENCES users(email),
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    accepted_at TEXT,
+                    accepted_by TEXT REFERENCES users(email)
+                );
+
                 CREATE TABLE IF NOT EXISTS loan_applications (
                     id TEXT PRIMARY KEY,
                     borrower_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
@@ -303,6 +315,8 @@ class MicroScoreRepository:
                     ON application_decisions(application_id);
                 CREATE INDEX IF NOT EXISTS idx_audit_entity
                     ON audit_events(entity_type, entity_id);
+                CREATE INDEX IF NOT EXISTS idx_staff_invites_email
+                    ON staff_invites(email, created_at DESC);
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_model_versions_single_active
                     ON model_versions(is_active)
                     WHERE is_active = 1;
@@ -654,6 +668,89 @@ class MicroScoreRepository:
                 """
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def create_staff_invite(
+        self,
+        *,
+        token: str,
+        email: str,
+        role: str,
+        organization_id: str,
+        created_by: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        now = _now_iso()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO staff_invites (
+                    token,
+                    email,
+                    role,
+                    organization_id,
+                    created_by,
+                    created_at,
+                    expires_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (token, email, role, organization_id, created_by, now, expires_at),
+            )
+        return self.get_staff_invite(token) or {}
+
+    def get_staff_invite(self, token: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    token,
+                    email,
+                    role,
+                    organization_id,
+                    created_by,
+                    created_at,
+                    expires_at,
+                    accepted_at,
+                    accepted_by
+                FROM staff_invites
+                WHERE token = ?
+                """,
+                (token,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_staff_invites(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    token,
+                    email,
+                    role,
+                    organization_id,
+                    created_by,
+                    created_at,
+                    expires_at,
+                    accepted_at,
+                    accepted_by
+                FROM staff_invites
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_staff_invite_accepted(self, token: str, accepted_by: str) -> bool:
+        now = _now_iso()
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE staff_invites
+                SET accepted_at = ?, accepted_by = ?
+                WHERE token = ? AND accepted_at IS NULL
+                """,
+                (now, accepted_by, token),
+            )
+        return cursor.rowcount > 0
 
     def assign_user_organization(self, email: str, organization_id: str | None) -> None:
         with self._connection() as connection:

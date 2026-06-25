@@ -454,6 +454,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("MeResponse", schemas)
         self.assertIn("LogoutResponse", schemas)
         self.assertIn("StaffUserCreate", schemas)
+        self.assertIn("StaffInviteCreate", schemas)
+        self.assertIn("StaffInviteAccept", schemas)
+        self.assertIn("StaffInviteResponse", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
         self.assertIn("ModelVersionCreate", schemas)
@@ -505,6 +508,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
+        paths = response.json()["paths"]
+        self.assertIn("/admin/staff-invites", paths)
+        self.assertIn("/auth/accept-staff-invite", paths)
 
     def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
         response = self.client.get("/governance/pilot-readiness")
@@ -765,6 +771,75 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
         self.assertEqual(analyst_login.json()["role"], "mfi_analyst")
 
+        invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "invited-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "expires_in_hours": 24,
+            },
+        )
+        self.assertEqual(invite.status_code, 201, invite.text)
+        invite_payload = invite.json()
+        self.assertEqual(invite_payload["email"], "invited-analyst@example.com")
+        self.assertEqual(invite_payload["role"], "mfi_analyst")
+        self.assertEqual(invite_payload["organization_id"], TEST_ORGANIZATION_ID)
+        self.assertIsNone(invite_payload["accepted_at"])
+        self.assertIn("token", invite_payload)
+        self.assertNotIn("password", invite_payload)
+
+        weak_accept = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": invite_payload["token"], "password": "password123"},
+        )
+        self.assertEqual(weak_accept.status_code, 422, weak_accept.text)
+
+        accepted = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": invite_payload["token"], "password": TEST_PASSWORD},
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        self.assertEqual(accepted.json()["role"], "mfi_analyst")
+        self.assertEqual(accepted.json()["organization_id"], TEST_ORGANIZATION_ID)
+        self.assertIn("session_expires_at", accepted.json())
+        self.assertEqual(accepted.json()["session_ttl_seconds"], 8 * 60 * 60)
+
+        reused = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": invite_payload["token"], "password": TEST_PASSWORD},
+        )
+        self.assertEqual(reused.status_code, 409, reused.text)
+
+        invites = self.client.get(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(invites.status_code, 200, invites.text)
+        self.assertTrue(
+            any(
+                row["email"] == "invited-analyst@example.com"
+                and row["accepted_at"]
+                and row["accepted_by"] == "invited-analyst@example.com"
+                for row in invites.json()
+            )
+        )
+
+        self.repository.create_staff_invite(
+            token="expired-staff-invite-token",
+            email="expired-analyst@example.com",
+            role="mfi_analyst",
+            organization_id=TEST_ORGANIZATION_ID,
+            created_by="provisioning-admin@example.com",
+            expires_at="2020-01-01T00:00:00+00:00",
+        )
+        expired = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": "expired-staff-invite-token", "password": TEST_PASSWORD},
+        )
+        self.assertEqual(expired.status_code, 410, expired.text)
+
         audit = self.client.get(
             "/admin/audit-events",
             headers=self._headers(admin_token),
@@ -774,6 +849,15 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(provisioning_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(provisioning_event["entity_id"], "new-analyst@example.com")
+        invite_created_event = next(
+            event for event in audit if event["action"] == "staff_invite_created"
+        )
+        self.assertEqual(invite_created_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(invite_created_event["details"]["email"], "invited-analyst@example.com")
+        invite_accepted_event = next(
+            event for event in audit if event["action"] == "staff_invite_accepted"
+        )
+        self.assertEqual(invite_accepted_event["actor_email"], "invited-analyst@example.com")
 
     def test_admin_can_create_publicly_listed_organization(self) -> None:
         public_before = self.client.get("/organizations")

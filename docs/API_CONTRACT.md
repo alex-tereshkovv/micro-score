@@ -215,9 +215,56 @@ only `mfi_analyst`; additional administrators remain a deployment-level
 operation. Password hashes are never returned. Successful provisioning records
 a `staff_user_created` audit event with the acting administrator.
 
-The temporary-password flow is suitable only for the prototype. A production
-version should use expiring invitation links, forced password setup, MFA, and
-MFI organization membership.
+The temporary-password flow remains as a prototype/admin fallback. The safer
+default for new staff is Staff Invite v1: administrators create an expiring
+invite, and the analyst sets their own password during acceptance.
+
+List staff invites:
+
+```http
+GET /admin/staff-invites
+```
+
+Create an expiring MFI analyst invite:
+
+```http
+POST /admin/staff-invites
+```
+
+```json
+{
+  "email": "analyst@mfi.example",
+  "role": "mfi_analyst",
+  "organization_id": "pavlodar-demo-mfi",
+  "expires_in_hours": 48
+}
+```
+
+`expires_in_hours` can be 1 to 168 hours and defaults to 48. Successful invite
+creation records `staff_invite_created` and returns the invite token plus
+`created_at`, `expires_at`, `accepted_at`, and `accepted_by` metadata.
+
+Accept an invite and set the staff password:
+
+```http
+POST /auth/accept-staff-invite
+```
+
+```json
+{
+  "token": "<invite-token>",
+  "password": "StrongPassword1!"
+}
+```
+
+Acceptance uses the same password policy as registration, rejects expired or
+already accepted invites, creates an `mfi_analyst` user in the invite's
+organization, records `staff_invite_accepted`, and returns the same auth
+response shape as login, including session expiry metadata.
+
+Before any real user data, the production version still needs MFA, an external
+identity provider, email delivery, HTTPS-only links, and operational invite
+revocation/rotation.
 
 ## Borrower Application Form
 
@@ -702,6 +749,8 @@ Current audited actions:
 - `model_version_activated`
 - `portfolio_simulation_run`
 - `staff_user_created`
+- `staff_invite_created`
+- `staff_invite_accepted`
 - `organization_created`
 - `user_logged_out`
 - `applications_cleared`
@@ -721,10 +770,10 @@ $env:MICROSCORE_API_DB_PATH = "C:\path\to\microscore.sqlite3"
 ```
 
 Runtime database files are intentionally ignored by Git.
-The SQLite schema persists organizations, users, expiring sessions,
-applications, analyst decisions, audit events, and `model_versions`. Existing
-development databases receive the model registry through an idempotent startup
-migration and are seeded with `research-v0.1` as the initial active version.
+The SQLite schema persists organizations, users, staff invites, expiring
+sessions, applications, analyst decisions, audit events, and `model_versions`.
+Existing development databases receive these tables through idempotent startup
+migrations and are seeded with `research-v0.1` as the initial active version.
 
 ## Prototype Data Scale
 

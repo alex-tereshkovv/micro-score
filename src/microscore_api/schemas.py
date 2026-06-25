@@ -112,6 +112,30 @@ class StaffUserCreate(BaseModel):
     organization_id: str = Field(min_length=1, max_length=100)
 
 
+class StaffInviteCreate(BaseModel):
+    email: str
+    role: Literal["mfi_analyst"] = "mfi_analyst"
+    organization_id: str = Field(min_length=1, max_length=100)
+    expires_in_hours: int = Field(default=48, ge=1, le=168)
+
+
+class StaffInviteAccept(BaseModel):
+    token: str = Field(min_length=16, max_length=200)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class StaffInviteResponse(BaseModel):
+    token: str
+    email: str
+    role: Literal["mfi_analyst"]
+    organization_id: str
+    created_by: str | None = None
+    created_at: str
+    expires_at: str
+    accepted_at: str | None = None
+    accepted_by: str | None = None
+
+
 class OrganizationCreate(BaseModel):
     id: str = Field(min_length=2, max_length=100)
     name: str = Field(min_length=2, max_length=200)

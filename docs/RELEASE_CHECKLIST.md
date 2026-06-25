@@ -64,6 +64,9 @@ git diff --check
   errors instead of entering the scoring pipeline.
 - Auth responses and `/me` expose `session_expires_at` and
   `session_ttl_seconds`; the session pill makes token expiry visible.
+- Staff Invite v1 creates expiring analyst invites, enforces password setup at
+  acceptance time, and records invite creation/acceptance audit events; direct
+  temporary-password provisioning remains prototype-only.
 - Borrower history lists only the signed-in account's applications and excludes
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject

@@ -322,9 +322,65 @@ async function main() {
   if (usersAfterProvisioning.length !== usersBeforeProvisioning.length + 1) {
     throw new Error("Expected provisioned analyst in the user list");
   }
+
+  const staffInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "invited-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 24,
+      }),
+    },
+    adminSession,
+  );
+  if (!staffInvite.token || !staffInvite.expires_at || staffInvite.accepted_at) {
+    throw new Error("Expected expiring staff invite token before acceptance");
+  }
+  let weakInvitePasswordRejected = false;
+  try {
+    await api.request("/auth/accept-staff-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        token: staffInvite.token,
+        password: "password123",
+      }),
+    });
+  } catch (error) {
+    weakInvitePasswordRejected = String(error.message).includes("registration policy");
+  }
+  if (!weakInvitePasswordRejected) {
+    throw new Error("Expected staff invite acceptance to enforce password policy");
+  }
+  const inviteAuth = await api.request("/auth/accept-staff-invite", {
+    method: "POST",
+    body: JSON.stringify({
+      token: staffInvite.token,
+      password: "StrongPassword1!",
+    }),
+  });
+  if (
+    inviteAuth.role !== "mfi_analyst"
+    || inviteAuth.organization_id !== "pavlodar-demo-mfi"
+    || !inviteAuth.session_expires_at
+  ) {
+    throw new Error("Expected accepted staff invite to create an analyst session");
+  }
+  const staffInvites = await api.request("/admin/staff-invites", {}, adminSession);
+  if (!staffInvites.some((invite) => invite.token === staffInvite.token && invite.accepted_at)) {
+    throw new Error("Expected accepted staff invite in admin invite list");
+  }
   const adminAudit = await api.request("/admin/audit-events", {}, adminSession);
   if (!adminAudit.some((event) => event.action === "staff_user_created")) {
     throw new Error("Expected staff provisioning audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_created")) {
+    throw new Error("Expected staff invite creation audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_accepted")) {
+    throw new Error("Expected staff invite acceptance audit event");
   }
 
   const modelVersionsBefore = await api.request("/admin/model-versions", {}, adminSession);
@@ -559,12 +615,13 @@ async function main() {
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
       lifecycle_terminal_guard: terminalMutationRejected,
-    risk_detail_v2: true,
-    intake_contract_v2: true,
+      risk_detail_v2: true,
+      intake_contract_v2: true,
       csv_size: csv.size,
       privacy_guards: 3,
       registration_guards: 3,
       staff_provisioning: true,
+      staff_invites: true,
       model_registry: true,
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,
