@@ -216,9 +216,11 @@ operation. Password hashes are never returned. Successful provisioning records
 a `staff_user_created` audit event with the acting administrator.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
-default for new staff is Staff Invite v2: administrators create an expiring
+default for new staff is Staff Invite v3: administrators create an expiring
 invite, can revoke it before use, and the analyst sets their own password
-during acceptance.
+during acceptance. The raw invite token is a one-time secret: it is returned
+only from invite creation and is not returned by invite listing, revocation
+responses, or audit events.
 
 List staff invites:
 
@@ -242,20 +244,23 @@ POST /admin/staff-invites
 ```
 
 `expires_in_hours` can be 1 to 168 hours and defaults to 48. Successful invite
-creation records `staff_invite_created` and returns the invite token plus
-`created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`, and
-`revoked_by` metadata.
+creation records `staff_invite_created` and returns a one-time raw `token` plus
+safe invite metadata: `token_id`, `token_preview`, `created_at`, `expires_at`,
+`accepted_at`, `accepted_by`, `revoked_at`, and `revoked_by`.
+
+The raw `token` must be copied at creation time. Later admin list/revoke
+responses expose only `token_id` and `token_preview`.
 
 Revoke an unused invite:
 
 ```http
-DELETE /admin/staff-invites/{token}
+DELETE /admin/staff-invites/{token_id}
 ```
 
 Revocation requires an `admin` bearer token, records `staff_invite_revoked`,
-and returns the updated invite. Accepted invites cannot be revoked. Repeating a
-revoke for an already revoked invite is idempotent and returns the existing
-revoked record.
+and returns the updated invite without the raw token. Accepted invites cannot
+be revoked. Repeating a revoke for an already revoked invite is idempotent and
+returns the existing revoked record.
 
 Accept an invite and set the staff password:
 
@@ -274,6 +279,10 @@ Acceptance uses the same password policy as registration, rejects expired,
 revoked, or already accepted invites, creates an `mfi_analyst` user in the
 invite's organization, records `staff_invite_accepted`, and returns the same
 auth response shape as login, including session expiry metadata.
+
+The API stores new invite records by `token_id` instead of the raw token.
+Legacy local development invites created before Staff Invite v3 can still be
+accepted by their original raw token during migration.
 
 Before any real user data, the production version still needs MFA, an external
 identity provider, email delivery, HTTPS-only links, and operational invite

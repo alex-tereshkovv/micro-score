@@ -5,6 +5,7 @@
     modelVersions: {},
     sessions: {},
     staffInvites: {},
+    staffInviteSecrets: {},
     applications: [],
     decisions: {},
     simulations: [],
@@ -262,6 +263,38 @@
     return { token, ...metadata };
   }
 
+  function staffInviteTokenId(rawToken) {
+    let hash = 0x811c9dc5;
+    String(rawToken).split("").forEach((character) => {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 0x01000193);
+    });
+    return `static-${(hash >>> 0).toString(16).padStart(8, "0")}-${String(rawToken).length}`;
+  }
+
+  function staffInviteTokenPreview(tokenId) {
+    return `${String(tokenId).slice(0, 12)}...`;
+  }
+
+  function publicStaffInvite(invite, rawToken = null) {
+    const response = {
+      token_id: invite.token_id,
+      token_preview: invite.token_preview,
+      email: invite.email,
+      role: invite.role,
+      organization_id: invite.organization_id,
+      created_by: invite.created_by,
+      created_at: invite.created_at,
+      expires_at: invite.expires_at,
+      accepted_at: invite.accepted_at,
+      accepted_by: invite.accepted_by,
+      revoked_at: invite.revoked_at,
+      revoked_by: invite.revoked_by,
+    };
+    if (rawToken) response.token = rawToken;
+    return response;
+  }
+
   function createStaffInviteRecord(payload, actorEmail) {
     const email = String(payload.email || "").trim().toLowerCase();
     if (!email) throw new Error("Invite email is required");
@@ -269,8 +302,10 @@
     const expiresInHours = clamp(number(payload.expires_in_hours, 48), 1, 168);
     const expiresAt = new Date(createdAt.getTime() + expiresInHours * 60 * 60 * 1000);
     const token = `staff-invite-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const tokenId = staffInviteTokenId(token);
     const invite = {
-      token,
+      token_id: tokenId,
+      token_preview: staffInviteTokenPreview(tokenId),
       email,
       role: payload.role || "mfi_analyst",
       organization_id: payload.organization_id,
@@ -282,8 +317,9 @@
       revoked_at: null,
       revoked_by: null,
     };
-    demo.staffInvites[token] = invite;
-    return invite;
+    demo.staffInvites[tokenId] = invite;
+    demo.staffInviteSecrets[token] = tokenId;
+    return publicStaffInvite(invite, token);
   }
 
   function clone(value) {
@@ -318,6 +354,7 @@
     demo.decisions = {};
     demo.simulations = [];
     demo.staffInvites = {};
+    demo.staffInviteSecrets = {};
     demo.modelVersions = {
       "static-demo-v1": {
         version: "static-demo-v1",
@@ -1481,7 +1518,8 @@
 
     if (cleanPath === "/auth/accept-staff-invite" && method === "POST") {
       const token = String(body.token || "").trim();
-      const invite = demo.staffInvites[token];
+      const tokenId = demo.staffInviteSecrets[token] || token;
+      const invite = demo.staffInvites[tokenId];
       if (!invite) throw new Error("Staff invite not found");
       if (invite.accepted_at) throw new Error("Staff invite has already been accepted");
       if (invite.revoked_at) throw new Error("Staff invite has been revoked");
@@ -1500,10 +1538,11 @@
       };
       invite.accepted_at = nowIso();
       invite.accepted_by = invite.email;
-      addAudit("staff_invite_accepted", "staff_invite", token, invite.email, {
+      addAudit("staff_invite_accepted", "staff_invite", tokenId, invite.email, {
         email: invite.email,
         role: invite.role,
         organization_id: invite.organization_id,
+        token_preview: invite.token_preview,
       });
       const sessionRecord = createDemoSession(invite.email);
       return {
@@ -1728,11 +1767,12 @@
       if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
       if (demo.users[email]) throw new Error("User already exists in static demo");
       const invite = createStaffInviteRecord({ ...body, email, role: "mfi_analyst" }, user.email);
-      addAudit("staff_invite_created", "staff_invite", invite.token, user.email, {
+      addAudit("staff_invite_created", "staff_invite", invite.token_id, user.email, {
         email: invite.email,
         role: invite.role,
         organization_id: invite.organization_id,
         expires_at: invite.expires_at,
+        token_preview: invite.token_preview,
       });
       return clone(invite);
     }
@@ -1740,17 +1780,18 @@
     const revokeStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)$/);
     if (revokeStaffInviteMatch && method === "DELETE") {
       const user = requireAdmin(session);
-      const token = decodeURIComponent(revokeStaffInviteMatch[1]);
-      const invite = demo.staffInvites[token];
+      const tokenId = decodeURIComponent(revokeStaffInviteMatch[1]);
+      const invite = demo.staffInvites[tokenId];
       if (!invite) throw new Error("Staff invite not found");
       if (invite.accepted_at) throw new Error("Accepted staff invite cannot be revoked");
       if (invite.revoked_at) return clone(invite);
       invite.revoked_at = nowIso();
       invite.revoked_by = user.email;
-      addAudit("staff_invite_revoked", "staff_invite", token, user.email, {
+      addAudit("staff_invite_revoked", "staff_invite", tokenId, user.email, {
         email: invite.email,
         role: invite.role,
         organization_id: invite.organization_id,
+        token_preview: invite.token_preview,
       });
       return clone(invite);
     }

@@ -336,8 +336,14 @@ async function main() {
     },
     adminSession,
   );
-  if (!staffInvite.token || !staffInvite.expires_at || staffInvite.accepted_at) {
-    throw new Error("Expected expiring staff invite token before acceptance");
+  if (
+    !staffInvite.token
+    || !staffInvite.token_id
+    || !staffInvite.token_preview
+    || !staffInvite.expires_at
+    || staffInvite.accepted_at
+  ) {
+    throw new Error("Expected expiring staff invite one-time token before acceptance");
   }
   let weakInvitePasswordRejected = false;
   try {
@@ -369,13 +375,16 @@ async function main() {
     throw new Error("Expected accepted staff invite to create an analyst session");
   }
   const staffInvites = await api.request("/admin/staff-invites", {}, adminSession);
-  if (!staffInvites.some((invite) => invite.token === staffInvite.token && invite.accepted_at)) {
+  if (staffInvites.some((invite) => invite.token)) {
+    throw new Error("Expected staff invite list to hide one-time raw tokens");
+  }
+  if (!staffInvites.some((invite) => invite.token_id === staffInvite.token_id && invite.accepted_at)) {
     throw new Error("Expected accepted staff invite in admin invite list");
   }
   let acceptedInviteRevokeRejected = false;
   try {
     await api.request(
-      `/admin/staff-invites/${encodeURIComponent(staffInvite.token)}`,
+      `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}`,
       { method: "DELETE" },
       adminSession,
     );
@@ -400,7 +409,7 @@ async function main() {
     adminSession,
   );
   const revokedInvite = await api.request(
-    `/admin/staff-invites/${encodeURIComponent(revokeInvite.token)}`,
+    `/admin/staff-invites/${encodeURIComponent(revokeInvite.token_id)}`,
     { method: "DELETE" },
     adminSession,
   );
@@ -676,6 +685,7 @@ async function main() {
       staff_provisioning: true,
       staff_invites: true,
       staff_invite_revocation: true,
+      staff_invite_token_hygiene: true,
       model_registry: true,
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,

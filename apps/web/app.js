@@ -2325,7 +2325,7 @@ function renderStaffInvites(rows) {
       const status = staffInviteStatus(invite);
       const canRevoke = status === "pending";
       const action = canRevoke
-        ? `<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token)}">Revoke</button>`
+        ? `<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token_id)}">Revoke</button>`
         : "-";
       return `
         <tr>
@@ -2334,7 +2334,7 @@ function renderStaffInvites(rows) {
           <td>${escapeHtml(invite.organization_id)}</td>
           <td>${escapeHtml(invite.expires_at || "-")}</td>
           <td>${escapeHtml(invite.accepted_at || invite.revoked_at || "-")}</td>
-          <td>${escapeHtml(invite.token)}</td>
+          <td>${escapeHtml(invite.token_preview || invite.token_id || "-")}</td>
           <td>${action}</td>
         </tr>
       `;
@@ -2349,7 +2349,7 @@ function renderStaffInvites(rows) {
           <th>Organization</th>
           <th>Expires</th>
           <th>Closed</th>
-          <th>Invite token</th>
+          <th>Token preview</th>
           <th>Action</th>
         </tr>
       </thead>
@@ -2540,7 +2540,7 @@ async function createStaffInvite(event) {
   });
   form.reset();
   form.elements.expires_in_hours.value = "48";
-  showMessage(`Created invite for ${created.email}. Token is visible in the Staff invites table.`, "ok");
+  showMessage(`Created invite for ${created.email}. Copy this one-time token now: ${created.token}`, "ok");
   await Promise.all([refreshStaffInvites(), refreshAudit()]);
 }
 

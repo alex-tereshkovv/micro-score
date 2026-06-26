@@ -125,7 +125,8 @@ class StaffInviteAccept(BaseModel):
 
 
 class StaffInviteResponse(BaseModel):
-    token: str
+    token_id: str
+    token_preview: str
     email: str
     role: Literal["mfi_analyst"]
     organization_id: str
@@ -136,6 +137,10 @@ class StaffInviteResponse(BaseModel):
     accepted_by: str | None = None
     revoked_at: str | None = None
     revoked_by: str | None = None
+
+
+class StaffInviteCreatedResponse(StaffInviteResponse):
+    token: str
 
 
 class OrganizationCreate(BaseModel):

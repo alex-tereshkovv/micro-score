@@ -15,6 +15,7 @@ import csv
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+import hashlib
 from io import StringIO
 import os
 from typing import Any
@@ -69,6 +70,7 @@ from .schemas import (
     SegmentAnalyticsRow,
     StaffInviteAccept,
     StaffInviteCreate,
+    StaffInviteCreatedResponse,
     StaffInviteResponse,
     StaffUserCreate,
     UserPublic,
@@ -147,6 +149,46 @@ def _parse_utc_datetime(value: str) -> datetime:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _staff_invite_token_id(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def _staff_invite_token_preview(token_id: str) -> str:
+    return f"{token_id[:12]}..."
+
+
+def _staff_invite_response(
+    invite: dict[str, Any],
+    *,
+    raw_token: str | None = None,
+) -> dict[str, Any]:
+    response = {
+        "token_id": invite["token"],
+        "token_preview": _staff_invite_token_preview(invite["token"]),
+        "email": invite["email"],
+        "role": invite["role"],
+        "organization_id": invite["organization_id"],
+        "created_by": invite.get("created_by"),
+        "created_at": invite["created_at"],
+        "expires_at": invite["expires_at"],
+        "accepted_at": invite.get("accepted_at"),
+        "accepted_by": invite.get("accepted_by"),
+        "revoked_at": invite.get("revoked_at"),
+        "revoked_by": invite.get("revoked_by"),
+    }
+    if raw_token is not None:
+        response["token"] = raw_token
+    return response
+
+
+def _get_staff_invite_by_secret(
+    repository: MicroScoreRepository,
+    raw_token: str,
+) -> dict[str, Any] | None:
+    token_id = _staff_invite_token_id(raw_token)
+    return repository.get_staff_invite(token_id) or repository.get_staff_invite(raw_token)
 
 
 def _active_model_or_503(repository: MicroScoreRepository) -> dict[str, Any]:
@@ -847,12 +889,13 @@ def accept_staff_invite(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> AuthResponse:
     token = payload.token.strip()
-    invite = repository.get_staff_invite(token)
+    invite = _get_staff_invite_by_secret(repository, token)
     if invite is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Staff invite not found",
         )
+    token_id = invite["token"]
     if invite.get("accepted_at"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -889,7 +932,7 @@ def accept_staff_invite(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already exists",
         )
-    accepted = repository.mark_staff_invite_accepted(token, email)
+    accepted = repository.mark_staff_invite_accepted(token_id, email)
     if not accepted:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -900,11 +943,12 @@ def accept_staff_invite(
         actor_email=email,
         action="staff_invite_accepted",
         entity_type="staff_invite",
-        entity_id=token,
+        entity_id=token_id,
         details={
             "email": email,
             "role": created["role"],
             "organization_id": created.get("organization_id"),
+            "token_preview": _staff_invite_token_preview(token_id),
         },
     )
     access_token = create_token()
@@ -1313,12 +1357,12 @@ def list_staff_invites(
     _user: dict[str, Any] = Depends(require_admin_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
-    return repository.list_staff_invites()
+    return [_staff_invite_response(invite) for invite in repository.list_staff_invites()]
 
 
 @app.post(
     "/admin/staff-invites",
-    response_model=StaffInviteResponse,
+    response_model=StaffInviteCreatedResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_staff_invite(
@@ -1341,8 +1385,10 @@ def create_staff_invite(
     expires_at = (
         datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
     ).isoformat()
+    raw_token = create_token()
+    token_id = _staff_invite_token_id(raw_token)
     created = repository.create_staff_invite(
-        token=create_token(),
+        token=token_id,
         email=email,
         role=payload.role,
         organization_id=payload.organization_id,
@@ -1353,24 +1399,25 @@ def create_staff_invite(
         actor_email=user["email"],
         action="staff_invite_created",
         entity_type="staff_invite",
-        entity_id=created["token"],
+        entity_id=token_id,
         details={
             "email": email,
             "role": payload.role,
             "organization_id": payload.organization_id,
             "expires_at": expires_at,
+            "token_preview": _staff_invite_token_preview(token_id),
         },
     )
-    return created
+    return _staff_invite_response(created, raw_token=raw_token)
 
 
-@app.delete("/admin/staff-invites/{token}", response_model=StaffInviteResponse)
+@app.delete("/admin/staff-invites/{token_id}", response_model=StaffInviteResponse)
 def revoke_staff_invite(
-    token: str,
+    token_id: str,
     user: dict[str, Any] = Depends(require_admin_user),
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    invite = repository.get_staff_invite(token)
+    invite = repository.get_staff_invite(token_id)
     if invite is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1382,31 +1429,32 @@ def revoke_staff_invite(
             detail="Accepted staff invite cannot be revoked",
         )
     if invite.get("revoked_at"):
-        return invite
+        return _staff_invite_response(invite)
 
-    revoked = repository.mark_staff_invite_revoked(token, user["email"])
+    revoked = repository.mark_staff_invite_revoked(token_id, user["email"])
     if not revoked:
-        refreshed = repository.get_staff_invite(token)
+        refreshed = repository.get_staff_invite(token_id)
         if refreshed and refreshed.get("revoked_at"):
-            return refreshed
+            return _staff_invite_response(refreshed)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Staff invite can no longer be revoked",
         )
 
-    updated = repository.get_staff_invite(token)
+    updated = repository.get_staff_invite(token_id)
     repository.record_audit_event(
         actor_email=user["email"],
         action="staff_invite_revoked",
         entity_type="staff_invite",
-        entity_id=token,
+        entity_id=token_id,
         details={
             "email": invite["email"],
             "role": invite["role"],
             "organization_id": invite["organization_id"],
+            "token_preview": _staff_invite_token_preview(token_id),
         },
     )
-    return updated or invite
+    return _staff_invite_response(updated or invite)
 
 
 @app.get("/admin/model-versions", response_model=list[ModelVersionPublic])

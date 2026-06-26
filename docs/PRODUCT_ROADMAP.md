@@ -259,8 +259,10 @@ top-district, and rural/peri-urban contextual-share views.
 Session Security v2 now makes session expiry explicit in API and static-demo
 auth responses, exposes `/me` session metadata, and shows token lifetime in the
 browser session pill.
-Staff Invite v2 now adds admin-created, expiring MFI analyst invitations with
+Staff Invite v3 now adds admin-created, expiring MFI analyst invitations with
 password setup at acceptance time, invite status listing, admin revocation, and
+one-time raw token handling so list/revoke/audit surfaces expose only safe
+`token_id`/preview metadata. It records
 `staff_invite_created`/`staff_invite_accepted`/`staff_invite_revoked` audit
 events across the API and static demo.
 The next engineering milestone is to turn the

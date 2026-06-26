@@ -25,7 +25,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 | Public demo | https://alex-tereshkovv.github.io/micro-score/ |
 | Quality gate | GitHub Actions CI for tests, smoke checks, and static demo |
 | Model governance | Version registry + reproducible, tenant-scoped Monte Carlo run registry |
-| Staff onboarding | Admin-created expiring/revocable analyst invites with password setup and audit events |
+| Staff onboarding | Expiring/revocable analyst invites with one-time tokens and audit events |
 | Main finding | Synthetic-data performance depends heavily on `late_payment_count` |
 | Key limitation | Borrower-level data is synthetic, not real MFI data |
 | Public benchmark | UCI Default of Credit Card Clients: RF ROC-AUC `0.775` |

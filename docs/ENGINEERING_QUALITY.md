@@ -51,7 +51,7 @@ The smoke test verifies that the in-browser static backend can:
 - sign in as an MFI analyst
 - verify auth/session expiry metadata in the static contract
 - create, revoke, and accept expiring staff invites with password-policy
-  enforcement
+  enforcement and one-time raw token handling
 - load the seeded application queue
 - score an application
 - open a review packet

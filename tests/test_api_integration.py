@@ -457,6 +457,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteCreate", schemas)
         self.assertIn("StaffInviteAccept", schemas)
         self.assertIn("StaffInviteResponse", schemas)
+        self.assertIn("StaffInviteCreatedResponse", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
         self.assertIn("ModelVersionCreate", schemas)
@@ -508,11 +509,15 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
+        self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("token_preview", schemas["StaffInviteResponse"]["properties"])
+        self.assertNotIn("token", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("token", schemas["StaffInviteCreatedResponse"]["properties"])
         self.assertIn("revoked_at", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("revoked_by", schemas["StaffInviteResponse"]["properties"])
         paths = response.json()["paths"]
         self.assertIn("/admin/staff-invites", paths)
-        self.assertIn("/admin/staff-invites/{token}", paths)
+        self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
 
     def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
@@ -792,6 +797,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIsNone(invite_payload["accepted_at"])
         self.assertIsNone(invite_payload["revoked_at"])
         self.assertIn("token", invite_payload)
+        self.assertIn("token_id", invite_payload)
+        self.assertIn("token_preview", invite_payload)
+        self.assertNotEqual(invite_payload["token"], invite_payload["token_id"])
+        self.assertEqual(len(invite_payload["token_id"]), 64)
         self.assertNotIn("password", invite_payload)
 
         weak_accept = self.client.post(
@@ -817,7 +826,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(reused.status_code, 409, reused.text)
 
         accepted_revoke = self.client.delete(
-            f"/admin/staff-invites/{invite_payload['token']}",
+            f"/admin/staff-invites/{invite_payload['token_id']}",
             headers=self._headers(admin_token),
         )
         self.assertEqual(accepted_revoke.status_code, 409, accepted_revoke.text)
@@ -827,9 +836,12 @@ class ApiIntegrationTests(unittest.TestCase):
             headers=self._headers(admin_token),
         )
         self.assertEqual(invites.status_code, 200, invites.text)
+        self.assertTrue(all("token" not in row for row in invites.json()))
         self.assertTrue(
             any(
                 row["email"] == "invited-analyst@example.com"
+                and row["token_id"] == invite_payload["token_id"]
+                and row["token_preview"] == invite_payload["token_preview"]
                 and row["accepted_at"]
                 and row["accepted_by"] == "invited-analyst@example.com"
                 for row in invites.json()
@@ -848,7 +860,7 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(revokable.status_code, 201, revokable.text)
         revoked = self.client.delete(
-            f"/admin/staff-invites/{revokable.json()['token']}",
+            f"/admin/staff-invites/{revokable.json()['token_id']}",
             headers=self._headers(admin_token),
         )
         self.assertEqual(revoked.status_code, 200, revoked.text)
@@ -856,7 +868,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(revoked.json()["revoked_by"], "provisioning-admin@example.com")
 
         repeated_revoke = self.client.delete(
-            f"/admin/staff-invites/{revokable.json()['token']}",
+            f"/admin/staff-invites/{revokable.json()['token_id']}",
             headers=self._headers(admin_token),
         )
         self.assertEqual(repeated_revoke.status_code, 200, repeated_revoke.text)
@@ -898,16 +910,21 @@ class ApiIntegrationTests(unittest.TestCase):
             and event["details"]["email"] == "invited-analyst@example.com"
         )
         self.assertEqual(invite_created_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(invite_created_event["entity_id"], invite_payload["token_id"])
+        self.assertNotEqual(invite_created_event["entity_id"], invite_payload["token"])
         self.assertEqual(invite_created_event["details"]["email"], "invited-analyst@example.com")
+        self.assertEqual(invite_created_event["details"]["token_preview"], invite_payload["token_preview"])
         invite_accepted_event = next(
             event for event in audit if event["action"] == "staff_invite_accepted"
         )
         self.assertEqual(invite_accepted_event["actor_email"], "invited-analyst@example.com")
+        self.assertEqual(invite_accepted_event["entity_id"], invite_payload["token_id"])
         invite_revoked_event = next(
             event for event in audit if event["action"] == "staff_invite_revoked"
         )
         self.assertEqual(invite_revoked_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(invite_revoked_event["details"]["email"], "revoked-analyst@example.com")
+        self.assertEqual(invite_revoked_event["entity_id"], revokable.json()["token_id"])
 
     def test_admin_can_create_publicly_listed_organization(self) -> None:
         public_before = self.client.get("/organizations")
