@@ -401,6 +401,8 @@
         organization_id: organizationId,
         password: "password123",
         created_at: nowIso(),
+        disabled_at: null,
+        disabled_by: null,
       };
     });
 
@@ -700,11 +702,17 @@
     if (!user || user.email !== session?.email || user.role !== session?.role) {
       throw new Error("Demo session expired. Sign in again.");
     }
+    if (user.disabled_at) {
+      delete demo.sessions[session.token];
+      throw new Error("Account disabled");
+    }
     return {
       email: user.email,
       role: user.role,
       organization_id: user.organization_id || null,
       created_at: user.created_at,
+      disabled_at: user.disabled_at || null,
+      disabled_by: user.disabled_by || null,
       session_expires_at: expiresAt,
       session_ttl_seconds: DEMO_SESSION_TTL_SECONDS,
     };
@@ -1477,6 +1485,7 @@
       const email = String(body.email || "").trim().toLowerCase();
       const user = demo.users[email];
       if (!user || user.password !== body.password) throw new Error("Invalid demo credentials");
+      if (user.disabled_at) throw new Error("Account disabled");
       const sessionRecord = createDemoSession(email);
       return {
         access_token: sessionRecord.token,
@@ -1504,6 +1513,8 @@
         organization_id: null,
         password: body.password || "",
         created_at: nowIso(),
+        disabled_at: null,
+        disabled_by: null,
       };
       const sessionRecord = createDemoSession(email);
       return {
@@ -1535,6 +1546,8 @@
         organization_id: invite.organization_id,
         password: body.password || "",
         created_at: nowIso(),
+        disabled_at: null,
+        disabled_by: null,
       };
       invite.accepted_at = nowIso();
       invite.accepted_by = invite.email;
@@ -1740,14 +1753,57 @@
       requireAdmin(session);
       return clone(
         Object.values(demo.users)
-          .map(({ email, role, organization_id, created_at }) => ({
+          .map(({ email, role, organization_id, created_at, disabled_at, disabled_by }) => ({
             email,
             role,
             organization_id: organization_id || null,
             created_at,
+            disabled_at: disabled_at || null,
+            disabled_by: disabled_by || null,
           }))
           .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
       );
+    }
+
+    const disableStaffUserMatch = cleanPath.match(/^\/admin\/users\/([^/]+)\/disable$/);
+    if (disableStaffUserMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const email = decodeURIComponent(disableStaffUserMatch[1]).trim().toLowerCase();
+      const target = demo.users[email];
+      if (!target) throw new Error("User not found");
+      if (target.role !== "mfi_analyst") {
+        throw new Error("Only MFI analyst accounts can be disabled here");
+      }
+      const wasAlreadyDisabled = Boolean(target.disabled_at);
+      if (!target.disabled_at) {
+        target.disabled_at = nowIso();
+        target.disabled_by = user.email;
+      }
+      let revokedSessionCount = 0;
+      Object.entries(demo.sessions).forEach(([token, record]) => {
+        const sessionEmail = typeof record === "string" ? record : record.email;
+        if (sessionEmail === email) {
+          delete demo.sessions[token];
+          revokedSessionCount += 1;
+        }
+      });
+      if (!wasAlreadyDisabled) {
+        addAudit("staff_user_disabled", "user", email, user.email, {
+          role: target.role,
+          organization_id: target.organization_id,
+          revoked_session_count: revokedSessionCount,
+        });
+      }
+      return clone({
+        email: target.email,
+        role: target.role,
+        organization_id: target.organization_id || null,
+        created_at: target.created_at,
+        disabled_at: target.disabled_at,
+        disabled_by: target.disabled_by,
+        revoked_session_count: revokedSessionCount,
+        was_already_disabled: wasAlreadyDisabled,
+      });
     }
 
     if (cleanPath === "/admin/staff-invites" && method === "GET") {
@@ -1875,6 +1931,8 @@
         organization_id: body.organization_id,
         password: body.password,
         created_at: nowIso(),
+        disabled_at: null,
+        disabled_by: null,
       };
       addAudit("staff_user_created", "user", email, user.email, {
         role: "mfi_analyst",
@@ -1885,6 +1943,8 @@
         role: "mfi_analyst",
         organization_id: body.organization_id,
         created_at: demo.users[email].created_at,
+        disabled_at: null,
+        disabled_by: null,
       });
     }
 

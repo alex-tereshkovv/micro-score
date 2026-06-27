@@ -322,6 +322,65 @@ async function main() {
   if (usersAfterProvisioning.length !== usersBeforeProvisioning.length + 1) {
     throw new Error("Expected provisioned analyst in the user list");
   }
+  const newAnalystAuth = await api.request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: "new-analyst@test.com",
+      password: "StrongPassword1!",
+    }),
+  });
+  const newAnalystSession = {
+    token: newAnalystAuth.access_token,
+    role: newAnalystAuth.role,
+    email: "new-analyst@test.com",
+  };
+  const disabledAnalyst = await api.request(
+    `/admin/users/${encodeURIComponent("new-analyst@test.com")}/disable`,
+    { method: "POST" },
+    adminSession,
+  );
+  if (
+    !disabledAnalyst.disabled_at
+    || disabledAnalyst.disabled_by !== "admin@test.com"
+    || disabledAnalyst.revoked_session_count !== 1
+  ) {
+    throw new Error("Expected disabled staff user with revoked session count");
+  }
+  let disabledTokenRejected = false;
+  try {
+    await api.request("/me", {}, newAnalystSession);
+  } catch (error) {
+    disabledTokenRejected = String(error.message).includes("session expired")
+      || String(error.message).includes("disabled");
+  }
+  if (!disabledTokenRejected) {
+    throw new Error("Expected disabled staff user's active session to be revoked");
+  }
+  let disabledLoginRejected = false;
+  try {
+    await api.request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "new-analyst@test.com",
+        password: "StrongPassword1!",
+      }),
+    });
+  } catch (error) {
+    disabledLoginRejected = String(error.message).includes("Account disabled");
+  }
+  if (!disabledLoginRejected) throw new Error("Expected disabled staff login to fail");
+  const repeatedDisabledAnalyst = await api.request(
+    `/admin/users/${encodeURIComponent("new-analyst@test.com")}/disable`,
+    { method: "POST" },
+    adminSession,
+  );
+  if (!repeatedDisabledAnalyst.was_already_disabled) {
+    throw new Error("Expected repeated staff disable to be idempotent");
+  }
+  const usersAfterDisable = await api.request("/admin/users", {}, adminSession);
+  if (!usersAfterDisable.some((user) => user.email === "new-analyst@test.com" && user.disabled_at)) {
+    throw new Error("Expected disabled analyst in the user list");
+  }
 
   const staffInvite = await api.request(
     "/admin/staff-invites",
@@ -443,6 +502,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_revoked")) {
     throw new Error("Expected staff invite revocation audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_user_disabled")) {
+    throw new Error("Expected staff disable audit event");
   }
 
   const modelVersionsBefore = await api.request("/admin/model-versions", {}, adminSession);
@@ -686,6 +748,7 @@ async function main() {
       staff_invites: true,
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
+      staff_user_disable: true,
       model_registry: true,
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,

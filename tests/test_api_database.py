@@ -121,6 +121,25 @@ class ApiDatabaseTests(unittest.TestCase):
             {user["email"] for user in users},
             {"borrower@example.com", "analyst@example.com"},
         )
+        self.assertTrue(all("disabled_at" in user for user in users))
+
+    def test_disabled_user_sessions_are_revoked(self) -> None:
+        self.repository.create_user("admin@example.com", "admin-hash", "admin")
+        self.repository.create_user("analyst@example.com", "analyst-hash", "mfi_analyst")
+        self.repository.create_session("analyst-token", "analyst@example.com")
+
+        disabled = self.repository.disable_user("analyst@example.com", "admin@example.com")
+
+        self.assertEqual(disabled["email"], "analyst@example.com")
+        self.assertIsNotNone(disabled["disabled_at"])
+        self.assertEqual(disabled["disabled_by"], "admin@example.com")
+        self.assertEqual(disabled["revoked_session_count"], 1)
+        self.assertFalse(disabled["was_already_disabled"])
+        self.assertIsNone(self.repository.get_user_by_token("analyst-token"))
+
+        repeated = self.repository.disable_user("analyst@example.com", "admin@example.com")
+        self.assertTrue(repeated["was_already_disabled"])
+        self.assertEqual(repeated["revoked_session_count"], 0)
 
     def test_staff_invites_persist_and_accept_once(self) -> None:
         self.repository.create_organization(

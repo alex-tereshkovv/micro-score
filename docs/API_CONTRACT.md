@@ -215,6 +215,18 @@ only `mfi_analyst`; additional administrators remain a deployment-level
 operation. Password hashes are never returned. Successful provisioning records
 a `staff_user_created` audit event with the acting administrator.
 
+Disable an MFI analyst account without deleting its history:
+
+```http
+POST /admin/users/{email}/disable
+```
+
+The disable endpoint requires an `admin` bearer token and only applies to
+`mfi_analyst` accounts. It sets `disabled_at`/`disabled_by`, revokes all active
+sessions for that analyst, rejects future login with `Account disabled`, and
+records `staff_user_disabled`. Repeating the request is idempotent and returns
+`was_already_disabled: true`.
+
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
 invite, can revoke it before use, and the analyst sets their own password
@@ -771,6 +783,7 @@ Current audited actions:
 - `model_version_activated`
 - `portfolio_simulation_run`
 - `staff_user_created`
+- `staff_user_disabled`
 - `staff_invite_created`
 - `staff_invite_accepted`
 - `staff_invite_revoked`

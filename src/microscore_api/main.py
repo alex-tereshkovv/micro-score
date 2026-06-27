@@ -73,6 +73,7 @@ from .schemas import (
     StaffInviteCreatedResponse,
     StaffInviteResponse,
     StaffUserCreate,
+    StaffUserDisableResponse,
     UserPublic,
 )
 from .scoring import get_scoring_service
@@ -870,6 +871,11 @@ def login(
         if retry_after:
             _raise_login_rate_limit(retry_after)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if user.get("disabled_at"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account disabled",
+        )
 
     limiter.record_success(rate_key)
     token = create_token()
@@ -986,6 +992,8 @@ def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
         "role": user["role"],
         "organization_id": user.get("organization_id"),
         "created_at": user["created_at"],
+        "disabled_at": user.get("disabled_at"),
+        "disabled_by": user.get("disabled_by"),
         "session_expires_at": user["session_expires_at"],
         "session_ttl_seconds": user["session_ttl_seconds"],
     }
@@ -1350,6 +1358,46 @@ def list_admin_users(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_users()
+
+
+@app.post("/admin/users/{email}/disable", response_model=StaffUserDisableResponse)
+def disable_staff_user(
+    email: str,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    target_email = email.strip().lower()
+    target = repository.get_user(target_email)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if target["role"] != "mfi_analyst":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only MFI analyst accounts can be disabled here",
+        )
+
+    disabled = repository.disable_user(target_email, user["email"])
+    if disabled is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if not disabled["was_already_disabled"]:
+        repository.record_audit_event(
+            actor_email=user["email"],
+            action="staff_user_disabled",
+            entity_type="user",
+            entity_id=target_email,
+            details={
+                "role": target["role"],
+                "organization_id": target.get("organization_id"),
+                "revoked_session_count": disabled["revoked_session_count"],
+            },
+        )
+    return disabled
 
 
 @app.get("/admin/staff-invites", response_model=list[StaffInviteResponse])

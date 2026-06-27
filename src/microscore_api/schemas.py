@@ -98,6 +98,8 @@ class UserPublic(BaseModel):
     role: Role
     organization_id: str | None = None
     created_at: str
+    disabled_at: str | None = None
+    disabled_by: str | None = None
 
 
 class MeResponse(UserPublic):
@@ -110,6 +112,11 @@ class StaffUserCreate(BaseModel):
     password: str = Field(min_length=1, max_length=128)
     role: Literal["mfi_analyst"] = "mfi_analyst"
     organization_id: str = Field(min_length=1, max_length=100)
+
+
+class StaffUserDisableResponse(UserPublic):
+    revoked_session_count: int = Field(ge=0)
+    was_already_disabled: bool = False
 
 
 class StaffInviteCreate(BaseModel):

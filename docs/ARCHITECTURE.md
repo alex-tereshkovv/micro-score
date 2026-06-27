@@ -87,7 +87,7 @@ Main local components:
   and a single-process login attempt limiter;
 - admin-only MFI analyst creation plus expiring/revocable staff invites with
   one-time raw tokens, analyst-side password setup, public user listings,
-  invite status listings, and audit events;
+  invite status listings, analyst disable/session revocation, and audit events;
 - organization-scoped applications, queues, review packets, exports, and
   analytics, with global visibility reserved for admins;
 - dynamic organization discovery for borrower routing and admin staff

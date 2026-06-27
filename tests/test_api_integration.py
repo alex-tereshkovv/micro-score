@@ -454,6 +454,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("MeResponse", schemas)
         self.assertIn("LogoutResponse", schemas)
         self.assertIn("StaffUserCreate", schemas)
+        self.assertIn("StaffUserDisableResponse", schemas)
         self.assertIn("StaffInviteCreate", schemas)
         self.assertIn("StaffInviteAccept", schemas)
         self.assertIn("StaffInviteResponse", schemas)
@@ -509,6 +510,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
+        self.assertIn("disabled_at", schemas["UserPublic"]["properties"])
+        self.assertIn("disabled_by", schemas["UserPublic"]["properties"])
+        self.assertIn("revoked_session_count", schemas["StaffUserDisableResponse"]["properties"])
         self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token_preview", schemas["StaffInviteResponse"]["properties"])
         self.assertNotIn("token", schemas["StaffInviteResponse"]["properties"])
@@ -519,6 +523,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
+        self.assertIn("/admin/users/{email}/disable", paths)
 
     def test_pilot_readiness_endpoint_defines_minimum_data_contract(self) -> None:
         response = self.client.get("/governance/pilot-readiness")
@@ -778,6 +783,41 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
         self.assertEqual(analyst_login.json()["role"], "mfi_analyst")
+        analyst_token = analyst_login.json()["access_token"]
+
+        disabled = self.client.post(
+            "/admin/users/new-analyst@example.com/disable",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(disabled.status_code, 200, disabled.text)
+        self.assertEqual(disabled.json()["email"], "new-analyst@example.com")
+        self.assertIsNotNone(disabled.json()["disabled_at"])
+        self.assertEqual(disabled.json()["disabled_by"], "provisioning-admin@example.com")
+        self.assertEqual(disabled.json()["revoked_session_count"], 1)
+        self.assertFalse(disabled.json()["was_already_disabled"])
+
+        revoked_session = self.client.get("/me", headers=self._headers(analyst_token))
+        self.assertEqual(revoked_session.status_code, 401, revoked_session.text)
+
+        disabled_login = self.client.post(
+            "/auth/login",
+            json={"email": "new-analyst@example.com", "password": TEST_PASSWORD},
+        )
+        self.assertEqual(disabled_login.status_code, 403, disabled_login.text)
+
+        repeated_disable = self.client.post(
+            "/admin/users/new-analyst@example.com/disable",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(repeated_disable.status_code, 200, repeated_disable.text)
+        self.assertTrue(repeated_disable.json()["was_already_disabled"])
+        self.assertEqual(repeated_disable.json()["revoked_session_count"], 0)
+
+        borrower_disable = self.client.post(
+            "/admin/users/regular@example.com/disable",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(borrower_disable.status_code, 409, borrower_disable.text)
 
         invite = self.client.post(
             "/admin/staff-invites",
@@ -925,6 +965,12 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(invite_revoked_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(invite_revoked_event["details"]["email"], "revoked-analyst@example.com")
         self.assertEqual(invite_revoked_event["entity_id"], revokable.json()["token_id"])
+        staff_disabled_event = next(
+            event for event in audit if event["action"] == "staff_user_disabled"
+        )
+        self.assertEqual(staff_disabled_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(staff_disabled_event["entity_id"], "new-analyst@example.com")
+        self.assertEqual(staff_disabled_event["details"]["revoked_session_count"], 1)
 
     def test_admin_can_create_publicly_listed_organization(self) -> None:
         public_before = self.client.get("/organizations")

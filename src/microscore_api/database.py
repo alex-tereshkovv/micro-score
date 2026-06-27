@@ -226,7 +226,9 @@ class MicroScoreRepository:
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL,
                     organization_id TEXT REFERENCES mfi_organizations(id),
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    disabled_at TEXT,
+                    disabled_by TEXT REFERENCES users(email)
                 );
 
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -331,6 +333,13 @@ class MicroScoreRepository:
                 "users",
                 "organization_id",
                 "TEXT REFERENCES mfi_organizations(id)",
+            )
+            _ensure_column(connection, "users", "disabled_at", "TEXT")
+            _ensure_column(
+                connection,
+                "users",
+                "disabled_by",
+                "TEXT REFERENCES users(email)",
             )
             _ensure_column(
                 connection,
@@ -659,7 +668,14 @@ class MicroScoreRepository:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT email, password_hash, role, organization_id, created_at
+                SELECT
+                    email,
+                    password_hash,
+                    role,
+                    organization_id,
+                    created_at,
+                    disabled_at,
+                    disabled_by
                 FROM users
                 WHERE email = ?
                 """,
@@ -671,12 +687,49 @@ class MicroScoreRepository:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT email, role, organization_id, created_at
+                SELECT
+                    email,
+                    role,
+                    organization_id,
+                    created_at,
+                    disabled_at,
+                    disabled_by
                 FROM users
                 ORDER BY role, email
                 """
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def disable_user(self, email: str, disabled_by: str) -> dict[str, Any] | None:
+        now = _now_iso()
+        with self._connection() as connection:
+            existing = connection.execute(
+                """
+                SELECT email, disabled_at
+                FROM users
+                WHERE email = ?
+                """,
+                (email,),
+            ).fetchone()
+            if existing is None:
+                return None
+            if existing["disabled_at"] is None:
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET disabled_at = ?, disabled_by = ?
+                    WHERE email = ? AND disabled_at IS NULL
+                    """,
+                    (now, disabled_by, email),
+                )
+            revoked_sessions = connection.execute(
+                "DELETE FROM sessions WHERE email = ?",
+                (email,),
+            ).rowcount
+        disabled = self.get_user(email) or {}
+        disabled["revoked_session_count"] = revoked_sessions
+        disabled["was_already_disabled"] = existing["disabled_at"] is not None
+        return disabled
 
     def create_staff_invite(
         self,
@@ -819,6 +872,8 @@ class MicroScoreRepository:
                     users.role,
                     users.organization_id,
                     users.created_at,
+                    users.disabled_at,
+                    users.disabled_by,
                     sessions.created_at AS session_created_at
                 FROM sessions
                 JOIN users ON users.email = sessions.email
@@ -827,6 +882,9 @@ class MicroScoreRepository:
                 (token,),
             ).fetchone()
         if row is None:
+            return None
+        if row["disabled_at"] is not None:
+            self.revoke_session(token)
             return None
 
         metadata = session_expiry_metadata(row["session_created_at"], ttl_hours=ttl_hours)

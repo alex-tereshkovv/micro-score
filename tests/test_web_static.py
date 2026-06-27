@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./mock-api.js?v=20260626-invite-token"', html)
+        self.assertIn('src="./mock-api.js?v=20260627-user-lifecycle"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260626-invite-token"', html)
+        self.assertIn('src="./app.js?v=20260627-user-lifecycle"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -144,6 +144,8 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/simulations",
             "/mfi/analytics/decisions",
             "/admin/audit-events",
+            "/admin/users",
+            "/disable",
             "/admin/staff-invites",
             "/admin/model-versions",
             "/admin/applications",
@@ -276,6 +278,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
         self.assertIn("staff_user_created", mock_script)
+        self.assertIn("staff_user_disabled", mock_script)
+        self.assertIn("Account disabled", mock_script)
         self.assertIn('"/admin/staff-invites"', mock_script)
         self.assertIn('"/auth/accept-staff-invite"', mock_script)
         self.assertIn("staff_invite_created", mock_script)
@@ -287,6 +291,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Staff invite has expired", mock_script)
         self.assertIn("refreshStaffUsers", script)
         self.assertIn("createStaffUser", script)
+        self.assertIn("disableStaffUser", script)
+        self.assertIn("data-disable-user-email", script)
         self.assertIn("refreshStaffInvites", script)
         self.assertIn("createStaffInvite", script)
         self.assertIn("revokeStaffInvite", script)

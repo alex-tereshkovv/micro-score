@@ -2292,12 +2292,55 @@ async function refreshAudit() {
 
 async function refreshStaffUsers() {
   const rows = await apiFetch("/admin/users");
-  renderSimpleTable(els.staffUsers, rows, [
-    ["email", "Email"],
-    ["role", "Role", formatPolicyName],
-    ["organization_id", "Organization"],
-    ["created_at", "Created"],
-  ]);
+  renderStaffUsers(rows);
+}
+
+function renderStaffUsers(rows) {
+  if (!rows.length) {
+    setPanelState(
+      els.staffUsers,
+      "table-shell",
+      "empty",
+      "No staff users loaded",
+      "Created analyst accounts will appear here.",
+    );
+    return;
+  }
+  els.staffUsers.className = "table-shell";
+  const body = rows
+    .map((user) => {
+      const canDisable = user.role === "mfi_analyst" && !user.disabled_at;
+      const status = user.disabled_at ? "disabled" : "active";
+      const action = canDisable
+        ? `<button class="secondary-button compact-button" type="button" data-disable-user-email="${escapeHtml(user.email)}">Disable</button>`
+        : "-";
+      return `
+        <tr>
+          <td>${escapeHtml(user.email)}</td>
+          <td>${escapeHtml(formatPolicyName(user.role))}</td>
+          <td>${escapeHtml(formatPolicyName(status))}</td>
+          <td>${escapeHtml(user.organization_id || "-")}</td>
+          <td>${escapeHtml(user.disabled_at || user.created_at || "-")}</td>
+          <td>${action}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  els.staffUsers.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Organization</th>
+          <th>Created / disabled</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
 }
 
 function staffInviteStatus(invite) {
@@ -2526,6 +2569,17 @@ async function createStaffUser(event) {
   await Promise.all([refreshStaffUsers(), refreshAudit()]);
 }
 
+async function disableStaffUser(email) {
+  const disabled = await apiFetch(`/admin/users/${encodeURIComponent(email)}/disable`, {
+    method: "POST",
+  });
+  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  showMessage(
+    `Disabled ${disabled.email}; revoked ${disabled.revoked_session_count} active session(s).`,
+    "ok",
+  );
+}
+
 async function createStaffInvite(event) {
   event.preventDefault();
   const form = els.staffInviteForm;
@@ -2697,6 +2751,12 @@ function wireEvents() {
   });
   els.refreshUsers.addEventListener("click", () => {
     refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
+  });
+  els.staffUsers.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-disable-user-email]");
+    if (!button) return;
+    disableStaffUser(button.dataset.disableUserEmail)
+      .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshStaffInvites.addEventListener("click", () => {
     refreshStaffInvites().catch((error) => showMessage(error.message, "error"));
