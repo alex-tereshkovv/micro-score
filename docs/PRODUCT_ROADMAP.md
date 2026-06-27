@@ -268,6 +268,9 @@ events across the API and static demo.
 Staff/User Lifecycle v1 now adds admin-only MFI analyst disable, active-session
 revocation, disabled-login rejection, user status listing, and
 `staff_user_disabled` audit events.
+Staff/User Lifecycle v2 adds admin-only analyst reactivation, restores normal
+login without creating sessions automatically, and records
+`staff_user_reactivated` with prior disable metadata.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
@@ -277,5 +280,5 @@ frontend and scoring review flow into a more production-like application:
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL
-- MFA, email delivery, staff reactivation policy, invite rotation monitoring, and external
+- MFA, email delivery, invite rotation monitoring, and external
   identity-provider integration before any real user data

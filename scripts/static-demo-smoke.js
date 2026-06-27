@@ -381,6 +381,36 @@ async function main() {
   if (!usersAfterDisable.some((user) => user.email === "new-analyst@test.com" && user.disabled_at)) {
     throw new Error("Expected disabled analyst in the user list");
   }
+  const reactivatedAnalyst = await api.request(
+    `/admin/users/${encodeURIComponent("new-analyst@test.com")}/reactivate`,
+    { method: "POST" },
+    adminSession,
+  );
+  if (
+    reactivatedAnalyst.disabled_at
+    || reactivatedAnalyst.disabled_by
+    || reactivatedAnalyst.was_already_active
+  ) {
+    throw new Error("Expected reactivated analyst without disabled metadata");
+  }
+  const reactivatedLogin = await api.request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: "new-analyst@test.com",
+      password: "StrongPassword1!",
+    }),
+  });
+  if (reactivatedLogin.role !== "mfi_analyst") {
+    throw new Error("Expected reactivated analyst login to succeed");
+  }
+  const repeatedReactivatedAnalyst = await api.request(
+    `/admin/users/${encodeURIComponent("new-analyst@test.com")}/reactivate`,
+    { method: "POST" },
+    adminSession,
+  );
+  if (!repeatedReactivatedAnalyst.was_already_active) {
+    throw new Error("Expected repeated staff reactivation to be idempotent");
+  }
 
   const staffInvite = await api.request(
     "/admin/staff-invites",
@@ -505,6 +535,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_user_disabled")) {
     throw new Error("Expected staff disable audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_user_reactivated")) {
+    throw new Error("Expected staff reactivation audit event");
   }
 
   const modelVersionsBefore = await api.request("/admin/model-versions", {}, adminSession);
@@ -749,6 +782,7 @@ async function main() {
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
       staff_user_disable: true,
+      staff_user_reactivation: true,
       model_registry: true,
       active_model: rescored.score_result.model_version,
       tenant_isolation: true,

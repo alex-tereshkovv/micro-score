@@ -1806,6 +1806,41 @@
       });
     }
 
+    const reactivateStaffUserMatch = cleanPath.match(/^\/admin\/users\/([^/]+)\/reactivate$/);
+    if (reactivateStaffUserMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const email = decodeURIComponent(reactivateStaffUserMatch[1]).trim().toLowerCase();
+      const target = demo.users[email];
+      if (!target) throw new Error("User not found");
+      if (target.role !== "mfi_analyst") {
+        throw new Error("Only MFI analyst accounts can be reactivated here");
+      }
+      const wasAlreadyActive = !target.disabled_at;
+      const previousDisabledAt = target.disabled_at || null;
+      const previousDisabledBy = target.disabled_by || null;
+      if (target.disabled_at) {
+        target.disabled_at = null;
+        target.disabled_by = null;
+      }
+      if (!wasAlreadyActive) {
+        addAudit("staff_user_reactivated", "user", email, user.email, {
+          role: target.role,
+          organization_id: target.organization_id,
+          previous_disabled_at: previousDisabledAt,
+          previous_disabled_by: previousDisabledBy,
+        });
+      }
+      return clone({
+        email: target.email,
+        role: target.role,
+        organization_id: target.organization_id || null,
+        created_at: target.created_at,
+        disabled_at: target.disabled_at || null,
+        disabled_by: target.disabled_by || null,
+        was_already_active: wasAlreadyActive,
+      });
+    }
+
     if (cleanPath === "/admin/staff-invites" && method === "GET") {
       requireAdmin(session);
       return clone(

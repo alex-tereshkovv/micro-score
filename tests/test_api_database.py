@@ -141,6 +141,18 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(repeated["was_already_disabled"])
         self.assertEqual(repeated["revoked_session_count"], 0)
 
+        reactivated = self.repository.reactivate_user("analyst@example.com")
+        self.assertEqual(reactivated["email"], "analyst@example.com")
+        self.assertIsNone(reactivated["disabled_at"])
+        self.assertIsNone(reactivated["disabled_by"])
+        self.assertFalse(reactivated["was_already_active"])
+        self.assertIsNotNone(reactivated["previous_disabled_at"])
+        self.assertEqual(reactivated["previous_disabled_by"], "admin@example.com")
+
+        repeated_reactivation = self.repository.reactivate_user("analyst@example.com")
+        self.assertTrue(repeated_reactivation["was_already_active"])
+        self.assertIsNone(repeated_reactivation["previous_disabled_at"])
+
     def test_staff_invites_persist_and_accept_once(self) -> None:
         self.repository.create_organization(
             organization_id="mfi-a",

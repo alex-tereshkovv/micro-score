@@ -71,6 +71,8 @@ git diff --check
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.
+- Staff/User Lifecycle v2 reactivates disabled MFI analysts without creating a
+  session automatically and records `staff_user_reactivated`.
 - Borrower history lists only the signed-in account's applications and excludes
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject

@@ -227,6 +227,19 @@ sessions for that analyst, rejects future login with `Account disabled`, and
 records `staff_user_disabled`. Repeating the request is idempotent and returns
 `was_already_disabled: true`.
 
+Reactivate a disabled MFI analyst account:
+
+```http
+POST /admin/users/{email}/reactivate
+```
+
+The reactivation endpoint requires an `admin` bearer token, only applies to
+`mfi_analyst` accounts, clears `disabled_at`/`disabled_by`, and records
+`staff_user_reactivated` with the previous disable metadata. It does not create
+a session automatically; the analyst must sign in again with their existing
+password. Repeating the request is idempotent and returns
+`was_already_active: true`.
+
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
 invite, can revoke it before use, and the analyst sets their own password
@@ -784,6 +797,7 @@ Current audited actions:
 - `portfolio_simulation_run`
 - `staff_user_created`
 - `staff_user_disabled`
+- `staff_user_reactivated`
 - `staff_invite_created`
 - `staff_invite_accepted`
 - `staff_invite_revoked`

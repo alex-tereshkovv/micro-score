@@ -119,6 +119,10 @@ class StaffUserDisableResponse(UserPublic):
     was_already_disabled: bool = False
 
 
+class StaffUserReactivateResponse(UserPublic):
+    was_already_active: bool = False
+
+
 class StaffInviteCreate(BaseModel):
     email: str
     role: Literal["mfi_analyst"] = "mfi_analyst"

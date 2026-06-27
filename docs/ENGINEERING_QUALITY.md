@@ -54,6 +54,8 @@ The smoke test verifies that the in-browser static backend can:
   enforcement and one-time raw token handling
 - disable an MFI analyst, revoke their active static session, reject future
   login, and verify the `staff_user_disabled` audit event
+- reactivate the analyst, verify login resumes without automatic session
+  creation, and verify the `staff_user_reactivated` audit event
 - load the seeded application queue
 - score an application
 - open a review packet

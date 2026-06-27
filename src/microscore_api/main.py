@@ -74,6 +74,7 @@ from .schemas import (
     StaffInviteResponse,
     StaffUserCreate,
     StaffUserDisableResponse,
+    StaffUserReactivateResponse,
     UserPublic,
 )
 from .scoring import get_scoring_service
@@ -1398,6 +1399,47 @@ def disable_staff_user(
             },
         )
     return disabled
+
+
+@app.post("/admin/users/{email}/reactivate", response_model=StaffUserReactivateResponse)
+def reactivate_staff_user(
+    email: str,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    target_email = email.strip().lower()
+    target = repository.get_user(target_email)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if target["role"] != "mfi_analyst":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only MFI analyst accounts can be reactivated here",
+        )
+
+    reactivated = repository.reactivate_user(target_email)
+    if reactivated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if not reactivated["was_already_active"]:
+        repository.record_audit_event(
+            actor_email=user["email"],
+            action="staff_user_reactivated",
+            entity_type="user",
+            entity_id=target_email,
+            details={
+                "role": target["role"],
+                "organization_id": target.get("organization_id"),
+                "previous_disabled_at": reactivated["previous_disabled_at"],
+                "previous_disabled_by": reactivated["previous_disabled_by"],
+            },
+        )
+    return reactivated
 
 
 @app.get("/admin/staff-invites", response_model=list[StaffInviteResponse])

@@ -731,6 +731,33 @@ class MicroScoreRepository:
         disabled["was_already_disabled"] = existing["disabled_at"] is not None
         return disabled
 
+    def reactivate_user(self, email: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            existing = connection.execute(
+                """
+                SELECT email, disabled_at, disabled_by
+                FROM users
+                WHERE email = ?
+                """,
+                (email,),
+            ).fetchone()
+            if existing is None:
+                return None
+            if existing["disabled_at"] is not None:
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET disabled_at = NULL, disabled_by = NULL
+                    WHERE email = ? AND disabled_at IS NOT NULL
+                    """,
+                    (email,),
+                )
+        reactivated = self.get_user(email) or {}
+        reactivated["was_already_active"] = existing["disabled_at"] is None
+        reactivated["previous_disabled_at"] = existing["disabled_at"]
+        reactivated["previous_disabled_by"] = existing["disabled_by"]
+        return reactivated
+
     def create_staff_invite(
         self,
         *,

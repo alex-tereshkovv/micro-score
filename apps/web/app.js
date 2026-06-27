@@ -2310,9 +2310,12 @@ function renderStaffUsers(rows) {
   const body = rows
     .map((user) => {
       const canDisable = user.role === "mfi_analyst" && !user.disabled_at;
+      const canReactivate = user.role === "mfi_analyst" && Boolean(user.disabled_at);
       const status = user.disabled_at ? "disabled" : "active";
       const action = canDisable
         ? `<button class="secondary-button compact-button" type="button" data-disable-user-email="${escapeHtml(user.email)}">Disable</button>`
+        : canReactivate
+          ? `<button class="primary-button compact-button" type="button" data-reactivate-user-email="${escapeHtml(user.email)}">Reactivate</button>`
         : "-";
       return `
         <tr>
@@ -2580,6 +2583,14 @@ async function disableStaffUser(email) {
   );
 }
 
+async function reactivateStaffUser(email) {
+  const reactivated = await apiFetch(`/admin/users/${encodeURIComponent(email)}/reactivate`, {
+    method: "POST",
+  });
+  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  showMessage(`Reactivated ${reactivated.email}; analyst can sign in again.`, "ok");
+}
+
 async function createStaffInvite(event) {
   event.preventDefault();
   const form = els.staffInviteForm;
@@ -2753,9 +2764,15 @@ function wireEvents() {
     refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
   });
   els.staffUsers.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-disable-user-email]");
-    if (!button) return;
-    disableStaffUser(button.dataset.disableUserEmail)
+    const disableButton = event.target.closest("[data-disable-user-email]");
+    if (disableButton) {
+      disableStaffUser(disableButton.dataset.disableUserEmail)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
+    const reactivateButton = event.target.closest("[data-reactivate-user-email]");
+    if (!reactivateButton) return;
+    reactivateStaffUser(reactivateButton.dataset.reactivateUserEmail)
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshStaffInvites.addEventListener("click", () => {
