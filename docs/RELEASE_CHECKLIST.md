@@ -68,6 +68,8 @@ git diff --check
   returns the raw invite token only once at creation time, enforces password
   setup at acceptance time, and records invite creation/acceptance/revocation
   audit events; direct temporary-password provisioning remains prototype-only.
+- Staff Invite Health v1 exposes invite rotation health, including expired and
+  soon-expiring pending invites, in both the API and static demo.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

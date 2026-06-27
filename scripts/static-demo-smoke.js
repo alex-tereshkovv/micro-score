@@ -520,6 +520,28 @@ async function main() {
   if (!revokedInviteAcceptanceRejected) {
     throw new Error("Expected revoked staff invite acceptance to fail");
   }
+  await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "soon-expiring-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 1,
+      }),
+    },
+    adminSession,
+  );
+  const inviteHealth = await api.request("/admin/staff-invites/health", {}, adminSession);
+  if (
+    inviteHealth.status !== "attention"
+    || inviteHealth.expiring_soon_count < 1
+    || inviteHealth.action_required_count < 1
+    || inviteHealth.window_hours !== 24
+  ) {
+    throw new Error("Expected staff invite health to flag soon-expiring pending invites");
+  }
   const adminAudit = await api.request("/admin/audit-events", {}, adminSession);
   if (!adminAudit.some((event) => event.action === "staff_user_created")) {
     throw new Error("Expected staff provisioning audit event");
@@ -781,6 +803,7 @@ async function main() {
       staff_invites: true,
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
+      staff_invite_health: true,
       staff_user_disable: true,
       staff_user_reactivation: true,
       model_registry: true,

@@ -97,6 +97,7 @@ const els = {
   staffForm: document.querySelector("#staffForm"),
   staffInviteForm: document.querySelector("#staffInviteForm"),
   staffUsers: document.querySelector("#staffUsers"),
+  staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
   refreshUsers: document.querySelector("#refreshUsers"),
   refreshStaffInvites: document.querySelector("#refreshStaffInvites"),
@@ -927,6 +928,8 @@ function resetPrivilegedViews() {
     container.className = "table-shell empty";
     container.textContent = label;
   }
+  els.staffInviteHealth.className = "metric-grid invite-health empty";
+  els.staffInviteHealth.textContent = "Invite health not loaded.";
   els.modelStatusPill.className = "pill muted";
   els.modelStatusPill.textContent = "Model status unavailable";
 }
@@ -2353,6 +2356,39 @@ function staffInviteStatus(invite) {
   return "pending";
 }
 
+function renderStaffInviteHealth(health) {
+  if (!els.staffInviteHealth) return;
+  const statusClass = health.status === "attention" ? "risk-high" : "risk-low";
+  els.staffInviteHealth.className = "metric-grid invite-health";
+  els.staffInviteHealth.innerHTML = `
+    <div class="metric">
+      <span>Status</span>
+      <strong class="${statusClass}">${escapeHtml(formatPolicyName(health.status))}</strong>
+    </div>
+    <div class="metric">
+      <span>Action required</span>
+      <strong>${Number(health.action_required_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Active pending</span>
+      <strong>${Number(health.active_pending_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Expired pending</span>
+      <strong>${Number(health.expired_pending_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Expiring ${Number(health.window_hours || 24)}h</span>
+      <strong>${Number(health.expiring_soon_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Closed</span>
+      <strong>${Number(health.accepted_count || 0) + Number(health.revoked_count || 0)}</strong>
+    </div>
+    <p class="tiny-text full-width">${escapeHtml(health.recommended_action || "No pending staff invite rotation action required.")}</p>
+  `;
+}
+
 function renderStaffInvites(rows) {
   if (!rows.length) {
     setPanelState(
@@ -2405,7 +2441,11 @@ function renderStaffInvites(rows) {
 }
 
 async function refreshStaffInvites() {
-  const rows = await apiFetch("/admin/staff-invites");
+  const [health, rows] = await Promise.all([
+    apiFetch("/admin/staff-invites/health"),
+    apiFetch("/admin/staff-invites"),
+  ]);
+  renderStaffInviteHealth(health);
   renderStaffInvites(rows);
 }
 

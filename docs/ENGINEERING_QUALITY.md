@@ -52,6 +52,7 @@ The smoke test verifies that the in-browser static backend can:
 - verify auth/session expiry metadata in the static contract
 - create, revoke, and accept expiring staff invites with password-policy
   enforcement and one-time raw token handling
+- summarize staff invite rotation health and flag soon-expiring pending invites
 - disable an MFI analyst, revoke their active static session, reject future
   login, and verify the `staff_user_disabled` audit event
 - reactivate the analyst, verify login resumes without automatic session

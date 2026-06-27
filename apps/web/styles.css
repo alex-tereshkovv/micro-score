@@ -1808,6 +1808,10 @@ label {
   gap: 10px;
 }
 
+.invite-health {
+  margin-bottom: 12px;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1828,6 +1832,10 @@ label {
   display: block;
   margin-top: 4px;
   font-size: 20px;
+}
+
+.metric-grid .full-width {
+  grid-column: 1 / -1;
 }
 
 .metric strong.risk-low,

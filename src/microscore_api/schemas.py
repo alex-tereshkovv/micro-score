@@ -154,6 +154,21 @@ class StaffInviteCreatedResponse(StaffInviteResponse):
     token: str
 
 
+class StaffInviteHealthResponse(BaseModel):
+    status: Literal["ok", "attention"]
+    total_count: int = Field(ge=0)
+    active_pending_count: int = Field(ge=0)
+    expiring_soon_count: int = Field(ge=0)
+    expired_pending_count: int = Field(ge=0)
+    accepted_count: int = Field(ge=0)
+    revoked_count: int = Field(ge=0)
+    action_required_count: int = Field(ge=0)
+    window_hours: int = Field(ge=1)
+    oldest_pending_created_at: str | None = None
+    next_expiring_at: str | None = None
+    recommended_action: str
+
+
 class OrganizationCreate(BaseModel):
     id: str = Field(min_length=2, max_length=100)
     name: str = Field(min_length=2, max_length=200)

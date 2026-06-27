@@ -253,6 +253,20 @@ List staff invites:
 GET /admin/staff-invites
 ```
 
+Summarize invite rotation health:
+
+```http
+GET /admin/staff-invites/health
+```
+
+The health endpoint requires an `admin` bearer token and returns a computed
+summary for invite hygiene: `active_pending_count`, `expiring_soon_count`,
+`expired_pending_count`, `accepted_count`, `revoked_count`,
+`action_required_count`, `oldest_pending_created_at`, `next_expiring_at`, and a
+`recommended_action`. The current warning window is 24 hours, and the response
+status is `attention` when pending invites are expired or expiring inside that
+window.
+
 Create an expiring MFI analyst invite:
 
 ```http

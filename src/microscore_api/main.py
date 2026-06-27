@@ -71,6 +71,7 @@ from .schemas import (
     StaffInviteAccept,
     StaffInviteCreate,
     StaffInviteCreatedResponse,
+    StaffInviteHealthResponse,
     StaffInviteResponse,
     StaffUserCreate,
     StaffUserDisableResponse,
@@ -183,6 +184,68 @@ def _staff_invite_response(
     if raw_token is not None:
         response["token"] = raw_token
     return response
+
+
+def _staff_invite_health_response(
+    invites: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    window_hours: int = 24,
+) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    expiring_deadline = now + timedelta(hours=window_hours)
+    health: dict[str, Any] = {
+        "status": "ok",
+        "total_count": len(invites),
+        "active_pending_count": 0,
+        "expiring_soon_count": 0,
+        "expired_pending_count": 0,
+        "accepted_count": 0,
+        "revoked_count": 0,
+        "action_required_count": 0,
+        "window_hours": window_hours,
+        "oldest_pending_created_at": None,
+        "next_expiring_at": None,
+        "recommended_action": "No pending staff invite rotation action required.",
+    }
+
+    oldest_pending: datetime | None = None
+    next_expiring: datetime | None = None
+    for invite in invites:
+        if invite.get("accepted_at"):
+            health["accepted_count"] += 1
+            continue
+        if invite.get("revoked_at"):
+            health["revoked_count"] += 1
+            continue
+
+        created_at = _parse_utc_datetime(invite["created_at"])
+        expires_at = _parse_utc_datetime(invite["expires_at"])
+        if oldest_pending is None or created_at < oldest_pending:
+            oldest_pending = created_at
+
+        if expires_at <= now:
+            health["expired_pending_count"] += 1
+            continue
+
+        health["active_pending_count"] += 1
+        if next_expiring is None or expires_at < next_expiring:
+            next_expiring = expires_at
+        if expires_at <= expiring_deadline:
+            health["expiring_soon_count"] += 1
+
+    health["action_required_count"] = (
+        health["expired_pending_count"] + health["expiring_soon_count"]
+    )
+    health["oldest_pending_created_at"] = oldest_pending.isoformat() if oldest_pending else None
+    health["next_expiring_at"] = next_expiring.isoformat() if next_expiring else None
+    if health["action_required_count"]:
+        health["status"] = "attention"
+        health["recommended_action"] = (
+            "Review expired or soon-expiring staff invites; revoke stale links "
+            "and create fresh invites only when onboarding is still needed."
+        )
+    return health
 
 
 def _get_staff_invite_by_secret(
@@ -1448,6 +1511,14 @@ def list_staff_invites(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return [_staff_invite_response(invite) for invite in repository.list_staff_invites()]
+
+
+@app.get("/admin/staff-invites/health", response_model=StaffInviteHealthResponse)
+def staff_invite_health(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _staff_invite_health_response(repository.list_staff_invites())
 
 
 @app.post(

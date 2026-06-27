@@ -460,6 +460,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteAccept", schemas)
         self.assertIn("StaffInviteResponse", schemas)
         self.assertIn("StaffInviteCreatedResponse", schemas)
+        self.assertIn("StaffInviteHealthResponse", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
         self.assertIn("ModelVersionCreate", schemas)
@@ -521,8 +522,13 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("token", schemas["StaffInviteCreatedResponse"]["properties"])
         self.assertIn("revoked_at", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("revoked_by", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("status", schemas["StaffInviteHealthResponse"]["properties"])
+        self.assertIn("expiring_soon_count", schemas["StaffInviteHealthResponse"]["properties"])
+        self.assertIn("action_required_count", schemas["StaffInviteHealthResponse"]["properties"])
+        self.assertIn("recommended_action", schemas["StaffInviteHealthResponse"]["properties"])
         paths = response.json()["paths"]
         self.assertIn("/admin/staff-invites", paths)
+        self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
         self.assertIn("/admin/users/{email}/disable", paths)
@@ -965,6 +971,16 @@ class ApiIntegrationTests(unittest.TestCase):
             json={"token": "expired-staff-invite-token", "password": TEST_PASSWORD},
         )
         self.assertEqual(expired.status_code, 410, expired.text)
+        invite_health = self.client.get(
+            "/admin/staff-invites/health",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(invite_health.status_code, 200, invite_health.text)
+        self.assertEqual(invite_health.json()["status"], "attention")
+        self.assertEqual(invite_health.json()["expired_pending_count"], 1)
+        self.assertEqual(invite_health.json()["action_required_count"], 1)
+        self.assertEqual(invite_health.json()["window_hours"], 24)
+        self.assertIn("Review expired", invite_health.json()["recommended_action"])
 
         audit = self.client.get(
             "/admin/audit-events",

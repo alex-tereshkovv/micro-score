@@ -322,6 +322,55 @@
     return publicStaffInvite(invite, token);
   }
 
+  function staffInviteHealth(invites, windowHours = 24) {
+    const now = new Date();
+    const expiringDeadline = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
+    const health = {
+      status: "ok",
+      total_count: invites.length,
+      active_pending_count: 0,
+      expiring_soon_count: 0,
+      expired_pending_count: 0,
+      accepted_count: 0,
+      revoked_count: 0,
+      action_required_count: 0,
+      window_hours: windowHours,
+      oldest_pending_created_at: null,
+      next_expiring_at: null,
+      recommended_action: "No pending staff invite rotation action required.",
+    };
+    let oldestPending = null;
+    let nextExpiring = null;
+    invites.forEach((invite) => {
+      if (invite.accepted_at) {
+        health.accepted_count += 1;
+        return;
+      }
+      if (invite.revoked_at) {
+        health.revoked_count += 1;
+        return;
+      }
+      const createdAt = new Date(invite.created_at);
+      const expiresAt = new Date(invite.expires_at);
+      if (!oldestPending || createdAt < oldestPending) oldestPending = createdAt;
+      if (expiresAt <= now) {
+        health.expired_pending_count += 1;
+        return;
+      }
+      health.active_pending_count += 1;
+      if (!nextExpiring || expiresAt < nextExpiring) nextExpiring = expiresAt;
+      if (expiresAt <= expiringDeadline) health.expiring_soon_count += 1;
+    });
+    health.action_required_count = health.expired_pending_count + health.expiring_soon_count;
+    health.oldest_pending_created_at = oldestPending ? oldestPending.toISOString() : null;
+    health.next_expiring_at = nextExpiring ? nextExpiring.toISOString() : null;
+    if (health.action_required_count) {
+      health.status = "attention";
+      health.recommended_action = "Review expired or soon-expiring staff invites; revoke stale links and create fresh invites only when onboarding is still needed.";
+    }
+    return health;
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -1847,6 +1896,11 @@
         Object.values(demo.staffInvites)
           .sort((left, right) => right.created_at.localeCompare(left.created_at)),
       );
+    }
+
+    if (cleanPath === "/admin/staff-invites/health" && method === "GET") {
+      requireAdmin(session);
+      return clone(staffInviteHealth(Object.values(demo.staffInvites)));
     }
 
     if (cleanPath === "/admin/staff-invites" && method === "POST") {
