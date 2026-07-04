@@ -56,6 +56,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("staff_invite_health", script)
         self.assertIn("mfa_readiness", script)
         self.assertIn("security_readiness", script)
+        self.assertIn("mfa_code", script)
+        self.assertIn("246810", script)
         self.assertIn("staff_user_disable", script)
         self.assertIn("staff_user_reactivation", script)
         self.assertIn("/admin/security/readiness", script)

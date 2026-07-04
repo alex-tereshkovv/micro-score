@@ -72,6 +72,7 @@ borrower@test.com
 analyst@test.com
 admin@test.com
 password: password123
+staff/admin MFA code: 246810
 ```
 
 Applications are stored in the local SQLite database until an admin clears them

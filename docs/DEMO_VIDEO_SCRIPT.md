@@ -16,6 +16,7 @@ borrower@test.com
 analyst@test.com
 admin@test.com
 password: password123
+staff/admin MFA code: 246810
 ```
 
 - Do not enter real borrower names, IINs, phone numbers, addresses, bank

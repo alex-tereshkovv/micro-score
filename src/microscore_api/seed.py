@@ -14,6 +14,8 @@ from .scoring import get_scoring_service
 from .security import hash_password
 
 DEMO_PASSWORD = "password123"
+DEMO_MFA_CODE = "246810"
+DEMO_MFA_METHOD = "prototype_mfa_code"
 DEMO_ORGANIZATION_ID = "pavlodar-demo-mfi"
 DEMO_ORGANIZATION = {
     "organization_id": DEMO_ORGANIZATION_ID,
@@ -524,6 +526,19 @@ def seed_demo_data(
         else:
             existing_users.append(user["email"])
 
+    mfa_attested_users: list[str] = []
+    for user in DEMO_USERS:
+        if user["role"] not in {"admin", "mfi_analyst"}:
+            continue
+        actor_email = user["email"] if user["role"] == "admin" else "admin@test.com"
+        attested = repository.attest_user_mfa(
+            user["email"],
+            actor_email,
+            DEMO_MFA_METHOD,
+        )
+        if not attested.get("was_already_attested", False):
+            mfa_attested_users.append(user["email"])
+
     for user in DEMO_PORTFOLIO_BORROWERS:
         created = _seed_user(
             repository,
@@ -592,6 +607,8 @@ def seed_demo_data(
         "demo_password": DEMO_PASSWORD,
         "created_users": created_users,
         "existing_users": existing_users,
+        "mfa_code": DEMO_MFA_CODE,
+        "mfa_attested_users": mfa_attested_users,
         "created_portfolio_borrowers": created_portfolio_borrowers,
         "existing_portfolio_borrowers": existing_portfolio_borrowers,
         "demo_application_id": DEMO_APPLICATION_ID,
@@ -609,8 +626,10 @@ def main() -> int:
     print("MicroScore demo data")
     print(f"Database: {result['database']}")
     print(f"Password for demo accounts: {result['demo_password']}")
+    print(f"MFA code for staff demo accounts: {result['mfa_code']}")
     print(f"Created users: {', '.join(result['created_users']) or 'none'}")
     print(f"Existing users: {', '.join(result['existing_users']) or 'none'}")
+    print(f"MFA attested staff: {', '.join(result['mfa_attested_users']) or 'already attested'}")
     print(
         "Portfolio borrowers: "
         f"{len(result['created_portfolio_borrowers'])} created, "

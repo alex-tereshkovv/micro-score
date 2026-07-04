@@ -72,6 +72,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str = Field(min_length=1, max_length=128)
+    mfa_code: str | None = Field(default=None, min_length=6, max_length=32)
 
 
 class AuthResponse(BaseModel):
@@ -127,7 +128,13 @@ class StaffUserReactivateResponse(UserPublic):
 
 
 class MfaAttestationCreate(BaseModel):
-    method: Literal["pilot_attestation", "totp", "webauthn", "external_idp"] = "pilot_attestation"
+    method: Literal[
+        "pilot_attestation",
+        "prototype_mfa_code",
+        "totp",
+        "webauthn",
+        "external_idp",
+    ] = "pilot_attestation"
 
 
 class MfaAttestationResponse(UserPublic):
@@ -185,6 +192,7 @@ class StaffInviteCreate(BaseModel):
 class StaffInviteAccept(BaseModel):
     token: str = Field(min_length=16, max_length=200)
     password: str = Field(min_length=1, max_length=128)
+    mfa_code: str | None = Field(default=None, min_length=6, max_length=32)
 
 
 class StaffInviteResponse(BaseModel):

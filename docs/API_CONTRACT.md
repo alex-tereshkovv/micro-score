@@ -102,6 +102,7 @@ borrower@test.com
 analyst@test.com
 admin@test.com
 password: password123
+staff/admin MFA code: 246810
 ```
 
 ## Authentication
@@ -163,6 +164,22 @@ session expiry metadata through `session_expires_at` and
 `session_ttl_seconds`, so the browser can make token lifetime visible instead
 of treating sessions as indefinite.
 
+Staff login (`admin` and `mfi_analyst`) now requires both recorded MFA
+attestation and a second-factor code in the login payload:
+
+```json
+{
+  "email": "analyst@test.com",
+  "password": "password123",
+  "mfa_code": "246810"
+}
+```
+
+The default local prototype MFA code is `246810`; override it for local
+deployment experiments with `MICROSCORE_PROTOTYPE_MFA_CODE`. This is a
+prototype control for reviewer/pilot readiness, not a replacement for a
+production identity provider, TOTP/WebAuthn enrollment, or recovery flows.
+
 Logout and revoke the current token:
 
 ```http
@@ -178,8 +195,8 @@ $env:MICROSCORE_CORS_ORIGINS = "https://demo.example.org,https://mfi.example.org
 ```
 
 These controls improve the prototype boundary, but they are not a replacement
-for a production identity provider, MFA, HTTPS, distributed rate limiting, or
-a formal security review.
+for a production identity provider, HTTPS, distributed rate limiting, or a
+formal security review.
 
 Login currently has a small in-memory limiter: five failed attempts within one
 minute block that client/account key for five minutes and return `429` with a
@@ -249,19 +266,24 @@ POST /admin/users/{email}/mfa/attest
 ```
 
 These endpoints require an `admin` bearer token. Security Readiness v1 combines
-MFA posture, invite hygiene, session lifetime, and known production blockers
+MFA posture, invite hygiene, session lifetime, and remaining production caveats
 into one pre-pilot gate. It returns `status`, `blockers_count`,
 `warnings_count`, structured `checks`, `recommended_actions`, and a `limitation`
 stating that this is not a completed production security review.
 
-MFA Readiness v1 is a prototype governance control, not a login challenge: it
-records admin attestation that an active `admin` or `mfi_analyst` account has
-MFA coverage planned or verified outside this local prototype. The MFA readiness
-response is `blocked` while active staff accounts lack attestation and includes
-`missing_mfa_count`, `mfa_attested_count`, account-level status rows, a
-`recommended_action`, and a `limitation` stating that this does not enforce a second factor during login. Successful first-time attestation records
-`staff_mfa_attested`; repeated attestation is idempotent and returns
-`was_already_attested: true`.
+MFA Readiness v2 records admin attestation for active `admin` and
+`mfi_analyst` accounts and the local prototype requires a second-factor code
+for staff sessions. The MFA readiness response is `blocked` while active staff
+accounts lack attestation and includes `missing_mfa_count`,
+`mfa_attested_count`, account-level status rows, a `recommended_action`, and a
+`limitation` stating that the prototype code is not a production identity
+provider. Successful first-time attestation records `staff_mfa_attested`;
+repeated attestation is idempotent and returns `was_already_attested: true`.
+Successful staff login records `staff_mfa_login_verified`.
+
+In Security Readiness v1, `mfa_enforcement` is `pass` when staff login requires
+both attestation and the prototype code. The recommended action still points
+to production IdP/TOTP/WebAuthn replacement before real user data.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
@@ -333,20 +355,22 @@ POST /auth/accept-staff-invite
 ```json
 {
   "token": "<invite-token>",
-  "password": "StrongPassword1!"
+  "password": "StrongPassword1!",
+  "mfa_code": "246810"
 }
 ```
 
 Acceptance uses the same password policy as registration, rejects expired,
 revoked, or already accepted invites, creates an `mfi_analyst` user in the
-invite's organization, records `staff_invite_accepted`, and returns the same
+invite's organization, records `staff_invite_accepted`, records MFA attestation
+from invite acceptance, verifies the prototype MFA code, and returns the same
 auth response shape as login, including session expiry metadata.
 
 The API stores new invite records by `token_id` instead of the raw token.
 Legacy local development invites created before Staff Invite v3 can still be
 accepted by their original raw token during migration.
 
-Before any real user data, the production version still needs enforced MFA or
+Before any real user data, the production version still needs TOTP/WebAuthn or
 an external identity provider, email delivery, and HTTPS-only invite links.
 
 ## Borrower Application Form
@@ -833,6 +857,7 @@ Current audited actions:
 - `portfolio_simulation_run`
 - `staff_user_created`
 - `staff_mfa_attested`
+- `staff_mfa_login_verified`
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`

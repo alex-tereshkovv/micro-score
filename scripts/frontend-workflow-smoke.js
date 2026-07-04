@@ -8,9 +8,13 @@ window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js"
 vm.runInThisContext(fs.readFileSync("apps/web/mock-api.js", "utf8"));
 
 async function login(api, email) {
+  const payload = { email, password: "password123" };
+  if (["analyst@test.com", "admin@test.com"].includes(email)) {
+    payload.mfa_code = "246810";
+  }
   const auth = await api.request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password: "password123" }),
+    body: JSON.stringify(payload),
   });
   return { token: auth.access_token, role: auth.role, email };
 }

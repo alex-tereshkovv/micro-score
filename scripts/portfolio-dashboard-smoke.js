@@ -56,7 +56,11 @@ async function main() {
   const api = window.MicroScoreMockApi;
   const auth = await api.request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "analyst@test.com", password: "password123" }),
+    body: JSON.stringify({
+      email: "analyst@test.com",
+      password: "password123",
+      mfa_code: "246810",
+    }),
   });
   const session = { token: auth.access_token, role: auth.role, email: "analyst@test.com" };
   const queue = await api.request("/mfi/applications", {}, session);

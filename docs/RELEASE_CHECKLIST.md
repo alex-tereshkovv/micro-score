@@ -70,11 +70,12 @@ git diff --check
   audit events; direct temporary-password provisioning remains prototype-only.
 - Staff Invite Health v1 exposes invite rotation health, including expired and
   soon-expiring pending invites, in both the API and static demo.
-- MFA Readiness v1 exposes active staff MFA posture, supports admin
-  attestation, records `staff_mfa_attested`, and clearly states that it does
-  not enforce a second factor during login.
+- MFA Enforcement v1 exposes active staff MFA posture, supports admin
+  attestation, requires the prototype second-factor code for staff sessions,
+  records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly
+  states that production IdP/TOTP/WebAuthn remains future work.
 - Security Readiness v1 aggregates MFA posture, invite hygiene, session TTL,
-  and explicit production blockers into a pre-pilot admin gate.
+  and remaining production caveats into a pre-pilot admin gate.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

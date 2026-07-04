@@ -274,11 +274,12 @@ revocation, disabled-login rejection, user status listing, and
 Staff/User Lifecycle v2 adds admin-only analyst reactivation, restores normal
 login without creating sessions automatically, and records
 `staff_user_reactivated` with prior disable metadata.
-MFA Readiness v1 adds admin-only staff MFA posture monitoring and attestation
-for active admin/MFI analyst accounts, with an explicit limitation that the
-local prototype does not yet enforce a second factor during login.
+MFA Enforcement v1 adds login-time staff MFA enforcement for active
+admin/MFI analyst accounts using recorded attestation plus a local prototype
+second-factor code. The explicit limitation is now that the code is a prototype
+control, not a production IdP/TOTP/WebAuthn flow.
 Security Readiness v1 now combines MFA posture, invite hygiene, session TTL,
-and known production blockers into one admin-only pre-pilot gate.
+and remaining production caveats into one admin-only pre-pilot gate.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
@@ -288,5 +289,5 @@ frontend and scoring review flow into a more production-like application:
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL
-- enforced MFA or external identity-provider integration, email delivery, and
+- production IdP/TOTP/WebAuthn integration, email delivery, and
   HTTPS-only invite links before any real user data

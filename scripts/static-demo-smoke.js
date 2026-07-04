@@ -15,6 +15,7 @@ async function main() {
     body: JSON.stringify({
       email: "analyst@test.com",
       password: "password123",
+      mfa_code: "246810",
     }),
   });
   if (!auth.session_expires_at || auth.session_ttl_seconds !== 8 * 60 * 60) {
@@ -296,6 +297,7 @@ async function main() {
     body: JSON.stringify({
       email: "admin@test.com",
       password: "password123",
+      mfa_code: "246810",
     }),
   });
   const adminSession = {
@@ -305,11 +307,11 @@ async function main() {
   };
   const mfaReadinessBefore = await api.request("/admin/security/mfa-readiness", {}, adminSession);
   if (
-    mfaReadinessBefore.status !== "blocked"
-    || mfaReadinessBefore.missing_mfa_count < 1
-    || !String(mfaReadinessBefore.limitation).includes("does not enforce")
+    mfaReadinessBefore.status !== "ready"
+    || mfaReadinessBefore.missing_mfa_count !== 0
+    || !String(mfaReadinessBefore.limitation).includes("requires a second-factor code")
   ) {
-    throw new Error("Expected MFA readiness to block active staff without attestation");
+    throw new Error("Expected seeded staff MFA readiness to be ready with prototype enforcement");
   }
   const mfaAttested = await api.request(
     `/admin/users/${encodeURIComponent("admin@test.com")}/mfa/attest`,
@@ -322,9 +324,10 @@ async function main() {
   if (
     !mfaAttested.mfa_attested_at
     || mfaAttested.mfa_attested_by !== "admin@test.com"
-    || mfaAttested.mfa_method !== "pilot_attestation"
+    || mfaAttested.mfa_method !== "prototype_mfa_code"
+    || !mfaAttested.was_already_attested
   ) {
-    throw new Error("Expected admin MFA attestation metadata");
+    throw new Error("Expected seeded admin MFA attestation metadata");
   }
   const mfaReadinessAfter = await api.request("/admin/security/mfa-readiness", {}, adminSession);
   if (mfaReadinessAfter.mfa_attested_count < 1) {
@@ -333,7 +336,7 @@ async function main() {
   const securityReadinessAfterMfa = await api.request("/admin/security/readiness", {}, adminSession);
   if (
     securityReadinessAfterMfa.status !== "blocked"
-    || !securityReadinessAfterMfa.checks.some((check) => check.key === "mfa_enforcement" && check.status === "blocker")
+    || !securityReadinessAfterMfa.checks.some((check) => check.key === "mfa_enforcement" && check.status === "pass")
     || !securityReadinessAfterMfa.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")
   ) {
     throw new Error("Expected security readiness to flag production security blockers");
@@ -357,11 +360,39 @@ async function main() {
   if (usersAfterProvisioning.length !== usersBeforeProvisioning.length + 1) {
     throw new Error("Expected provisioned analyst in the user list");
   }
+  let missingMfaLoginRejected = false;
+  try {
+    await api.request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "new-analyst@test.com",
+        password: "StrongPassword1!",
+        mfa_code: "246810",
+      }),
+    });
+  } catch (error) {
+    missingMfaLoginRejected = String(error.message).includes("MFA attestation required");
+  }
+  if (!missingMfaLoginRejected) {
+    throw new Error("Expected provisioned staff login to require MFA attestation first");
+  }
+  const analystMfaAttested = await api.request(
+    `/admin/users/${encodeURIComponent("new-analyst@test.com")}/mfa/attest`,
+    {
+      method: "POST",
+      body: JSON.stringify({ method: "pilot_attestation" }),
+    },
+    adminSession,
+  );
+  if (!analystMfaAttested.mfa_attested_at) {
+    throw new Error("Expected provisioned analyst MFA attestation metadata");
+  }
   const newAnalystAuth = await api.request("/auth/login", {
     method: "POST",
     body: JSON.stringify({
       email: "new-analyst@test.com",
       password: "StrongPassword1!",
+      mfa_code: "246810",
     }),
   });
   const newAnalystSession = {
@@ -398,6 +429,7 @@ async function main() {
       body: JSON.stringify({
         email: "new-analyst@test.com",
         password: "StrongPassword1!",
+        mfa_code: "246810",
       }),
     });
   } catch (error) {
@@ -433,6 +465,7 @@ async function main() {
     body: JSON.stringify({
       email: "new-analyst@test.com",
       password: "StrongPassword1!",
+      mfa_code: "246810",
     }),
   });
   if (reactivatedLogin.role !== "mfi_analyst") {
@@ -476,6 +509,7 @@ async function main() {
       body: JSON.stringify({
         token: staffInvite.token,
         password: "password123",
+        mfa_code: "246810",
       }),
     });
   } catch (error) {
@@ -489,6 +523,7 @@ async function main() {
     body: JSON.stringify({
       token: staffInvite.token,
       password: "StrongPassword1!",
+      mfa_code: "246810",
     }),
   });
   if (
@@ -547,6 +582,7 @@ async function main() {
       body: JSON.stringify({
         token: revokeInvite.token,
         password: "StrongPassword1!",
+        mfa_code: "246810",
       }),
     });
   } catch (error) {
@@ -666,6 +702,14 @@ async function main() {
     adminSession,
   );
   await api.request(
+    `/admin/users/${encodeURIComponent("second-analyst@test.com")}/mfa/attest`,
+    {
+      method: "POST",
+      body: JSON.stringify({ method: "pilot_attestation" }),
+    },
+    adminSession,
+  );
+  await api.request(
     "/applications",
     {
       method: "POST",
@@ -684,6 +728,7 @@ async function main() {
     body: JSON.stringify({
       email: "second-analyst@test.com",
       password: "StrongPassword1!",
+      mfa_code: "246810",
     }),
   });
   const secondAnalystSession = {

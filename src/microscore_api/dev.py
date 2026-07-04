@@ -116,6 +116,7 @@ def main() -> int:
     print(f"API: {api_base}")
     print(f"Web: http://{host}:{web_port}")
     print("Demo password: password123")
+    print("Staff/admin MFA code: 246810")
     print("Close this window or press Ctrl+C to stop MicroScore.")
 
     if _wait_for_health(api_base) and not args.no_browser:

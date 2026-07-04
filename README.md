@@ -8,7 +8,7 @@ Interpretable alternative credit-risk scoring prototype for thin-file borrowers 
 
 Open the public static demo: https://alex-tereshkovv.github.io/micro-score/
 
-Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password: `password123`.
+Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password: `password123`; staff/admin MFA code: `246810`.
 
 The public demo uses synthetic in-browser data only. It is not a lending service and does not collect real borrower data.
 
@@ -34,7 +34,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 ## Reviewer Assets
 
 - Live Demo: [GitHub Pages static demo](https://alex-tereshkovv.github.io/micro-score/)
-- Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password `password123`
+- Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password `password123`; staff/admin MFA code `246810`
 - Demo Video: planned; script in [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)
 - Research Paper PDF: planned
 - Research paper draft + reviewer brief: [docs/RESEARCH_PAPER.md](docs/RESEARCH_PAPER.md), [docs/ADMISSIONS_REVIEWER_BRIEF.md](docs/ADMISSIONS_REVIEWER_BRIEF.md)
@@ -150,7 +150,7 @@ local API on common development ports.
 Static frontend demo mode: `http://127.0.0.1:5173?demo=static`. This mode
 works without FastAPI by using a synthetic in-browser demo portfolio.
 
-Demo accounts use password `password123`:
+Demo accounts use password `password123`; staff/admin accounts also use MFA code `246810`:
 
 - `borrower@test.com`
 - `analyst@test.com`

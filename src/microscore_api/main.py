@@ -16,6 +16,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import hashlib
+import hmac
 from io import StringIO
 import os
 from typing import Any
@@ -94,9 +95,10 @@ DEFAULT_CORS_ORIGINS = (
     "https://alex-tereshkovv.github.io",
 )
 MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
+DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 MFA_READINESS_LIMITATION = (
-    "MFA Readiness v1 records admin attestation for prototype governance only; "
-    "it does not enforce a second factor during login."
+    "MFA Readiness v2 records staff attestation and the local prototype requires "
+    "a second-factor code for staff sessions; it is not a production identity provider."
 )
 
 
@@ -106,6 +108,10 @@ def configured_cors_origins() -> list[str]:
         return list(DEFAULT_CORS_ORIGINS)
     origins = [item.strip().rstrip("/") for item in raw_value.split(",")]
     return [origin for origin in origins if origin]
+
+
+def configured_prototype_mfa_code() -> str:
+    return os.environ.get("MICROSCORE_PROTOTYPE_MFA_CODE", DEFAULT_PROTOTYPE_MFA_CODE).strip()
 
 
 app = FastAPI(
@@ -143,6 +149,48 @@ def _raise_login_rate_limit(retry_after: int) -> None:
         detail="Too many login attempts. Try again later.",
         headers={"Retry-After": str(retry_after)},
     )
+
+
+def _prototype_mfa_code_matches(mfa_code: str | None) -> bool:
+    expected = configured_prototype_mfa_code()
+    provided = (mfa_code or "").strip()
+    return bool(expected and provided and hmac.compare_digest(provided, expected))
+
+
+def _verify_staff_mfa_for_session(user: dict[str, Any], mfa_code: str | None) -> bool:
+    if user["role"] not in MFA_REQUIRED_ROLES:
+        return False
+    if user.get("mfa_attested_at") is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA attestation required before staff login",
+        )
+    if not (mfa_code or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="MFA code required",
+        )
+    if not _prototype_mfa_code_matches(mfa_code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MFA code",
+        )
+    return True
+
+
+def _verify_invite_acceptance_mfa(role: str, mfa_code: str | None) -> None:
+    if role not in MFA_REQUIRED_ROLES:
+        return
+    if not (mfa_code or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="MFA code required",
+        )
+    if not _prototype_mfa_code_matches(mfa_code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MFA code",
+        )
 
 
 def _validate_new_password(password: str) -> None:
@@ -391,9 +439,9 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
             {
                 "key": "mfa_enforcement",
                 "label": "Login-time MFA enforcement",
-                "status": "blocker",
-                "summary": "MFA Readiness v1 records attestation but does not enforce a second factor during login.",
-                "action": "Integrate TOTP/WebAuthn or an external identity provider before real user data.",
+                "status": "pass",
+                "summary": "Staff login requires an MFA-attested account and a prototype second-factor code.",
+                "action": "Replace the prototype shared-code control with TOTP/WebAuthn or an external identity provider before real user data.",
             },
             {
                 "key": "invite_delivery",
@@ -422,7 +470,7 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
         "recommended_actions": [check["action"] for check in checks if check["status"] != "pass"],
         "limitation": (
             "Security Readiness v1 is a pre-pilot control summary for the local prototype; "
-            "it is not a completed production security review."
+            "MFA enforcement uses a local prototype code and is not a completed production security review."
         ),
     }
 
@@ -1119,10 +1167,29 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account disabled",
         )
+    try:
+        mfa_verified = _verify_staff_mfa_for_session(user, payload.mfa_code)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            retry_after = limiter.record_failure(rate_key)
+            if retry_after:
+                _raise_login_rate_limit(retry_after)
+        raise
 
     limiter.record_success(rate_key)
     token = create_token()
     session = repository.create_session(token, email)
+    if mfa_verified:
+        repository.record_audit_event(
+            actor_email=email,
+            action="staff_mfa_login_verified",
+            entity_type="user",
+            entity_id=email,
+            details={
+                "method": user.get("mfa_method") or "prototype_mfa_code",
+                "prototype": True,
+            },
+        )
     return AuthResponse(
         access_token=token,
         role=user["role"],
@@ -1162,6 +1229,7 @@ def accept_staff_invite(
         )
 
     _validate_new_password(payload.password)
+    _verify_invite_acceptance_mfa(invite["role"], payload.mfa_code)
     email = invite["email"].strip().lower()
     if repository.get_user(email) is not None:
         raise HTTPException(
@@ -1200,8 +1268,32 @@ def accept_staff_invite(
             "token_preview": _staff_invite_token_preview(token_id),
         },
     )
+    attested = repository.attest_user_mfa(email, email, "prototype_mfa_code")
+    repository.record_audit_event(
+        actor_email=email,
+        action="staff_mfa_attested",
+        entity_type="user",
+        entity_id=email,
+        details={
+            "method": attested.get("mfa_method") or "prototype_mfa_code",
+            "source": "staff_invite_acceptance",
+            "was_already_attested": attested.get("was_already_attested", False),
+            "limitation": MFA_READINESS_LIMITATION,
+        },
+    )
     access_token = create_token()
     session = repository.create_session(access_token, email)
+    repository.record_audit_event(
+        actor_email=email,
+        action="staff_mfa_login_verified",
+        entity_type="user",
+        entity_id=email,
+        details={
+            "method": "prototype_mfa_code",
+            "prototype": True,
+            "source": "staff_invite_acceptance",
+        },
+    )
     return AuthResponse(
         access_token=access_token,
         role=created["role"],

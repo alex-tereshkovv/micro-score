@@ -23,6 +23,7 @@
   };
   const terminalApplicationStatuses = new Set(["approved", "declined"]);
   const DEMO_SESSION_TTL_SECONDS = 8 * 60 * 60;
+  const DEMO_MFA_CODE = "246810";
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for MFI scoring.",
     scored: "Risk assessment completed. It is waiting for analyst review.",
@@ -416,7 +417,7 @@
       recommended_action: missingMfaCount
         ? "Record MFA attestation for active admin and MFI analyst accounts before pilot use."
         : "All active staff accounts have MFA attestation recorded.",
-      limitation: "MFA Readiness v1 records admin attestation for prototype governance only; it does not enforce a second factor during login.",
+      limitation: "MFA Readiness v2 records staff attestation and the local prototype requires a second-factor code for staff sessions; it is not a production identity provider.",
     };
   }
 
@@ -468,9 +469,9 @@
     checks.push({
       key: "mfa_enforcement",
       label: "Login-time MFA enforcement",
-      status: "blocker",
-      summary: "MFA Readiness v1 records attestation but does not enforce a second factor during login.",
-      action: "Integrate TOTP/WebAuthn or an external identity provider before real user data.",
+      status: "pass",
+      summary: "Staff login requires an MFA-attested account and a prototype second-factor code.",
+      action: "Replace the prototype shared-code control with TOTP/WebAuthn or an external identity provider before real user data.",
     });
     checks.push({
       key: "invite_delivery",
@@ -490,7 +491,7 @@
       recommended_actions: checks
         .filter((check) => check.status !== "pass")
         .map((check) => check.action),
-      limitation: "Security Readiness v1 is a pre-pilot control summary for the local prototype; it is not a completed production security review.",
+      limitation: "Security Readiness v1 is a pre-pilot control summary for the local prototype; MFA enforcement uses a local prototype code and is not a completed production security review.",
     };
   }
 
@@ -567,6 +568,7 @@
     demo.nextApplicationNumber = 1;
 
     demoUsers.forEach(([email, role, organizationId]) => {
+      const staff = ["admin", "mfi_analyst"].includes(role);
       demo.users[email] = {
         email,
         role,
@@ -575,9 +577,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
-        mfa_attested_at: null,
-        mfa_attested_by: null,
-        mfa_method: null,
+        mfa_attested_at: staff ? nowIso() : null,
+        mfa_attested_by: staff ? (role === "admin" ? email : "admin@test.com") : null,
+        mfa_method: staff ? "prototype_mfa_code" : null,
       };
     });
 
@@ -1664,7 +1666,18 @@
       const user = demo.users[email];
       if (!user || user.password !== body.password) throw new Error("Invalid demo credentials");
       if (user.disabled_at) throw new Error("Account disabled");
+      if (["admin", "mfi_analyst"].includes(user.role)) {
+        if (!user.mfa_attested_at) throw new Error("MFA attestation required before staff login");
+        if (!String(body.mfa_code || "").trim()) throw new Error("MFA code required");
+        if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) throw new Error("Invalid MFA code");
+      }
       const sessionRecord = createDemoSession(email);
+      if (["admin", "mfi_analyst"].includes(user.role)) {
+        addAudit("staff_mfa_login_verified", "user", email, email, {
+          method: user.mfa_method || "prototype_mfa_code",
+          prototype: true,
+        });
+      }
       return {
         access_token: sessionRecord.token,
         token_type: "bearer",
@@ -1720,6 +1733,8 @@
       if (passwordViolations.length) {
         throw new Error(`Password does not meet the registration policy: ${passwordViolations.join(", ")}`);
       }
+      if (!String(body.mfa_code || "").trim()) throw new Error("MFA code required");
+      if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) throw new Error("Invalid MFA code");
       if (demo.users[invite.email]) throw new Error("User already exists in static demo");
       demo.users[invite.email] = {
         email: invite.email,
@@ -1729,9 +1744,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
-        mfa_attested_at: null,
-        mfa_attested_by: null,
-        mfa_method: null,
+        mfa_attested_at: nowIso(),
+        mfa_attested_by: invite.email,
+        mfa_method: "prototype_mfa_code",
       };
       invite.accepted_at = nowIso();
       invite.accepted_by = invite.email;
@@ -1741,7 +1756,18 @@
         organization_id: invite.organization_id,
         token_preview: invite.token_preview,
       });
+      addAudit("staff_mfa_attested", "user", invite.email, invite.email, {
+        method: "prototype_mfa_code",
+        source: "staff_invite_acceptance",
+        was_already_attested: false,
+        limitation: "MFA Readiness v2 records staff attestation and the local prototype requires a second-factor code for staff sessions; it is not a production identity provider.",
+      });
       const sessionRecord = createDemoSession(invite.email);
+      addAudit("staff_mfa_login_verified", "user", invite.email, invite.email, {
+        method: "prototype_mfa_code",
+        prototype: true,
+        source: "staff_invite_acceptance",
+      });
       return {
         access_token: sessionRecord.token,
         token_type: "bearer",
@@ -1995,7 +2021,7 @@
           role: target.role,
           organization_id: target.organization_id,
           method: target.mfa_method,
-          limitation: "MFA Readiness v1 records admin attestation for prototype governance only; it does not enforce a second factor during login.",
+          limitation: "MFA Readiness v2 records staff attestation and the local prototype requires a second-factor code for staff sessions; it is not a production identity provider.",
         });
       }
       return clone({

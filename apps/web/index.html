@@ -82,6 +82,7 @@
             <form id="authForm" class="auth-form">
               <input id="email" name="email" type="email" placeholder="email" autocomplete="email" required />
               <input id="password" name="password" type="password" placeholder="password" autocomplete="current-password" minlength="10" maxlength="128" required />
+              <input id="mfaCode" name="mfa_code" type="text" inputmode="numeric" placeholder="MFA code for staff/admin" autocomplete="one-time-code" minlength="6" maxlength="32" />
               <button id="loginButton" class="primary-button" type="submit">Sign in</button>
               <button id="registerButton" class="secondary-button" type="button">Register</button>
             </form>
@@ -659,8 +660,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260623-dashboard"></script>
-    <script src="./mock-api.js?v=20260704-security-readiness"></script>
+    <script src="./mock-api.js?v=20260704-mfa-enforcement"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260704-security-readiness"></script>
+    <script src="./app.js?v=20260704-mfa-enforcement"></script>
   </body>
 </html>

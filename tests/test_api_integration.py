@@ -26,6 +26,7 @@ if TestClient is not None:
 
 
 TEST_PASSWORD = "StrongPassword1!"
+TEST_MFA_CODE = "246810"
 TEST_ORGANIZATION_ID = "pavlodar-mfi-a"
 SECOND_ORGANIZATION_ID = "pavlodar-mfi-b"
 
@@ -71,9 +72,14 @@ class ApiIntegrationTests(unittest.TestCase):
                 role,
                 TEST_ORGANIZATION_ID if role == "mfi_analyst" else None,
             )
+            self.repository.attest_user_mfa(
+                email,
+                email,
+                "prototype_mfa_code",
+            )
             response = self.client.post(
                 "/auth/login",
-                json={"email": email, "password": TEST_PASSWORD},
+                json={"email": email, "password": TEST_PASSWORD, "mfa_code": TEST_MFA_CODE},
             )
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["access_token"]
@@ -516,6 +522,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PilotDataClassRow", schemas)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
+        self.assertIn("mfa_code", schemas["LoginRequest"]["properties"])
+        self.assertIn("mfa_code", schemas["StaffInviteAccept"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
         self.assertIn("disabled_at", schemas["UserPublic"]["properties"])
@@ -783,21 +791,9 @@ class ApiIntegrationTests(unittest.TestCase):
             headers=self._headers(admin_token),
         )
         self.assertEqual(mfa_readiness.status_code, 200, mfa_readiness.text)
-        self.assertEqual(mfa_readiness.json()["status"], "blocked")
-        self.assertEqual(mfa_readiness.json()["missing_mfa_count"], 1)
-        self.assertIn("does not enforce", mfa_readiness.json()["limitation"])
-
-        mfa_attested = self.client.post(
-            "/admin/users/provisioning-admin@example.com/mfa/attest",
-            headers=self._headers(admin_token),
-            json={"method": "pilot_attestation"},
-        )
-        self.assertEqual(mfa_attested.status_code, 200, mfa_attested.text)
-        self.assertEqual(mfa_attested.json()["email"], "provisioning-admin@example.com")
-        self.assertIsNotNone(mfa_attested.json()["mfa_attested_at"])
-        self.assertEqual(mfa_attested.json()["mfa_attested_by"], "provisioning-admin@example.com")
-        self.assertEqual(mfa_attested.json()["mfa_method"], "pilot_attestation")
-        self.assertFalse(mfa_attested.json()["was_already_attested"])
+        self.assertEqual(mfa_readiness.json()["status"], "ready")
+        self.assertEqual(mfa_readiness.json()["missing_mfa_count"], 0)
+        self.assertIn("requires a second-factor code", mfa_readiness.json()["limitation"])
 
         repeated_mfa = self.client.post(
             "/admin/users/provisioning-admin@example.com/mfa/attest",
@@ -806,7 +802,7 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(repeated_mfa.status_code, 200, repeated_mfa.text)
         self.assertTrue(repeated_mfa.json()["was_already_attested"])
-        self.assertEqual(repeated_mfa.json()["mfa_method"], "pilot_attestation")
+        self.assertEqual(repeated_mfa.json()["mfa_method"], "prototype_mfa_code")
 
         borrower_mfa = self.client.post(
             "/admin/users/regular@example.com/mfa/attest",
@@ -833,7 +829,7 @@ class ApiIntegrationTests(unittest.TestCase):
         }
         self.assertEqual(security_checks["mfa_attestation"]["status"], "pass")
         self.assertEqual(security_checks["session_ttl"]["status"], "pass")
-        self.assertEqual(security_checks["mfa_enforcement"]["status"], "blocker")
+        self.assertEqual(security_checks["mfa_enforcement"]["status"], "pass")
         self.assertEqual(security_checks["invite_delivery"]["status"], "blocker")
         self.assertIn("not a completed production security review", security_readiness.json()["limitation"])
 
@@ -862,9 +858,47 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(all("password_hash" not in user for user in users.json()))
 
+        missing_mfa_login = self.client.post(
+            "/auth/login",
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
+        )
+        self.assertEqual(missing_mfa_login.status_code, 403, missing_mfa_login.text)
+        self.assertIn("MFA attestation required", missing_mfa_login.json()["detail"])
+
+        mfa_attested = self.client.post(
+            "/admin/users/new-analyst@example.com/mfa/attest",
+            headers=self._headers(admin_token),
+            json={"method": "pilot_attestation"},
+        )
+        self.assertEqual(mfa_attested.status_code, 200, mfa_attested.text)
+        self.assertEqual(mfa_attested.json()["email"], "new-analyst@example.com")
+        self.assertIsNotNone(mfa_attested.json()["mfa_attested_at"])
+        self.assertEqual(mfa_attested.json()["mfa_attested_by"], "provisioning-admin@example.com")
+        self.assertEqual(mfa_attested.json()["mfa_method"], "pilot_attestation")
+        self.assertFalse(mfa_attested.json()["was_already_attested"])
+
+        invalid_mfa_login = self.client.post(
+            "/auth/login",
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": "000000",
+            },
+        )
+        self.assertEqual(invalid_mfa_login.status_code, 401, invalid_mfa_login.text)
+        self.assertIn("Invalid MFA code", invalid_mfa_login.json()["detail"])
+
         analyst_login = self.client.post(
             "/auth/login",
-            json={"email": "new-analyst@example.com", "password": TEST_PASSWORD},
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
         self.assertEqual(analyst_login.json()["role"], "mfi_analyst")
@@ -886,7 +920,11 @@ class ApiIntegrationTests(unittest.TestCase):
 
         disabled_login = self.client.post(
             "/auth/login",
-            json={"email": "new-analyst@example.com", "password": TEST_PASSWORD},
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         self.assertEqual(disabled_login.status_code, 403, disabled_login.text)
 
@@ -910,7 +948,11 @@ class ApiIntegrationTests(unittest.TestCase):
 
         reactivated_login = self.client.post(
             "/auth/login",
-            json={"email": "new-analyst@example.com", "password": TEST_PASSWORD},
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         self.assertEqual(reactivated_login.status_code, 200, reactivated_login.text)
         self.assertEqual(reactivated_login.json()["role"], "mfi_analyst")
@@ -965,7 +1007,11 @@ class ApiIntegrationTests(unittest.TestCase):
 
         accepted = self.client.post(
             "/auth/accept-staff-invite",
-            json={"token": invite_payload["token"], "password": TEST_PASSWORD},
+            json={
+                "token": invite_payload["token"],
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         self.assertEqual(accepted.status_code, 200, accepted.text)
         self.assertEqual(accepted.json()["role"], "mfi_analyst")
@@ -975,7 +1021,11 @@ class ApiIntegrationTests(unittest.TestCase):
 
         reused = self.client.post(
             "/auth/accept-staff-invite",
-            json={"token": invite_payload["token"], "password": TEST_PASSWORD},
+            json={
+                "token": invite_payload["token"],
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         self.assertEqual(reused.status_code, 409, reused.text)
 
@@ -1078,11 +1128,21 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(provisioning_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(provisioning_event["entity_id"], "new-analyst@example.com")
         mfa_attested_event = next(
-            event for event in audit if event["action"] == "staff_mfa_attested"
+            event
+            for event in audit
+            if event["action"] == "staff_mfa_attested"
+            and event["entity_id"] == "new-analyst@example.com"
         )
         self.assertEqual(mfa_attested_event["actor_email"], "provisioning-admin@example.com")
-        self.assertEqual(mfa_attested_event["entity_id"], "provisioning-admin@example.com")
+        self.assertEqual(mfa_attested_event["entity_id"], "new-analyst@example.com")
         self.assertEqual(mfa_attested_event["details"]["method"], "pilot_attestation")
+        mfa_login_event = next(
+            event
+            for event in audit
+            if event["action"] == "staff_mfa_login_verified"
+            and event["entity_id"] == "new-analyst@example.com"
+        )
+        self.assertTrue(mfa_login_event["details"]["prototype"])
         invite_created_event = next(
             event
             for event in audit
@@ -1187,9 +1247,18 @@ class ApiIntegrationTests(unittest.TestCase):
             "mfi_analyst",
             SECOND_ORGANIZATION_ID,
         )
+        self.repository.attest_user_mfa(
+            "analyst-b@example.com",
+            "analyst-b@example.com",
+            "prototype_mfa_code",
+        )
         analyst_b_login = self.client.post(
             "/auth/login",
-            json={"email": "analyst-b@example.com", "password": TEST_PASSWORD},
+            json={
+                "email": "analyst-b@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
         )
         analyst_b_token = analyst_b_login.json()["access_token"]
 
@@ -1334,11 +1403,17 @@ class ApiIntegrationTests(unittest.TestCase):
             "mfi_analyst",
             SECOND_ORGANIZATION_ID,
         )
+        self.repository.attest_user_mfa(
+            "simulation-other-analyst@example.com",
+            "simulation-other-analyst@example.com",
+            "prototype_mfa_code",
+        )
         other_login = self.client.post(
             "/auth/login",
             json={
                 "email": "simulation-other-analyst@example.com",
                 "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
             },
         )
         cross_tenant_history = self.client.get(

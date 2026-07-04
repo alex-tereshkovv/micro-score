@@ -58,6 +58,7 @@ const els = {
   registerButton: document.querySelector("#registerButton"),
   email: document.querySelector("#email"),
   password: document.querySelector("#password"),
+  mfaCode: document.querySelector("#mfaCode"),
   demoModePill: document.querySelector("#demoModePill"),
   resetDemoData: document.querySelector("#resetDemoData"),
   sessionRole: document.querySelector("#sessionRole"),
@@ -612,6 +613,8 @@ async function authenticate(mode) {
     email: els.email.value.trim(),
     password: els.password.value,
   };
+  const mfaCode = els.mfaCode?.value?.trim();
+  if (mfaCode) payload.mfa_code = mfaCode;
   if (mode === "register") payload.role = "borrower";
 
   const endpoint = mode === "register" ? "/auth/register" : "/auth/login";
@@ -634,6 +637,11 @@ async function authenticate(mode) {
 function fillDemoCredentials(email) {
   els.email.value = email;
   els.password.value = "password123";
+  if (els.mfaCode) {
+    els.mfaCode.value = ["admin@test.com", "analyst@test.com"].includes(email)
+      ? "246810"
+      : "";
+  }
 }
 
 async function enterDemoWorkspace(email, role) {
@@ -2384,7 +2392,7 @@ function renderMfaReadiness(readiness) {
       <strong>${Number(readiness.active_staff_count || 0)}</strong>
     </div>
     <p class="tiny-text full-width">${escapeHtml(readiness.recommended_action || "Record MFA attestation before pilot use.")}</p>
-    <p class="tiny-text full-width">${escapeHtml(readiness.limitation || "MFA Readiness v1 does not enforce a second factor during login.")}</p>
+    <p class="tiny-text full-width">${escapeHtml(readiness.limitation || "MFA Readiness v2 requires a prototype second-factor code for staff sessions.")}</p>
   `;
 }
 

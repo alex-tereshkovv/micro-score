@@ -25,6 +25,7 @@ borrower@test.com
 analyst@test.com
 admin@test.com
 password: password123
+staff/admin MFA code: 246810
 ```
 
 ## Two-Minute Script
