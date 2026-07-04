@@ -94,6 +94,7 @@ const els = {
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
+  securityReadiness: document.querySelector("#securityReadiness"),
   staffForm: document.querySelector("#staffForm"),
   staffInviteForm: document.querySelector("#staffInviteForm"),
   mfaReadiness: document.querySelector("#mfaReadiness"),
@@ -658,6 +659,7 @@ async function loadRoleWorkspace(role) {
   } else if (role === "admin") {
     await Promise.all([
       refreshAudit(),
+      refreshSecurityReadiness(),
       refreshStaffUsers(),
       refreshStaffInvites(),
       refreshOrganizations(),
@@ -921,6 +923,7 @@ function resetApplicationViews() {
 function resetPrivilegedViews() {
   for (const [container, label] of [
     [els.auditTrail, "No audit events loaded."],
+    [els.securityReadiness, "Security readiness not loaded."],
     [els.staffUsers, "No staff users loaded."],
     [els.staffInvites, "No staff invites loaded."],
     [els.organizationDirectory, "No organizations loaded."],
@@ -2296,6 +2299,60 @@ async function refreshAudit() {
   ]);
 }
 
+function renderSecurityReadiness(readiness) {
+  if (!els.securityReadiness) return;
+  const statusClass = readiness.status === "blocked"
+    ? "risk-high"
+    : readiness.status === "review"
+      ? "risk-medium"
+      : "risk-low";
+  const rows = (readiness.checks || [])
+    .map((check) => `
+      <tr>
+        <td>${escapeHtml(check.label)}</td>
+        <td>${escapeHtml(formatPolicyName(check.status))}</td>
+        <td>${escapeHtml(check.summary)}</td>
+        <td>${escapeHtml(check.action)}</td>
+      </tr>
+    `)
+    .join("");
+  els.securityReadiness.className = "table-shell security-readiness";
+  els.securityReadiness.innerHTML = `
+    <div class="metric-grid">
+      <div class="metric">
+        <span>Pre-pilot status</span>
+        <strong class="${statusClass}">${escapeHtml(formatPolicyName(readiness.status))}</strong>
+      </div>
+      <div class="metric">
+        <span>Blockers</span>
+        <strong>${Number(readiness.blockers_count || 0)}</strong>
+      </div>
+      <div class="metric">
+        <span>Warnings</span>
+        <strong>${Number(readiness.warnings_count || 0)}</strong>
+      </div>
+      <p class="tiny-text full-width">${escapeHtml(readiness.limitation || "Security readiness is a prototype control summary.")}</p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Check</th>
+          <th>Status</th>
+          <th>Summary</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function refreshSecurityReadiness() {
+  const readiness = await apiFetch("/admin/security/readiness");
+  renderSecurityReadiness(readiness);
+  return readiness;
+}
+
 async function refreshStaffUsers() {
   const [rows, readiness] = await Promise.all([
     apiFetch("/admin/users"),
@@ -2654,14 +2711,14 @@ async function createStaffUser(event) {
   });
   form.reset();
   showMessage(`Created ${created.email}`, "ok");
-  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
 }
 
 async function disableStaffUser(email) {
   const disabled = await apiFetch(`/admin/users/${encodeURIComponent(email)}/disable`, {
     method: "POST",
   });
-  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(
     `Disabled ${disabled.email}; revoked ${disabled.revoked_session_count} active session(s).`,
     "ok",
@@ -2672,7 +2729,7 @@ async function reactivateStaffUser(email) {
   const reactivated = await apiFetch(`/admin/users/${encodeURIComponent(email)}/reactivate`, {
     method: "POST",
   });
-  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(`Reactivated ${reactivated.email}; analyst can sign in again.`, "ok");
 }
 
@@ -2681,7 +2738,7 @@ async function attestStaffMfa(email) {
     method: "POST",
     body: JSON.stringify({ method: "pilot_attestation" }),
   });
-  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(`Recorded MFA attestation for ${attested.email}.`, "ok");
 }
 
@@ -2700,14 +2757,14 @@ async function createStaffInvite(event) {
   form.reset();
   form.elements.expires_in_hours.value = "48";
   showMessage(`Created invite for ${created.email}. Copy this one-time token now: ${created.token}`, "ok");
-  await Promise.all([refreshStaffInvites(), refreshAudit()]);
+  await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
 }
 
 async function revokeStaffInvite(token) {
   const revoked = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}`, {
     method: "DELETE",
   });
-  await Promise.all([refreshStaffInvites(), refreshAudit()]);
+  await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(`Revoked invite for ${revoked.email}`, "ok");
 }
 

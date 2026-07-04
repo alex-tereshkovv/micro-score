@@ -84,8 +84,8 @@ Security v2 exposes token expiry in API/static auth responses and the session
 pill so reviewer sessions are not treated as indefinite. Staff Invite v3 mirrors
 the API contract for expiring/revocable analyst invites, one-time raw token
 handling, password setup at acceptance, invite health monitoring, MFA readiness
-attestation, analyst disable/session revocation, and reactivation, plus
-invite/user lifecycle audit events in the static backend. Application
+attestation, aggregated security readiness, analyst disable/session revocation,
+and reactivation, plus invite/user lifecycle audit events in the static backend. Application
 Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
 count fields, categories, and district/settlement consistency; the FastAPI
 schema remains authoritative. MFI

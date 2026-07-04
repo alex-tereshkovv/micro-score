@@ -457,6 +457,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("MfaAttestationResponse", schemas)
         self.assertIn("MfaReadinessAccount", schemas)
         self.assertIn("MfaReadinessResponse", schemas)
+        self.assertIn("SecurityReadinessCheck", schemas)
+        self.assertIn("SecurityReadinessResponse", schemas)
         self.assertIn("StaffUserCreate", schemas)
         self.assertIn("StaffUserDisableResponse", schemas)
         self.assertIn("StaffUserReactivateResponse", schemas)
@@ -523,6 +525,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("mfa_method", schemas["UserPublic"]["properties"])
         self.assertIn("missing_mfa_count", schemas["MfaReadinessResponse"]["properties"])
         self.assertIn("limitation", schemas["MfaReadinessResponse"]["properties"])
+        self.assertIn("blockers_count", schemas["SecurityReadinessResponse"]["properties"])
+        self.assertIn("recommended_actions", schemas["SecurityReadinessResponse"]["properties"])
+        self.assertIn("checks", schemas["SecurityReadinessResponse"]["properties"])
         self.assertIn("revoked_session_count", schemas["StaffUserDisableResponse"]["properties"])
         self.assertIn("was_already_active", schemas["StaffUserReactivateResponse"]["properties"])
         self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
@@ -536,6 +541,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("action_required_count", schemas["StaffInviteHealthResponse"]["properties"])
         self.assertIn("recommended_action", schemas["StaffInviteHealthResponse"]["properties"])
         paths = response.json()["paths"]
+        self.assertIn("/admin/security/readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
         self.assertIn("/admin/staff-invites", paths)
@@ -816,6 +822,20 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(mfa_readiness_after.status_code, 200, mfa_readiness_after.text)
         self.assertEqual(mfa_readiness_after.json()["status"], "ready")
         self.assertEqual(mfa_readiness_after.json()["mfa_attested_count"], 1)
+        security_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(security_readiness.status_code, 200, security_readiness.text)
+        self.assertEqual(security_readiness.json()["status"], "blocked")
+        security_checks = {
+            check["key"]: check for check in security_readiness.json()["checks"]
+        }
+        self.assertEqual(security_checks["mfa_attestation"]["status"], "pass")
+        self.assertEqual(security_checks["session_ttl"]["status"], "pass")
+        self.assertEqual(security_checks["mfa_enforcement"]["status"], "blocker")
+        self.assertEqual(security_checks["invite_delivery"]["status"], "blocker")
+        self.assertIn("not a completed production security review", security_readiness.json()["limitation"])
 
         created = self.client.post(
             "/admin/users",
@@ -1037,6 +1057,16 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(invite_health.json()["action_required_count"], 1)
         self.assertEqual(invite_health.json()["window_hours"], 24)
         self.assertIn("Review expired", invite_health.json()["recommended_action"])
+        security_after_expired_invite = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(security_after_expired_invite.status_code, 200, security_after_expired_invite.text)
+        invite_check = next(
+            check for check in security_after_expired_invite.json()["checks"]
+            if check["key"] == "invite_hygiene"
+        )
+        self.assertEqual(invite_check["status"], "blocker")
 
         audit = self.client.get(
             "/admin/audit-events",

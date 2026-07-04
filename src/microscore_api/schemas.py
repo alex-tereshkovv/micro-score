@@ -157,6 +157,24 @@ class MfaReadinessResponse(BaseModel):
     limitation: str
 
 
+class SecurityReadinessCheck(BaseModel):
+    key: str
+    label: str
+    status: Literal["pass", "warning", "blocker"]
+    summary: str
+    action: str
+
+
+class SecurityReadinessResponse(BaseModel):
+    status: Literal["ready", "review", "blocked"]
+    generated_at: str
+    blockers_count: int = Field(ge=0)
+    warnings_count: int = Field(ge=0)
+    checks: list[SecurityReadinessCheck] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    limitation: str
+
+
 class StaffInviteCreate(BaseModel):
     email: str
     role: Literal["mfi_analyst"] = "mfi_analyst"

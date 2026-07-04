@@ -330,6 +330,14 @@ async function main() {
   if (mfaReadinessAfter.mfa_attested_count < 1) {
     throw new Error("Expected MFA readiness to include attested staff count");
   }
+  const securityReadinessAfterMfa = await api.request("/admin/security/readiness", {}, adminSession);
+  if (
+    securityReadinessAfterMfa.status !== "blocked"
+    || !securityReadinessAfterMfa.checks.some((check) => check.key === "mfa_enforcement" && check.status === "blocker")
+    || !securityReadinessAfterMfa.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")
+  ) {
+    throw new Error("Expected security readiness to flag production security blockers");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -568,6 +576,10 @@ async function main() {
     || inviteHealth.window_hours !== 24
   ) {
     throw new Error("Expected staff invite health to flag soon-expiring pending invites");
+  }
+  const securityReadinessAfterInvite = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!securityReadinessAfterInvite.checks.some((check) => check.key === "invite_hygiene" && check.status === "blocker")) {
+    throw new Error("Expected security readiness to include invite hygiene blocker");
   }
   const adminAudit = await api.request("/admin/audit-events", {}, adminSession);
   if (!adminAudit.some((event) => event.action === "staff_user_created")) {
@@ -835,6 +847,7 @@ async function main() {
       staff_invite_token_hygiene: true,
       staff_invite_health: true,
       mfa_readiness: true,
+      security_readiness: true,
       staff_user_disable: true,
       staff_user_reactivation: true,
       model_registry: true,

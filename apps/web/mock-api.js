@@ -420,6 +420,80 @@
     };
   }
 
+  function securityReadiness() {
+    const mfa = mfaReadiness(demo.users);
+    const inviteHealth = staffInviteHealth(Object.values(demo.staffInvites));
+    const checks = [];
+    if (mfa.missing_mfa_count) {
+      checks.push({
+        key: "mfa_attestation",
+        label: "Staff MFA attestation",
+        status: "blocker",
+        summary: `${mfa.missing_mfa_count} active staff account(s) lack MFA attestation.`,
+        action: "Record MFA attestation for every active admin and MFI analyst account.",
+      });
+    } else {
+      checks.push({
+        key: "mfa_attestation",
+        label: "Staff MFA attestation",
+        status: "pass",
+        summary: "All active staff accounts have MFA attestation recorded.",
+        action: "Keep attestation current when staff accounts change.",
+      });
+    }
+    if (inviteHealth.action_required_count) {
+      checks.push({
+        key: "invite_hygiene",
+        label: "Staff invite hygiene",
+        status: "blocker",
+        summary: `${inviteHealth.action_required_count} pending invite(s) are expired or expiring soon.`,
+        action: "Revoke stale invites and create fresh links only when onboarding is active.",
+      });
+    } else {
+      checks.push({
+        key: "invite_hygiene",
+        label: "Staff invite hygiene",
+        status: "pass",
+        summary: "No expired or soon-expiring pending staff invites require action.",
+        action: "Continue reviewing invite health before pilot access.",
+      });
+    }
+    checks.push({
+      key: "session_ttl",
+      label: "Session lifetime",
+      status: "pass",
+      summary: `Current session TTL is ${DEMO_SESSION_TTL_SECONDS} seconds.`,
+      action: "Keep reviewer sessions at or below 8 hours.",
+    });
+    checks.push({
+      key: "mfa_enforcement",
+      label: "Login-time MFA enforcement",
+      status: "blocker",
+      summary: "MFA Readiness v1 records attestation but does not enforce a second factor during login.",
+      action: "Integrate TOTP/WebAuthn or an external identity provider before real user data.",
+    });
+    checks.push({
+      key: "invite_delivery",
+      label: "Invite delivery and HTTPS links",
+      status: "blocker",
+      summary: "Invite links are local prototype secrets, not delivered through audited email with HTTPS-only URLs.",
+      action: "Add email delivery, HTTPS-only links, and delivery audit before production onboarding.",
+    });
+    const blockers = checks.filter((check) => check.status === "blocker");
+    const warnings = checks.filter((check) => check.status === "warning");
+    return {
+      status: blockers.length ? "blocked" : warnings.length ? "review" : "ready",
+      generated_at: nowIso(),
+      blockers_count: blockers.length,
+      warnings_count: warnings.length,
+      checks,
+      recommended_actions: checks
+        .filter((check) => check.status !== "pass")
+        .map((check) => check.action),
+      limitation: "Security Readiness v1 is a pre-pilot control summary for the local prototype; it is not a completed production security review.",
+    };
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -1886,6 +1960,11 @@
           }))
           .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
       );
+    }
+
+    if (cleanPath === "/admin/security/readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(securityReadiness());
     }
 
     if (cleanPath === "/admin/security/mfa-readiness" && method === "GET") {

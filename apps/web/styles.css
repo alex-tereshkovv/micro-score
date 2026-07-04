@@ -1816,6 +1816,10 @@ label {
   margin-bottom: 12px;
 }
 
+.security-readiness .metric-grid {
+  margin-bottom: 12px;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 6px;

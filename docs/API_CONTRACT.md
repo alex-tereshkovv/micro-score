@@ -243,19 +243,25 @@ password. Repeating the request is idempotent and returns
 MFA readiness and attestation:
 
 ```http
+GET /admin/security/readiness
 GET /admin/security/mfa-readiness
 POST /admin/users/{email}/mfa/attest
 ```
 
-Both endpoints require an `admin` bearer token. MFA Readiness v1 is a prototype
-governance control, not a login challenge: it records admin attestation that an
-active `admin` or `mfi_analyst` account has MFA coverage planned or verified
-outside this local prototype. The readiness response is `blocked` while active
-staff accounts lack attestation and includes `missing_mfa_count`,
-`mfa_attested_count`, account-level status rows, a `recommended_action`, and a
-`limitation` stating that this does not enforce a second factor during login.
-Successful first-time attestation records `staff_mfa_attested`; repeated
-attestation is idempotent and returns `was_already_attested: true`.
+These endpoints require an `admin` bearer token. Security Readiness v1 combines
+MFA posture, invite hygiene, session lifetime, and known production blockers
+into one pre-pilot gate. It returns `status`, `blockers_count`,
+`warnings_count`, structured `checks`, `recommended_actions`, and a `limitation`
+stating that this is not a completed production security review.
+
+MFA Readiness v1 is a prototype governance control, not a login challenge: it
+records admin attestation that an active `admin` or `mfi_analyst` account has
+MFA coverage planned or verified outside this local prototype. The MFA readiness
+response is `blocked` while active staff accounts lack attestation and includes
+`missing_mfa_count`, `mfa_attested_count`, account-level status rows, a
+`recommended_action`, and a `limitation` stating that this does not enforce a second factor during login. Successful first-time attestation records
+`staff_mfa_attested`; repeated attestation is idempotent and returns
+`was_already_attested: true`.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring

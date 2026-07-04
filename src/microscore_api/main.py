@@ -37,6 +37,7 @@ from .database import (
     DuplicateUserError,
     InvalidApplicationTransitionError,
     MicroScoreRepository,
+    configured_session_ttl_hours,
 )
 from .analytics import policy_analytics as build_policy_analytics
 from .privacy import find_forbidden_signal_paths
@@ -71,6 +72,7 @@ from .schemas import (
     PortfolioSimulationSummary,
     RegisterRequest,
     SegmentAnalyticsRow,
+    SecurityReadinessResponse,
     StaffInviteAccept,
     StaffInviteCreate,
     StaffInviteCreatedResponse,
@@ -309,6 +311,119 @@ def _mfa_readiness_response(users: list[dict[str, Any]]) -> dict[str, Any]:
         "accounts": accounts,
         "recommended_action": recommended_action,
         "limitation": MFA_READINESS_LIMITATION,
+    }
+
+
+def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, Any]:
+    users = repository.list_users()
+    invites = repository.list_staff_invites()
+    mfa_readiness = _mfa_readiness_response(users)
+    invite_health = _staff_invite_health_response(invites)
+    session_ttl_hours = configured_session_ttl_hours()
+    session_ttl_seconds = int(round(session_ttl_hours * 3600))
+    checks: list[dict[str, Any]] = []
+
+    if mfa_readiness["missing_mfa_count"]:
+        checks.append(
+            {
+                "key": "mfa_attestation",
+                "label": "Staff MFA attestation",
+                "status": "blocker",
+                "summary": (
+                    f"{mfa_readiness['missing_mfa_count']} active staff account(s) "
+                    "lack MFA attestation."
+                ),
+                "action": "Record MFA attestation for every active admin and MFI analyst account.",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "key": "mfa_attestation",
+                "label": "Staff MFA attestation",
+                "status": "pass",
+                "summary": "All active staff accounts have MFA attestation recorded.",
+                "action": "Keep attestation current when staff accounts change.",
+            }
+        )
+
+    if invite_health["action_required_count"]:
+        checks.append(
+            {
+                "key": "invite_hygiene",
+                "label": "Staff invite hygiene",
+                "status": "blocker",
+                "summary": (
+                    f"{invite_health['action_required_count']} pending invite(s) "
+                    "are expired or expiring soon."
+                ),
+                "action": "Revoke stale invites and create fresh links only when onboarding is active.",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "key": "invite_hygiene",
+                "label": "Staff invite hygiene",
+                "status": "pass",
+                "summary": "No expired or soon-expiring pending staff invites require action.",
+                "action": "Continue reviewing invite health before pilot access.",
+            }
+        )
+
+    ttl_status = "pass" if session_ttl_hours <= 8 else "warning"
+    checks.append(
+        {
+            "key": "session_ttl",
+            "label": "Session lifetime",
+            "status": ttl_status,
+            "summary": f"Current session TTL is {session_ttl_seconds} seconds.",
+            "action": (
+                "Keep reviewer sessions at or below 8 hours."
+                if ttl_status == "pass"
+                else "Reduce MICROSCORE_SESSION_TTL_HOURS to 8 hours or less before pilot use."
+            ),
+        }
+    )
+
+    checks.extend(
+        [
+            {
+                "key": "mfa_enforcement",
+                "label": "Login-time MFA enforcement",
+                "status": "blocker",
+                "summary": "MFA Readiness v1 records attestation but does not enforce a second factor during login.",
+                "action": "Integrate TOTP/WebAuthn or an external identity provider before real user data.",
+            },
+            {
+                "key": "invite_delivery",
+                "label": "Invite delivery and HTTPS links",
+                "status": "blocker",
+                "summary": "Invite links are local prototype secrets, not delivered through audited email with HTTPS-only URLs.",
+                "action": "Add email delivery, HTTPS-only links, and delivery audit before production onboarding.",
+            },
+        ]
+    )
+
+    blockers = [check for check in checks if check["status"] == "blocker"]
+    warnings = [check for check in checks if check["status"] == "warning"]
+    if blockers:
+        status_value = "blocked"
+    elif warnings:
+        status_value = "review"
+    else:
+        status_value = "ready"
+    return {
+        "status": status_value,
+        "generated_at": _utc_now_iso(),
+        "blockers_count": len(blockers),
+        "warnings_count": len(warnings),
+        "checks": checks,
+        "recommended_actions": [check["action"] for check in checks if check["status"] != "pass"],
+        "limitation": (
+            "Security Readiness v1 is a pre-pilot control summary for the local prototype; "
+            "it is not a completed production security review."
+        ),
     }
 
 
@@ -1489,6 +1604,14 @@ def list_admin_users(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_users()
+
+
+@app.get("/admin/security/readiness", response_model=SecurityReadinessResponse)
+def security_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _security_readiness_response(repository)
 
 
 @app.get("/admin/security/mfa-readiness", response_model=MfaReadinessResponse)

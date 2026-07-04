@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./mock-api.js?v=20260704-mfa-readiness"', html)
+        self.assertIn('src="./mock-api.js?v=20260704-security-readiness"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260704-mfa-readiness"', html)
+        self.assertIn('src="./app.js?v=20260704-security-readiness"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -88,6 +88,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="mfiView"', html)
         self.assertIn('id="adminView"', html)
         self.assertIn('id="staffForm"', html)
+        self.assertIn('id="securityReadiness"', html)
         self.assertIn('id="mfaReadiness"', html)
         self.assertIn('id="staffUsers"', html)
         self.assertIn('id="refreshUsers"', html)
@@ -146,6 +147,7 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/analytics/decisions",
             "/admin/audit-events",
             "/admin/users",
+            "/admin/security/readiness",
             "/admin/security/mfa-readiness",
             "/mfa/attest",
             "/disable",
@@ -282,7 +284,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("passwordPolicyViolations", mock_script)
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
+        self.assertIn('"/admin/security/readiness"', mock_script)
         self.assertIn('"/admin/security/mfa-readiness"', mock_script)
+        self.assertIn("securityReadiness", mock_script)
+        self.assertIn("mfa_enforcement", mock_script)
+        self.assertIn("invite_delivery", mock_script)
         self.assertIn("staff_user_created", mock_script)
         self.assertIn("staff_mfa_attested", mock_script)
         self.assertIn("staff_user_disabled", mock_script)
@@ -303,6 +309,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Staff invite has been revoked", mock_script)
         self.assertIn("Staff invite has expired", mock_script)
         self.assertIn("refreshStaffUsers", script)
+        self.assertIn("refreshSecurityReadiness", script)
+        self.assertIn("renderSecurityReadiness", script)
         self.assertIn("renderMfaReadiness", script)
         self.assertIn("attestStaffMfa", script)
         self.assertIn("createStaffUser", script)

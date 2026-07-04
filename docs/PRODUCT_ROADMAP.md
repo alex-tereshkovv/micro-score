@@ -277,6 +277,8 @@ login without creating sessions automatically, and records
 MFA Readiness v1 adds admin-only staff MFA posture monitoring and attestation
 for active admin/MFI analyst accounts, with an explicit limitation that the
 local prototype does not yet enforce a second factor during login.
+Security Readiness v1 now combines MFA posture, invite hygiene, session TTL,
+and known production blockers into one admin-only pre-pilot gate.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
