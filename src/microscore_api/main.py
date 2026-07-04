@@ -56,6 +56,9 @@ from .schemas import (
     LoginRequest,
     LogoutResponse,
     MeResponse,
+    MfaAttestationCreate,
+    MfaAttestationResponse,
+    MfaReadinessResponse,
     ModelStatusResponse,
     ModelVersionCreate,
     ModelVersionPublic,
@@ -87,6 +90,11 @@ DEFAULT_CORS_ORIGINS = (
     "http://127.0.0.1:5173",
     "http://localhost:5173",
     "https://alex-tereshkovv.github.io",
+)
+MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
+MFA_READINESS_LIMITATION = (
+    "MFA Readiness v1 records admin attestation for prototype governance only; "
+    "it does not enforce a second factor during login."
 )
 
 
@@ -246,6 +254,62 @@ def _staff_invite_health_response(
             "and create fresh invites only when onboarding is still needed."
         )
     return health
+
+
+def _mfa_readiness_response(users: list[dict[str, Any]]) -> dict[str, Any]:
+    accounts = []
+    active_staff_count = 0
+    mfa_attested_count = 0
+    disabled_staff_count = 0
+    missing_mfa_count = 0
+
+    for user in users:
+        if user["role"] not in MFA_REQUIRED_ROLES:
+            continue
+        disabled = user.get("disabled_at") is not None
+        mfa_attested = user.get("mfa_attested_at") is not None
+        mfa_required = not disabled
+        if disabled:
+            disabled_staff_count += 1
+            account_status = "disabled"
+        else:
+            active_staff_count += 1
+            if mfa_attested:
+                mfa_attested_count += 1
+                account_status = "ready"
+            else:
+                missing_mfa_count += 1
+                account_status = "missing"
+        accounts.append(
+            {
+                "email": user["email"],
+                "role": user["role"],
+                "organization_id": user.get("organization_id"),
+                "disabled": disabled,
+                "mfa_required": mfa_required,
+                "mfa_attested": mfa_attested,
+                "mfa_attested_at": user.get("mfa_attested_at"),
+                "mfa_method": user.get("mfa_method"),
+                "status": account_status,
+            }
+        )
+
+    status_value = "blocked" if missing_mfa_count else "ready"
+    recommended_action = (
+        "Record MFA attestation for active admin and MFI analyst accounts before pilot use."
+        if missing_mfa_count
+        else "All active staff accounts have MFA attestation recorded."
+    )
+    return {
+        "status": status_value,
+        "active_staff_count": active_staff_count,
+        "mfa_attested_count": mfa_attested_count,
+        "missing_mfa_count": missing_mfa_count,
+        "disabled_staff_count": disabled_staff_count,
+        "accounts": accounts,
+        "recommended_action": recommended_action,
+        "limitation": MFA_READINESS_LIMITATION,
+    }
 
 
 def _get_staff_invite_by_secret(
@@ -1058,6 +1122,9 @@ def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
         "created_at": user["created_at"],
         "disabled_at": user.get("disabled_at"),
         "disabled_by": user.get("disabled_by"),
+        "mfa_attested_at": user.get("mfa_attested_at"),
+        "mfa_attested_by": user.get("mfa_attested_by"),
+        "mfa_method": user.get("mfa_method"),
         "session_expires_at": user["session_expires_at"],
         "session_ttl_seconds": user["session_ttl_seconds"],
     }
@@ -1422,6 +1489,61 @@ def list_admin_users(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_users()
+
+
+@app.get("/admin/security/mfa-readiness", response_model=MfaReadinessResponse)
+def mfa_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _mfa_readiness_response(repository.list_users())
+
+
+@app.post("/admin/users/{email}/mfa/attest", response_model=MfaAttestationResponse)
+def attest_staff_mfa(
+    email: str,
+    payload: MfaAttestationCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    target_email = email.strip().lower()
+    target = repository.get_user(target_email)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if target["role"] not in MFA_REQUIRED_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active staff accounts require MFA attestation",
+        )
+    if target.get("disabled_at") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Disabled staff accounts do not require MFA attestation",
+        )
+
+    attested = repository.attest_user_mfa(target_email, user["email"], payload.method)
+    if attested is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if not attested["was_already_attested"]:
+        repository.record_audit_event(
+            actor_email=user["email"],
+            action="staff_mfa_attested",
+            entity_type="user",
+            entity_id=target_email,
+            details={
+                "role": target["role"],
+                "organization_id": target.get("organization_id"),
+                "method": payload.method,
+                "limitation": MFA_READINESS_LIMITATION,
+            },
+        )
+    return attested
 
 
 @app.post("/admin/users/{email}/disable", response_model=StaffUserDisableResponse)

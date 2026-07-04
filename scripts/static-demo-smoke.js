@@ -303,6 +303,33 @@ async function main() {
     role: adminAuth.role,
     email: "admin@test.com",
   };
+  const mfaReadinessBefore = await api.request("/admin/security/mfa-readiness", {}, adminSession);
+  if (
+    mfaReadinessBefore.status !== "blocked"
+    || mfaReadinessBefore.missing_mfa_count < 1
+    || !String(mfaReadinessBefore.limitation).includes("does not enforce")
+  ) {
+    throw new Error("Expected MFA readiness to block active staff without attestation");
+  }
+  const mfaAttested = await api.request(
+    `/admin/users/${encodeURIComponent("admin@test.com")}/mfa/attest`,
+    {
+      method: "POST",
+      body: JSON.stringify({ method: "pilot_attestation" }),
+    },
+    adminSession,
+  );
+  if (
+    !mfaAttested.mfa_attested_at
+    || mfaAttested.mfa_attested_by !== "admin@test.com"
+    || mfaAttested.mfa_method !== "pilot_attestation"
+  ) {
+    throw new Error("Expected admin MFA attestation metadata");
+  }
+  const mfaReadinessAfter = await api.request("/admin/security/mfa-readiness", {}, adminSession);
+  if (mfaReadinessAfter.mfa_attested_count < 1) {
+    throw new Error("Expected MFA readiness to include attested staff count");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -545,6 +572,9 @@ async function main() {
   const adminAudit = await api.request("/admin/audit-events", {}, adminSession);
   if (!adminAudit.some((event) => event.action === "staff_user_created")) {
     throw new Error("Expected staff provisioning audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_mfa_attested")) {
+    throw new Error("Expected staff MFA attestation audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_created")) {
     throw new Error("Expected staff invite creation audit event");
@@ -804,6 +834,7 @@ async function main() {
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
       staff_invite_health: true,
+      mfa_readiness: true,
       staff_user_disable: true,
       staff_user_reactivation: true,
       model_registry: true,

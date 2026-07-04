@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./mock-api.js?v=20260627-invite-health"', html)
+        self.assertIn('src="./mock-api.js?v=20260704-mfa-readiness"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260627-invite-health"', html)
+        self.assertIn('src="./app.js?v=20260704-mfa-readiness"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -88,6 +88,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="mfiView"', html)
         self.assertIn('id="adminView"', html)
         self.assertIn('id="staffForm"', html)
+        self.assertIn('id="mfaReadiness"', html)
         self.assertIn('id="staffUsers"', html)
         self.assertIn('id="refreshUsers"', html)
         self.assertIn('id="organizationForm"', html)
@@ -145,6 +146,8 @@ class WebStaticTests(unittest.TestCase):
             "/mfi/analytics/decisions",
             "/admin/audit-events",
             "/admin/users",
+            "/admin/security/mfa-readiness",
+            "/mfa/attest",
             "/disable",
             "/reactivate",
             "/admin/staff-invites",
@@ -279,9 +282,13 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("passwordPolicyViolations", mock_script)
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
+        self.assertIn('"/admin/security/mfa-readiness"', mock_script)
         self.assertIn("staff_user_created", mock_script)
+        self.assertIn("staff_mfa_attested", mock_script)
         self.assertIn("staff_user_disabled", mock_script)
         self.assertIn("staff_user_reactivated", mock_script)
+        self.assertIn("mfaReadiness", mock_script)
+        self.assertIn("missing_mfa_count", mock_script)
         self.assertIn("Account disabled", mock_script)
         self.assertIn('"/admin/staff-invites"', mock_script)
         self.assertIn('"/admin/staff-invites/health"', mock_script)
@@ -296,9 +303,12 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Staff invite has been revoked", mock_script)
         self.assertIn("Staff invite has expired", mock_script)
         self.assertIn("refreshStaffUsers", script)
+        self.assertIn("renderMfaReadiness", script)
+        self.assertIn("attestStaffMfa", script)
         self.assertIn("createStaffUser", script)
         self.assertIn("disableStaffUser", script)
         self.assertIn("reactivateStaffUser", script)
+        self.assertIn("data-attest-mfa-email", script)
         self.assertIn("data-disable-user-email", script)
         self.assertIn("data-reactivate-user-email", script)
         self.assertIn("refreshStaffInvites", script)

@@ -122,6 +122,35 @@ class ApiDatabaseTests(unittest.TestCase):
             {"borrower@example.com", "analyst@example.com"},
         )
         self.assertTrue(all("disabled_at" in user for user in users))
+        self.assertTrue(all("mfa_attested_at" in user for user in users))
+
+    def test_mfa_attestation_persists_for_staff_users(self) -> None:
+        self.repository.create_user("admin@example.com", "admin-hash", "admin")
+        self.repository.create_user("analyst@example.com", "analyst-hash", "mfi_analyst")
+
+        attested = self.repository.attest_user_mfa(
+            "analyst@example.com",
+            "admin@example.com",
+            "pilot_attestation",
+        )
+
+        self.assertEqual(attested["email"], "analyst@example.com")
+        self.assertIsNotNone(attested["mfa_attested_at"])
+        self.assertEqual(attested["mfa_attested_by"], "admin@example.com")
+        self.assertEqual(attested["mfa_method"], "pilot_attestation")
+        self.assertFalse(attested["was_already_attested"])
+        self.assertEqual(
+            self.repository.get_user("analyst@example.com")["mfa_method"],
+            "pilot_attestation",
+        )
+
+        repeated = self.repository.attest_user_mfa(
+            "analyst@example.com",
+            "admin@example.com",
+            "totp",
+        )
+        self.assertTrue(repeated["was_already_attested"])
+        self.assertEqual(repeated["mfa_method"], "pilot_attestation")
 
     def test_disabled_user_sessions_are_revoked(self) -> None:
         self.repository.create_user("admin@example.com", "admin-hash", "admin")

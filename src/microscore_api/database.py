@@ -228,7 +228,10 @@ class MicroScoreRepository:
                     organization_id TEXT REFERENCES mfi_organizations(id),
                     created_at TEXT NOT NULL,
                     disabled_at TEXT,
-                    disabled_by TEXT REFERENCES users(email)
+                    disabled_by TEXT REFERENCES users(email),
+                    mfa_attested_at TEXT,
+                    mfa_attested_by TEXT REFERENCES users(email),
+                    mfa_method TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -341,6 +344,14 @@ class MicroScoreRepository:
                 "disabled_by",
                 "TEXT REFERENCES users(email)",
             )
+            _ensure_column(connection, "users", "mfa_attested_at", "TEXT")
+            _ensure_column(
+                connection,
+                "users",
+                "mfa_attested_by",
+                "TEXT REFERENCES users(email)",
+            )
+            _ensure_column(connection, "users", "mfa_method", "TEXT")
             _ensure_column(
                 connection,
                 "loan_applications",
@@ -675,7 +686,10 @@ class MicroScoreRepository:
                     organization_id,
                     created_at,
                     disabled_at,
-                    disabled_by
+                    disabled_by,
+                    mfa_attested_at,
+                    mfa_attested_by,
+                    mfa_method
                 FROM users
                 WHERE email = ?
                 """,
@@ -693,7 +707,10 @@ class MicroScoreRepository:
                     organization_id,
                     created_at,
                     disabled_at,
-                    disabled_by
+                    disabled_by,
+                    mfa_attested_at,
+                    mfa_attested_by,
+                    mfa_method
                 FROM users
                 ORDER BY role, email
                 """
@@ -757,6 +774,37 @@ class MicroScoreRepository:
         reactivated["previous_disabled_at"] = existing["disabled_at"]
         reactivated["previous_disabled_by"] = existing["disabled_by"]
         return reactivated
+
+    def attest_user_mfa(
+        self,
+        email: str,
+        attested_by: str,
+        method: str,
+    ) -> dict[str, Any] | None:
+        now = _now_iso()
+        with self._connection() as connection:
+            existing = connection.execute(
+                """
+                SELECT email, mfa_attested_at
+                FROM users
+                WHERE email = ?
+                """,
+                (email,),
+            ).fetchone()
+            if existing is None:
+                return None
+            if existing["mfa_attested_at"] is None:
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET mfa_attested_at = ?, mfa_attested_by = ?, mfa_method = ?
+                    WHERE email = ? AND mfa_attested_at IS NULL
+                    """,
+                    (now, attested_by, method, email),
+                )
+        attested = self.get_user(email) or {}
+        attested["was_already_attested"] = existing["mfa_attested_at"] is not None
+        return attested
 
     def create_staff_invite(
         self,
@@ -901,6 +949,9 @@ class MicroScoreRepository:
                     users.created_at,
                     users.disabled_at,
                     users.disabled_by,
+                    users.mfa_attested_at,
+                    users.mfa_attested_by,
+                    users.mfa_method,
                     sessions.created_at AS session_created_at
                 FROM sessions
                 JOIN users ON users.email = sessions.email

@@ -100,6 +100,9 @@ class UserPublic(BaseModel):
     created_at: str
     disabled_at: str | None = None
     disabled_by: str | None = None
+    mfa_attested_at: str | None = None
+    mfa_attested_by: str | None = None
+    mfa_method: str | None = None
 
 
 class MeResponse(UserPublic):
@@ -121,6 +124,37 @@ class StaffUserDisableResponse(UserPublic):
 
 class StaffUserReactivateResponse(UserPublic):
     was_already_active: bool = False
+
+
+class MfaAttestationCreate(BaseModel):
+    method: Literal["pilot_attestation", "totp", "webauthn", "external_idp"] = "pilot_attestation"
+
+
+class MfaAttestationResponse(UserPublic):
+    was_already_attested: bool = False
+
+
+class MfaReadinessAccount(BaseModel):
+    email: str
+    role: Role
+    organization_id: str | None = None
+    disabled: bool = False
+    mfa_required: bool
+    mfa_attested: bool
+    mfa_attested_at: str | None = None
+    mfa_method: str | None = None
+    status: Literal["ready", "missing", "disabled"]
+
+
+class MfaReadinessResponse(BaseModel):
+    status: Literal["ready", "blocked"]
+    active_staff_count: int = Field(ge=0)
+    mfa_attested_count: int = Field(ge=0)
+    missing_mfa_count: int = Field(ge=0)
+    disabled_staff_count: int = Field(ge=0)
+    accounts: list[MfaReadinessAccount] = Field(default_factory=list)
+    recommended_action: str
+    limitation: str
 
 
 class StaffInviteCreate(BaseModel):

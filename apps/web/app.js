@@ -96,6 +96,7 @@ const els = {
   auditTrail: document.querySelector("#auditTrail"),
   staffForm: document.querySelector("#staffForm"),
   staffInviteForm: document.querySelector("#staffInviteForm"),
+  mfaReadiness: document.querySelector("#mfaReadiness"),
   staffUsers: document.querySelector("#staffUsers"),
   staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
@@ -928,6 +929,8 @@ function resetPrivilegedViews() {
     container.className = "table-shell empty";
     container.textContent = label;
   }
+  els.mfaReadiness.className = "metric-grid mfa-readiness empty";
+  els.mfaReadiness.textContent = "MFA readiness not loaded.";
   els.staffInviteHealth.className = "metric-grid invite-health empty";
   els.staffInviteHealth.textContent = "Invite health not loaded.";
   els.modelStatusPill.className = "pill muted";
@@ -2294,8 +2297,38 @@ async function refreshAudit() {
 }
 
 async function refreshStaffUsers() {
-  const rows = await apiFetch("/admin/users");
+  const [rows, readiness] = await Promise.all([
+    apiFetch("/admin/users"),
+    apiFetch("/admin/security/mfa-readiness"),
+  ]);
+  renderMfaReadiness(readiness);
   renderStaffUsers(rows);
+}
+
+function renderMfaReadiness(readiness) {
+  if (!els.mfaReadiness) return;
+  const statusClass = readiness.status === "blocked" ? "risk-high" : "risk-low";
+  els.mfaReadiness.className = "metric-grid mfa-readiness";
+  els.mfaReadiness.innerHTML = `
+    <div class="metric">
+      <span>MFA posture</span>
+      <strong class="${statusClass}">${escapeHtml(formatPolicyName(readiness.status))}</strong>
+    </div>
+    <div class="metric">
+      <span>Missing MFA</span>
+      <strong>${Number(readiness.missing_mfa_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Attested</span>
+      <strong>${Number(readiness.mfa_attested_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Active staff</span>
+      <strong>${Number(readiness.active_staff_count || 0)}</strong>
+    </div>
+    <p class="tiny-text full-width">${escapeHtml(readiness.recommended_action || "Record MFA attestation before pilot use.")}</p>
+    <p class="tiny-text full-width">${escapeHtml(readiness.limitation || "MFA Readiness v1 does not enforce a second factor during login.")}</p>
+  `;
 }
 
 function renderStaffUsers(rows) {
@@ -2314,17 +2347,28 @@ function renderStaffUsers(rows) {
     .map((user) => {
       const canDisable = user.role === "mfi_analyst" && !user.disabled_at;
       const canReactivate = user.role === "mfi_analyst" && Boolean(user.disabled_at);
+      const canAttestMfa = ["admin", "mfi_analyst"].includes(user.role)
+        && !user.disabled_at
+        && !user.mfa_attested_at;
       const status = user.disabled_at ? "disabled" : "active";
-      const action = canDisable
-        ? `<button class="secondary-button compact-button" type="button" data-disable-user-email="${escapeHtml(user.email)}">Disable</button>`
-        : canReactivate
-          ? `<button class="primary-button compact-button" type="button" data-reactivate-user-email="${escapeHtml(user.email)}">Reactivate</button>`
-        : "-";
+      const mfaStatus = user.mfa_attested_at ? `attested (${user.mfa_method || "method recorded"})` : "missing";
+      const actions = [];
+      if (canAttestMfa) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-attest-mfa-email="${escapeHtml(user.email)}">Mark MFA</button>`);
+      }
+      if (canDisable) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-disable-user-email="${escapeHtml(user.email)}">Disable</button>`);
+      }
+      if (canReactivate) {
+        actions.push(`<button class="primary-button compact-button" type="button" data-reactivate-user-email="${escapeHtml(user.email)}">Reactivate</button>`);
+      }
+      const action = actions.join(" ") || "-";
       return `
         <tr>
           <td>${escapeHtml(user.email)}</td>
           <td>${escapeHtml(formatPolicyName(user.role))}</td>
           <td>${escapeHtml(formatPolicyName(status))}</td>
+          <td>${escapeHtml(mfaStatus)}</td>
           <td>${escapeHtml(user.organization_id || "-")}</td>
           <td>${escapeHtml(user.disabled_at || user.created_at || "-")}</td>
           <td>${action}</td>
@@ -2339,6 +2383,7 @@ function renderStaffUsers(rows) {
           <th>Email</th>
           <th>Role</th>
           <th>Status</th>
+          <th>MFA</th>
           <th>Organization</th>
           <th>Created / disabled</th>
           <th>Action</th>
@@ -2631,6 +2676,15 @@ async function reactivateStaffUser(email) {
   showMessage(`Reactivated ${reactivated.email}; analyst can sign in again.`, "ok");
 }
 
+async function attestStaffMfa(email) {
+  const attested = await apiFetch(`/admin/users/${encodeURIComponent(email)}/mfa/attest`, {
+    method: "POST",
+    body: JSON.stringify({ method: "pilot_attestation" }),
+  });
+  await Promise.all([refreshStaffUsers(), refreshAudit()]);
+  showMessage(`Recorded MFA attestation for ${attested.email}.`, "ok");
+}
+
 async function createStaffInvite(event) {
   event.preventDefault();
   const form = els.staffInviteForm;
@@ -2804,6 +2858,12 @@ function wireEvents() {
     refreshStaffUsers().catch((error) => showMessage(error.message, "error"));
   });
   els.staffUsers.addEventListener("click", (event) => {
+    const mfaButton = event.target.closest("[data-attest-mfa-email]");
+    if (mfaButton) {
+      attestStaffMfa(mfaButton.dataset.attestMfaEmail)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
     const disableButton = event.target.closest("[data-disable-user-email]");
     if (disableButton) {
       disableStaffUser(disableButton.dataset.disableUserEmail)

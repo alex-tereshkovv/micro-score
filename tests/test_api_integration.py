@@ -453,6 +453,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("AuthResponse", schemas)
         self.assertIn("MeResponse", schemas)
         self.assertIn("LogoutResponse", schemas)
+        self.assertIn("MfaAttestationCreate", schemas)
+        self.assertIn("MfaAttestationResponse", schemas)
+        self.assertIn("MfaReadinessAccount", schemas)
+        self.assertIn("MfaReadinessResponse", schemas)
         self.assertIn("StaffUserCreate", schemas)
         self.assertIn("StaffUserDisableResponse", schemas)
         self.assertIn("StaffUserReactivateResponse", schemas)
@@ -514,6 +518,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("session_ttl_seconds", schemas["MeResponse"]["properties"])
         self.assertIn("disabled_at", schemas["UserPublic"]["properties"])
         self.assertIn("disabled_by", schemas["UserPublic"]["properties"])
+        self.assertIn("mfa_attested_at", schemas["UserPublic"]["properties"])
+        self.assertIn("mfa_attested_by", schemas["UserPublic"]["properties"])
+        self.assertIn("mfa_method", schemas["UserPublic"]["properties"])
+        self.assertIn("missing_mfa_count", schemas["MfaReadinessResponse"]["properties"])
+        self.assertIn("limitation", schemas["MfaReadinessResponse"]["properties"])
         self.assertIn("revoked_session_count", schemas["StaffUserDisableResponse"]["properties"])
         self.assertIn("was_already_active", schemas["StaffUserReactivateResponse"]["properties"])
         self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
@@ -527,6 +536,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("action_required_count", schemas["StaffInviteHealthResponse"]["properties"])
         self.assertIn("recommended_action", schemas["StaffInviteHealthResponse"]["properties"])
         paths = response.json()["paths"]
+        self.assertIn("/admin/security/mfa-readiness", paths)
+        self.assertIn("/admin/users/{email}/mfa/attest", paths)
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
@@ -761,6 +772,51 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 403, forbidden.text)
 
         admin_token = self._register("provisioning-admin@example.com", "admin")
+        mfa_readiness = self.client.get(
+            "/admin/security/mfa-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(mfa_readiness.status_code, 200, mfa_readiness.text)
+        self.assertEqual(mfa_readiness.json()["status"], "blocked")
+        self.assertEqual(mfa_readiness.json()["missing_mfa_count"], 1)
+        self.assertIn("does not enforce", mfa_readiness.json()["limitation"])
+
+        mfa_attested = self.client.post(
+            "/admin/users/provisioning-admin@example.com/mfa/attest",
+            headers=self._headers(admin_token),
+            json={"method": "pilot_attestation"},
+        )
+        self.assertEqual(mfa_attested.status_code, 200, mfa_attested.text)
+        self.assertEqual(mfa_attested.json()["email"], "provisioning-admin@example.com")
+        self.assertIsNotNone(mfa_attested.json()["mfa_attested_at"])
+        self.assertEqual(mfa_attested.json()["mfa_attested_by"], "provisioning-admin@example.com")
+        self.assertEqual(mfa_attested.json()["mfa_method"], "pilot_attestation")
+        self.assertFalse(mfa_attested.json()["was_already_attested"])
+
+        repeated_mfa = self.client.post(
+            "/admin/users/provisioning-admin@example.com/mfa/attest",
+            headers=self._headers(admin_token),
+            json={"method": "totp"},
+        )
+        self.assertEqual(repeated_mfa.status_code, 200, repeated_mfa.text)
+        self.assertTrue(repeated_mfa.json()["was_already_attested"])
+        self.assertEqual(repeated_mfa.json()["mfa_method"], "pilot_attestation")
+
+        borrower_mfa = self.client.post(
+            "/admin/users/regular@example.com/mfa/attest",
+            headers=self._headers(admin_token),
+            json={"method": "pilot_attestation"},
+        )
+        self.assertEqual(borrower_mfa.status_code, 409, borrower_mfa.text)
+
+        mfa_readiness_after = self.client.get(
+            "/admin/security/mfa-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(mfa_readiness_after.status_code, 200, mfa_readiness_after.text)
+        self.assertEqual(mfa_readiness_after.json()["status"], "ready")
+        self.assertEqual(mfa_readiness_after.json()["mfa_attested_count"], 1)
+
         created = self.client.post(
             "/admin/users",
             headers=self._headers(admin_token),
@@ -991,6 +1047,12 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(provisioning_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(provisioning_event["entity_id"], "new-analyst@example.com")
+        mfa_attested_event = next(
+            event for event in audit if event["action"] == "staff_mfa_attested"
+        )
+        self.assertEqual(mfa_attested_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(mfa_attested_event["entity_id"], "provisioning-admin@example.com")
+        self.assertEqual(mfa_attested_event["details"]["method"], "pilot_attestation")
         invite_created_event = next(
             event
             for event in audit

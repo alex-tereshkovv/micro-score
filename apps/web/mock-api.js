@@ -371,6 +371,55 @@
     return health;
   }
 
+  function mfaReadiness(users) {
+    const accounts = [];
+    let activeStaffCount = 0;
+    let mfaAttestedCount = 0;
+    let missingMfaCount = 0;
+    let disabledStaffCount = 0;
+    Object.values(users).forEach((user) => {
+      if (!["admin", "mfi_analyst"].includes(user.role)) return;
+      const disabled = Boolean(user.disabled_at);
+      const mfaAttested = Boolean(user.mfa_attested_at);
+      let status = "missing";
+      if (disabled) {
+        disabledStaffCount += 1;
+        status = "disabled";
+      } else {
+        activeStaffCount += 1;
+        if (mfaAttested) {
+          mfaAttestedCount += 1;
+          status = "ready";
+        } else {
+          missingMfaCount += 1;
+        }
+      }
+      accounts.push({
+        email: user.email,
+        role: user.role,
+        organization_id: user.organization_id || null,
+        disabled,
+        mfa_required: !disabled,
+        mfa_attested: mfaAttested,
+        mfa_attested_at: user.mfa_attested_at || null,
+        mfa_method: user.mfa_method || null,
+        status,
+      });
+    });
+    return {
+      status: missingMfaCount ? "blocked" : "ready",
+      active_staff_count: activeStaffCount,
+      mfa_attested_count: mfaAttestedCount,
+      missing_mfa_count: missingMfaCount,
+      disabled_staff_count: disabledStaffCount,
+      accounts: accounts.sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
+      recommended_action: missingMfaCount
+        ? "Record MFA attestation for active admin and MFI analyst accounts before pilot use."
+        : "All active staff accounts have MFA attestation recorded.",
+      limitation: "MFA Readiness v1 records admin attestation for prototype governance only; it does not enforce a second factor during login.",
+    };
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -452,6 +501,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
+        mfa_attested_at: null,
+        mfa_attested_by: null,
+        mfa_method: null,
       };
     });
 
@@ -762,6 +814,9 @@
       created_at: user.created_at,
       disabled_at: user.disabled_at || null,
       disabled_by: user.disabled_by || null,
+      mfa_attested_at: user.mfa_attested_at || null,
+      mfa_attested_by: user.mfa_attested_by || null,
+      mfa_method: user.mfa_method || null,
       session_expires_at: expiresAt,
       session_ttl_seconds: DEMO_SESSION_TTL_SECONDS,
     };
@@ -1564,6 +1619,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
+        mfa_attested_at: null,
+        mfa_attested_by: null,
+        mfa_method: null,
       };
       const sessionRecord = createDemoSession(email);
       return {
@@ -1597,6 +1655,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
+        mfa_attested_at: null,
+        mfa_attested_by: null,
+        mfa_method: null,
       };
       invite.accepted_at = nowIso();
       invite.accepted_by = invite.email;
@@ -1802,16 +1863,74 @@
       requireAdmin(session);
       return clone(
         Object.values(demo.users)
-          .map(({ email, role, organization_id, created_at, disabled_at, disabled_by }) => ({
+          .map(({
+            email,
+            role,
+            organization_id,
+            created_at,
+            disabled_at,
+            disabled_by,
+            mfa_attested_at,
+            mfa_attested_by,
+            mfa_method,
+          }) => ({
             email,
             role,
             organization_id: organization_id || null,
             created_at,
             disabled_at: disabled_at || null,
             disabled_by: disabled_by || null,
+            mfa_attested_at: mfa_attested_at || null,
+            mfa_attested_by: mfa_attested_by || null,
+            mfa_method: mfa_method || null,
           }))
           .sort((left, right) => `${left.role}:${left.email}`.localeCompare(`${right.role}:${right.email}`)),
       );
+    }
+
+    if (cleanPath === "/admin/security/mfa-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(mfaReadiness(demo.users));
+    }
+
+    const attestMfaMatch = cleanPath.match(/^\/admin\/users\/([^/]+)\/mfa\/attest$/);
+    if (attestMfaMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const email = decodeURIComponent(attestMfaMatch[1]).trim().toLowerCase();
+      const target = demo.users[email];
+      if (!target) throw new Error("User not found");
+      if (!["admin", "mfi_analyst"].includes(target.role)) {
+        throw new Error("Only active staff accounts require MFA attestation");
+      }
+      if (target.disabled_at) {
+        throw new Error("Disabled staff accounts do not require MFA attestation");
+      }
+      const wasAlreadyAttested = Boolean(target.mfa_attested_at);
+      if (!target.mfa_attested_at) {
+        target.mfa_attested_at = nowIso();
+        target.mfa_attested_by = user.email;
+        target.mfa_method = body.method || "pilot_attestation";
+      }
+      if (!wasAlreadyAttested) {
+        addAudit("staff_mfa_attested", "user", email, user.email, {
+          role: target.role,
+          organization_id: target.organization_id,
+          method: target.mfa_method,
+          limitation: "MFA Readiness v1 records admin attestation for prototype governance only; it does not enforce a second factor during login.",
+        });
+      }
+      return clone({
+        email: target.email,
+        role: target.role,
+        organization_id: target.organization_id || null,
+        created_at: target.created_at,
+        disabled_at: target.disabled_at || null,
+        disabled_by: target.disabled_by || null,
+        mfa_attested_at: target.mfa_attested_at || null,
+        mfa_attested_by: target.mfa_attested_by || null,
+        mfa_method: target.mfa_method || null,
+        was_already_attested: wasAlreadyAttested,
+      });
     }
 
     const disableStaffUserMatch = cleanPath.match(/^\/admin\/users\/([^/]+)\/disable$/);
@@ -1850,6 +1969,9 @@
         created_at: target.created_at,
         disabled_at: target.disabled_at,
         disabled_by: target.disabled_by,
+        mfa_attested_at: target.mfa_attested_at || null,
+        mfa_attested_by: target.mfa_attested_by || null,
+        mfa_method: target.mfa_method || null,
         revoked_session_count: revokedSessionCount,
         was_already_disabled: wasAlreadyDisabled,
       });
@@ -1886,6 +2008,9 @@
         created_at: target.created_at,
         disabled_at: target.disabled_at || null,
         disabled_by: target.disabled_by || null,
+        mfa_attested_at: target.mfa_attested_at || null,
+        mfa_attested_by: target.mfa_attested_by || null,
+        mfa_method: target.mfa_method || null,
         was_already_active: wasAlreadyActive,
       });
     }
@@ -2022,6 +2147,9 @@
         created_at: nowIso(),
         disabled_at: null,
         disabled_by: null,
+        mfa_attested_at: null,
+        mfa_attested_by: null,
+        mfa_method: null,
       };
       addAudit("staff_user_created", "user", email, user.email, {
         role: "mfi_analyst",
@@ -2034,6 +2162,9 @@
         created_at: demo.users[email].created_at,
         disabled_at: null,
         disabled_by: null,
+        mfa_attested_at: null,
+        mfa_attested_by: null,
+        mfa_method: null,
       });
     }
 

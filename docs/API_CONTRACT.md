@@ -240,6 +240,23 @@ a session automatically; the analyst must sign in again with their existing
 password. Repeating the request is idempotent and returns
 `was_already_active: true`.
 
+MFA readiness and attestation:
+
+```http
+GET /admin/security/mfa-readiness
+POST /admin/users/{email}/mfa/attest
+```
+
+Both endpoints require an `admin` bearer token. MFA Readiness v1 is a prototype
+governance control, not a login challenge: it records admin attestation that an
+active `admin` or `mfi_analyst` account has MFA coverage planned or verified
+outside this local prototype. The readiness response is `blocked` while active
+staff accounts lack attestation and includes `missing_mfa_count`,
+`mfa_attested_count`, account-level status rows, a `recommended_action`, and a
+`limitation` stating that this does not enforce a second factor during login.
+Successful first-time attestation records `staff_mfa_attested`; repeated
+attestation is idempotent and returns `was_already_attested: true`.
+
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
 invite, can revoke it before use, and the analyst sets their own password
@@ -323,9 +340,8 @@ The API stores new invite records by `token_id` instead of the raw token.
 Legacy local development invites created before Staff Invite v3 can still be
 accepted by their original raw token during migration.
 
-Before any real user data, the production version still needs MFA, an external
-identity provider, email delivery, HTTPS-only links, and operational invite
-rotation monitoring.
+Before any real user data, the production version still needs enforced MFA or
+an external identity provider, email delivery, and HTTPS-only invite links.
 
 ## Borrower Application Form
 
@@ -810,6 +826,7 @@ Current audited actions:
 - `model_version_activated`
 - `portfolio_simulation_run`
 - `staff_user_created`
+- `staff_mfa_attested`
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`
