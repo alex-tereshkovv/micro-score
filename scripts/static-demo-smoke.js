@@ -335,11 +335,11 @@ async function main() {
   }
   const securityReadinessAfterMfa = await api.request("/admin/security/readiness", {}, adminSession);
   if (
-    securityReadinessAfterMfa.status !== "blocked"
+    securityReadinessAfterMfa.status !== "ready"
     || !securityReadinessAfterMfa.checks.some((check) => check.key === "mfa_enforcement" && check.status === "pass")
-    || !securityReadinessAfterMfa.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")
+    || !securityReadinessAfterMfa.checks.some((check) => check.key === "invite_delivery" && check.status === "pass")
   ) {
-    throw new Error("Expected security readiness to flag production security blockers");
+    throw new Error("Expected security readiness to be ready with MFA enforcement and no pending invites");
   }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
@@ -495,12 +495,48 @@ async function main() {
   );
   if (
     !staffInvite.token
+    || !staffInvite.invite_url
     || !staffInvite.token_id
     || !staffInvite.token_preview
     || !staffInvite.expires_at
     || staffInvite.accepted_at
   ) {
-    throw new Error("Expected expiring staff invite one-time token before acceptance");
+    throw new Error("Expected expiring staff invite one-time token and URL before acceptance");
+  }
+  if (staffInvite.invite_url.includes(staffInvite.token_id) || !staffInvite.invite_url.includes(staffInvite.token)) {
+    throw new Error("Expected invite URL to contain only the one-time raw token");
+  }
+  const securityReadinessBeforeDelivery = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!securityReadinessBeforeDelivery.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")) {
+    throw new Error("Expected undelivered pending invite to block delivery readiness");
+  }
+  const deliveredInvite = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/delivery`,
+    {
+      method: "POST",
+      body: JSON.stringify({ channel: "manual_copy" }),
+    },
+    adminSession,
+  );
+  if (
+    !deliveredInvite.delivered_at
+    || deliveredInvite.delivered_by !== "admin@test.com"
+    || deliveredInvite.delivery_channel !== "manual_copy"
+    || deliveredInvite.delivery_url_base !== "https://alex-tereshkovv.github.io/micro-score"
+  ) {
+    throw new Error("Expected audited staff invite delivery metadata");
+  }
+  const repeatedDelivery = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/delivery`,
+    { method: "POST", body: JSON.stringify({ channel: "manual_copy" }) },
+    adminSession,
+  );
+  if (!repeatedDelivery.was_already_delivered) {
+    throw new Error("Expected repeated invite delivery to be idempotent");
+  }
+  const securityReadinessAfterDelivery = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!securityReadinessAfterDelivery.checks.some((check) => check.key === "invite_delivery" && check.status === "pass")) {
+    throw new Error("Expected delivered pending invite to pass delivery readiness");
   }
   let weakInvitePasswordRejected = false;
   try {
@@ -537,7 +573,7 @@ async function main() {
   if (staffInvites.some((invite) => invite.token)) {
     throw new Error("Expected staff invite list to hide one-time raw tokens");
   }
-  if (!staffInvites.some((invite) => invite.token_id === staffInvite.token_id && invite.accepted_at)) {
+  if (!staffInvites.some((invite) => invite.token_id === staffInvite.token_id && invite.accepted_at && invite.delivered_at)) {
     throw new Error("Expected accepted staff invite in admin invite list");
   }
   let acceptedInviteRevokeRejected = false;
@@ -626,6 +662,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_created")) {
     throw new Error("Expected staff invite creation audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_delivered")) {
+    throw new Error("Expected staff invite delivery audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_accepted")) {
     throw new Error("Expected staff invite acceptance audit event");
@@ -890,6 +929,7 @@ async function main() {
       staff_invites: true,
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
+      staff_invite_delivery: true,
       staff_invite_health: true,
       mfa_readiness: true,
       security_readiness: true,

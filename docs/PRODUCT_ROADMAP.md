@@ -268,6 +268,10 @@ events across the API and static demo.
 Staff Invite Health v1 adds admin-only invite rotation monitoring for pending,
 expired, and soon-expiring invites with an action-required summary in the API
 and static demo.
+Invite Delivery v1 adds audited delivery metadata for active staff invites,
+returns a one-time invite URL only at creation, marks undelivered active
+pending invites as a Security Readiness blocker, and records
+`staff_invite_delivered` without exposing raw tokens in list/audit surfaces.
 Staff/User Lifecycle v1 now adds admin-only MFI analyst disable, active-session
 revocation, disabled-login rejection, user status listing, and
 `staff_user_disabled` audit events.
@@ -278,8 +282,9 @@ MFA Enforcement v1 adds login-time staff MFA enforcement for active
 admin/MFI analyst accounts using recorded attestation plus a local prototype
 second-factor code. The explicit limitation is now that the code is a prototype
 control, not a production IdP/TOTP/WebAuthn flow.
-Security Readiness v1 now combines MFA posture, invite hygiene, session TTL,
-and remaining production caveats into one admin-only pre-pilot gate.
+Security Readiness v1 now combines MFA posture, invite hygiene, audited invite
+delivery, session TTL, and remaining production caveats into one admin-only
+pre-pilot gate.
 The next engineering milestone is to turn the
 frontend and scoring review flow into a more production-like application:
 
@@ -289,5 +294,5 @@ frontend and scoring review flow into a more production-like application:
 - real KZT feature calibration before pilot use
 - eventual React or Next.js migration when the product flow stabilizes
 - migration path from SQLite development storage to PostgreSQL
-- production IdP/TOTP/WebAuthn integration, email delivery, and
-  HTTPS-only invite links before any real user data
+- production IdP/TOTP/WebAuthn integration and transactional invite delivery
+  before any real user data

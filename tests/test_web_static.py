@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./mock-api.js?v=20260704-mfa-enforcement-v2"', html)
+        self.assertIn('src="./mock-api.js?v=20260704-invite-delivery-v1"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260704-mfa-enforcement-v2"', html)
+        self.assertIn('src="./app.js?v=20260704-invite-delivery-v1"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -155,6 +155,7 @@ class WebStaticTests(unittest.TestCase):
             "/reactivate",
             "/admin/staff-invites",
             "/admin/staff-invites/health",
+            "/delivery",
             "/admin/model-versions",
             "/admin/applications",
         ]
@@ -307,12 +308,15 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('"/admin/staff-invites/health"', mock_script)
         self.assertIn('"/auth/accept-staff-invite"', mock_script)
         self.assertIn("staff_invite_created", mock_script)
+        self.assertIn("staff_invite_delivered", mock_script)
         self.assertIn("staff_invite_accepted", mock_script)
         self.assertIn("staff_invite_revoked", mock_script)
         self.assertIn("staffInviteHealth", mock_script)
         self.assertIn("expiring_soon_count", mock_script)
         self.assertIn("staffInviteTokenId", mock_script)
         self.assertIn("publicStaffInvite", mock_script)
+        self.assertIn("invite_url", mock_script)
+        self.assertIn("delivery_url_base", mock_script)
         self.assertIn("Staff invite has been revoked", mock_script)
         self.assertIn("Staff invite has expired", mock_script)
         self.assertIn("refreshStaffUsers", script)
@@ -329,10 +333,12 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("refreshStaffInvites", script)
         self.assertIn("renderStaffInviteHealth", script)
         self.assertIn("createStaffInvite", script)
+        self.assertIn("markStaffInviteDelivered", script)
         self.assertIn("revokeStaffInvite", script)
+        self.assertIn("data-deliver-invite-token", script)
         self.assertIn("data-revoke-invite-token", script)
         self.assertIn("Token preview", script)
-        self.assertIn("one-time token", script)
+        self.assertIn("one-time URL", script)
         self.assertIn("Staff Invite v3", markup)
         self.assertIn('id="staffInviteHealth"', markup)
         self.assertIn("organization_id", script)

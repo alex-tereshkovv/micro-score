@@ -251,7 +251,13 @@ class MicroScoreRepository:
                     accepted_at TEXT,
                     accepted_by TEXT REFERENCES users(email),
                     revoked_at TEXT,
-                    revoked_by TEXT REFERENCES users(email)
+                    revoked_by TEXT REFERENCES users(email),
+                    delivered_at TEXT,
+                    delivered_by TEXT REFERENCES users(email),
+                    delivery_channel TEXT,
+                    delivery_recipient TEXT,
+                    delivery_url_base TEXT,
+                    delivery_note TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS loan_applications (
@@ -365,6 +371,17 @@ class MicroScoreRepository:
                 "revoked_by",
                 "TEXT REFERENCES users(email)",
             )
+            _ensure_column(connection, "staff_invites", "delivered_at", "TEXT")
+            _ensure_column(
+                connection,
+                "staff_invites",
+                "delivered_by",
+                "TEXT REFERENCES users(email)",
+            )
+            _ensure_column(connection, "staff_invites", "delivery_channel", "TEXT")
+            _ensure_column(connection, "staff_invites", "delivery_recipient", "TEXT")
+            _ensure_column(connection, "staff_invites", "delivery_url_base", "TEXT")
+            _ensure_column(connection, "staff_invites", "delivery_note", "TEXT")
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_applications_organization
@@ -850,7 +867,13 @@ class MicroScoreRepository:
                     accepted_at,
                     accepted_by,
                     revoked_at,
-                    revoked_by
+                    revoked_by,
+                    delivered_at,
+                    delivered_by,
+                    delivery_channel,
+                    delivery_recipient,
+                    delivery_url_base,
+                    delivery_note
                 FROM staff_invites
                 WHERE token = ?
                 """,
@@ -873,7 +896,13 @@ class MicroScoreRepository:
                     accepted_at,
                     accepted_by,
                     revoked_at,
-                    revoked_by
+                    revoked_by,
+                    delivered_at,
+                    delivered_by,
+                    delivery_channel,
+                    delivery_recipient,
+                    delivery_url_base,
+                    delivery_note
                 FROM staff_invites
                 ORDER BY created_at DESC
                 """
@@ -905,6 +934,41 @@ class MicroScoreRepository:
                 (now, revoked_by, token),
             )
         return cursor.rowcount > 0
+
+    def mark_staff_invite_delivered(
+        self,
+        token: str,
+        *,
+        delivered_by: str,
+        channel: str,
+        recipient: str | None,
+        url_base: str,
+        note: str | None,
+    ) -> dict[str, Any] | None:
+        now = _now_iso()
+        existing = self.get_staff_invite(token)
+        if existing is None:
+            return None
+        was_already_delivered = existing.get("delivered_at") is not None
+        if not was_already_delivered:
+            with self._connection() as connection:
+                connection.execute(
+                    """
+                    UPDATE staff_invites
+                    SET
+                        delivered_at = ?,
+                        delivered_by = ?,
+                        delivery_channel = ?,
+                        delivery_recipient = ?,
+                        delivery_url_base = ?,
+                        delivery_note = ?
+                    WHERE token = ? AND delivered_at IS NULL
+                    """,
+                    (now, delivered_by, channel, recipient, url_base, note, token),
+                )
+        delivered = self.get_staff_invite(token) or existing
+        delivered["was_already_delivered"] = was_already_delivered
+        return delivered
 
     def assign_user_organization(self, email: str, organization_id: str | None) -> None:
         with self._connection() as connection:

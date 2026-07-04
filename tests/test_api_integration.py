@@ -472,6 +472,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteAccept", schemas)
         self.assertIn("StaffInviteResponse", schemas)
         self.assertIn("StaffInviteCreatedResponse", schemas)
+        self.assertIn("StaffInviteDeliveryCreate", schemas)
+        self.assertIn("StaffInviteDeliveryResponse", schemas)
         self.assertIn("StaffInviteHealthResponse", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
@@ -540,8 +542,16 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("was_already_active", schemas["StaffUserReactivateResponse"]["properties"])
         self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token_preview", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("delivered_at", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("delivery_channel", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("delivery_url_base", schemas["StaffInviteResponse"]["properties"])
         self.assertNotIn("token", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token", schemas["StaffInviteCreatedResponse"]["properties"])
+        self.assertIn("invite_url", schemas["StaffInviteCreatedResponse"]["properties"])
+        self.assertIn(
+            "was_already_delivered",
+            schemas["StaffInviteDeliveryResponse"]["properties"],
+        )
         self.assertIn("revoked_at", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("revoked_by", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("status", schemas["StaffInviteHealthResponse"]["properties"])
@@ -554,6 +564,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
+        self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
         self.assertIn("/admin/users/{email}/disable", paths)
@@ -823,14 +834,14 @@ class ApiIntegrationTests(unittest.TestCase):
             headers=self._headers(admin_token),
         )
         self.assertEqual(security_readiness.status_code, 200, security_readiness.text)
-        self.assertEqual(security_readiness.json()["status"], "blocked")
+        self.assertEqual(security_readiness.json()["status"], "ready")
         security_checks = {
             check["key"]: check for check in security_readiness.json()["checks"]
         }
         self.assertEqual(security_checks["mfa_attestation"]["status"], "pass")
         self.assertEqual(security_checks["session_ttl"]["status"], "pass")
         self.assertEqual(security_checks["mfa_enforcement"]["status"], "pass")
-        self.assertEqual(security_checks["invite_delivery"]["status"], "blocker")
+        self.assertEqual(security_checks["invite_delivery"]["status"], "pass")
         self.assertIn("not a completed production security review", security_readiness.json()["limitation"])
 
         created = self.client.post(
@@ -993,11 +1004,57 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIsNone(invite_payload["accepted_at"])
         self.assertIsNone(invite_payload["revoked_at"])
         self.assertIn("token", invite_payload)
+        self.assertIn("invite_url", invite_payload)
         self.assertIn("token_id", invite_payload)
         self.assertIn("token_preview", invite_payload)
         self.assertNotEqual(invite_payload["token"], invite_payload["token_id"])
+        self.assertIn(invite_payload["token"], invite_payload["invite_url"])
+        self.assertNotIn(invite_payload["token_id"], invite_payload["invite_url"])
         self.assertEqual(len(invite_payload["token_id"]), 64)
         self.assertNotIn("password", invite_payload)
+
+        undelivered_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(undelivered_readiness.status_code, 200, undelivered_readiness.text)
+        undelivered_check = next(
+            check for check in undelivered_readiness.json()["checks"]
+            if check["key"] == "invite_delivery"
+        )
+        self.assertEqual(undelivered_check["status"], "blocker")
+
+        delivered = self.client.post(
+            f"/admin/staff-invites/{invite_payload['token_id']}/delivery",
+            headers=self._headers(admin_token),
+            json={"channel": "manual_copy"},
+        )
+        self.assertEqual(delivered.status_code, 200, delivered.text)
+        self.assertEqual(delivered.json()["email"], "invited-analyst@example.com")
+        self.assertIsNotNone(delivered.json()["delivered_at"])
+        self.assertEqual(delivered.json()["delivered_by"], "provisioning-admin@example.com")
+        self.assertEqual(delivered.json()["delivery_channel"], "manual_copy")
+        self.assertEqual(delivered.json()["delivery_url_base"], "http://127.0.0.1:5173")
+        self.assertFalse(delivered.json()["was_already_delivered"])
+
+        repeated_delivery = self.client.post(
+            f"/admin/staff-invites/{invite_payload['token_id']}/delivery",
+            headers=self._headers(admin_token),
+            json={"channel": "manual_copy"},
+        )
+        self.assertEqual(repeated_delivery.status_code, 200, repeated_delivery.text)
+        self.assertTrue(repeated_delivery.json()["was_already_delivered"])
+
+        delivered_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(delivered_readiness.status_code, 200, delivered_readiness.text)
+        delivered_check = next(
+            check for check in delivered_readiness.json()["checks"]
+            if check["key"] == "invite_delivery"
+        )
+        self.assertEqual(delivered_check["status"], "pass")
 
         weak_accept = self.client.post(
             "/auth/accept-staff-invite",
@@ -1048,6 +1105,7 @@ class ApiIntegrationTests(unittest.TestCase):
                 and row["token_preview"] == invite_payload["token_preview"]
                 and row["accepted_at"]
                 and row["accepted_by"] == "invited-analyst@example.com"
+                and row["delivered_at"]
                 for row in invites.json()
             )
         )
@@ -1154,6 +1212,14 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertNotEqual(invite_created_event["entity_id"], invite_payload["token"])
         self.assertEqual(invite_created_event["details"]["email"], "invited-analyst@example.com")
         self.assertEqual(invite_created_event["details"]["token_preview"], invite_payload["token_preview"])
+        invite_delivered_event = next(
+            event for event in audit if event["action"] == "staff_invite_delivered"
+        )
+        self.assertEqual(invite_delivered_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(invite_delivered_event["entity_id"], invite_payload["token_id"])
+        self.assertEqual(invite_delivered_event["details"]["delivery_channel"], "manual_copy")
+        self.assertEqual(invite_delivered_event["details"]["delivery_url_base"], "http://127.0.0.1:5173")
+        self.assertNotIn(invite_payload["token"], invite_delivered_event["details"].values())
         invite_accepted_event = next(
             event for event in audit if event["action"] == "staff_invite_accepted"
         )

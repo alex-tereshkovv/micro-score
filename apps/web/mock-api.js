@@ -24,6 +24,7 @@
   const terminalApplicationStatuses = new Set(["approved", "declined"]);
   const DEMO_SESSION_TTL_SECONDS = 8 * 60 * 60;
   const DEMO_MFA_CODE = "246810";
+  const DEMO_INVITE_URL_BASE = "https://alex-tereshkovv.github.io/micro-score";
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for MFI scoring.",
     scored: "Risk assessment completed. It is waiting for analyst review.",
@@ -291,8 +292,20 @@
       accepted_by: invite.accepted_by,
       revoked_at: invite.revoked_at,
       revoked_by: invite.revoked_by,
+      delivered_at: invite.delivered_at,
+      delivered_by: invite.delivered_by,
+      delivery_channel: invite.delivery_channel,
+      delivery_recipient: invite.delivery_recipient,
+      delivery_url_base: invite.delivery_url_base,
+      delivery_note: invite.delivery_note,
     };
-    if (rawToken) response.token = rawToken;
+    if (rawToken) {
+      response.token = rawToken;
+      response.invite_url = `${DEMO_INVITE_URL_BASE}/#/accept-staff-invite?token=${encodeURIComponent(rawToken)}`;
+    }
+    if (Object.prototype.hasOwnProperty.call(invite, "was_already_delivered")) {
+      response.was_already_delivered = invite.was_already_delivered;
+    }
     return response;
   }
 
@@ -317,6 +330,12 @@
       accepted_by: null,
       revoked_at: null,
       revoked_by: null,
+      delivered_at: null,
+      delivered_by: null,
+      delivery_channel: null,
+      delivery_recipient: null,
+      delivery_url_base: null,
+      delivery_note: null,
     };
     demo.staffInvites[tokenId] = invite;
     demo.staffInviteSecrets[token] = tokenId;
@@ -473,13 +492,45 @@
       summary: "Staff login requires an MFA-attested account and a prototype second-factor code.",
       action: "Replace the prototype shared-code control with TOTP/WebAuthn or an external identity provider before real user data.",
     });
-    checks.push({
-      key: "invite_delivery",
-      label: "Invite delivery and HTTPS links",
-      status: "blocker",
-      summary: "Invite links are local prototype secrets, not delivered through audited email with HTTPS-only URLs.",
-      action: "Add email delivery, HTTPS-only links, and delivery audit before production onboarding.",
-    });
+    const activePendingInvites = Object.values(demo.staffInvites).filter((invite) => (
+      !invite.accepted_at
+      && !invite.revoked_at
+      && Date.parse(invite.expires_at) > Date.now()
+    ));
+    const undeliveredInvites = activePendingInvites.filter((invite) => !invite.delivered_at);
+    const unsafeDeliveredInvites = activePendingInvites.filter((invite) => (
+      invite.delivered_at
+      && !String(invite.delivery_url_base || "").startsWith("https://")
+      && !String(invite.delivery_url_base || "").startsWith("http://127.0.0.1")
+      && !String(invite.delivery_url_base || "").startsWith("http://localhost")
+    ));
+    if (undeliveredInvites.length) {
+      checks.push({
+        key: "invite_delivery",
+        label: "Invite delivery and HTTPS links",
+        status: "blocker",
+        summary: `${undeliveredInvites.length} active pending staff invite(s) lack audited delivery metadata.`,
+        action: "Record invite delivery before sharing onboarding links.",
+      });
+    } else if (unsafeDeliveredInvites.length) {
+      checks.push({
+        key: "invite_delivery",
+        label: "Invite delivery and HTTPS links",
+        status: "blocker",
+        summary: `${unsafeDeliveredInvites.length} delivered staff invite(s) use a non-HTTPS, non-local URL base.`,
+        action: "Use HTTPS invite URLs outside local development.",
+      });
+    } else {
+      checks.push({
+        key: "invite_delivery",
+        label: "Invite delivery and HTTPS links",
+        status: "pass",
+        summary: activePendingInvites.length
+          ? "All active pending staff invites have audited delivery metadata."
+          : "No active pending staff invites require delivery.",
+        action: "Use audited delivery records and move to transactional email before production onboarding.",
+      });
+    }
     const blockers = checks.filter((check) => check.status === "blocker");
     const warnings = checks.filter((check) => check.status === "warning");
     return {
@@ -2150,6 +2201,37 @@
         token_preview: invite.token_preview,
       });
       return clone(invite);
+    }
+
+    const deliverStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/delivery$/);
+    if (deliverStaffInviteMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const tokenId = decodeURIComponent(deliverStaffInviteMatch[1]);
+      const invite = demo.staffInvites[tokenId];
+      if (!invite) throw new Error("Staff invite not found");
+      if (invite.accepted_at) throw new Error("Accepted staff invite delivery is already complete");
+      if (invite.revoked_at) throw new Error("Revoked staff invite cannot be delivered");
+      if (Date.parse(invite.expires_at) <= Date.now()) throw new Error("Expired staff invite cannot be delivered");
+      const wasAlreadyDelivered = Boolean(invite.delivered_at);
+      if (!wasAlreadyDelivered) {
+        invite.delivered_at = nowIso();
+        invite.delivered_by = user.email;
+        invite.delivery_channel = body.channel || "manual_copy";
+        invite.delivery_recipient = String(body.recipient || invite.email).trim() || invite.email;
+        invite.delivery_url_base = DEMO_INVITE_URL_BASE;
+        invite.delivery_note = body.note ? String(body.note).trim() : null;
+        addAudit("staff_invite_delivered", "staff_invite", tokenId, user.email, {
+          email: invite.email,
+          role: invite.role,
+          organization_id: invite.organization_id,
+          token_preview: invite.token_preview,
+          delivery_channel: invite.delivery_channel,
+          delivery_recipient: invite.delivery_recipient,
+          delivery_url_base: invite.delivery_url_base,
+          note_present: Boolean(invite.delivery_note),
+        });
+      }
+      return clone(publicStaffInvite({ ...invite, was_already_delivered: wasAlreadyDelivered }));
     }
 
     const revokeStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)$/);

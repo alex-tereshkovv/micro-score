@@ -2516,9 +2516,16 @@ function renderStaffInvites(rows) {
     .map((invite) => {
       const status = staffInviteStatus(invite);
       const canRevoke = status === "pending";
-      const action = canRevoke
-        ? `<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token_id)}">Revoke</button>`
-        : "-";
+      const actions = [];
+      if (canRevoke && !invite.delivered_at) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-deliver-invite-token="${escapeHtml(invite.token_id)}">Mark delivered</button>`);
+      }
+      if (canRevoke) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token_id)}">Revoke</button>`);
+      }
+      const delivery = invite.delivered_at
+        ? `${formatPolicyName(invite.delivery_channel || "delivered")} by ${invite.delivered_by || "-"}`
+        : "not delivered";
       return `
         <tr>
           <td>${escapeHtml(invite.email)}</td>
@@ -2526,8 +2533,9 @@ function renderStaffInvites(rows) {
           <td>${escapeHtml(invite.organization_id)}</td>
           <td>${escapeHtml(invite.expires_at || "-")}</td>
           <td>${escapeHtml(invite.accepted_at || invite.revoked_at || "-")}</td>
+          <td>${escapeHtml(delivery)}</td>
           <td>${escapeHtml(invite.token_preview || invite.token_id || "-")}</td>
-          <td>${action}</td>
+          <td>${actions.join(" ") || "-"}</td>
         </tr>
       `;
     })
@@ -2541,6 +2549,7 @@ function renderStaffInvites(rows) {
           <th>Organization</th>
           <th>Expires</th>
           <th>Closed</th>
+          <th>Delivery</th>
           <th>Token preview</th>
           <th>Action</th>
         </tr>
@@ -2764,8 +2773,17 @@ async function createStaffInvite(event) {
   });
   form.reset();
   form.elements.expires_in_hours.value = "48";
-  showMessage(`Created invite for ${created.email}. Copy this one-time token now: ${created.token}`, "ok");
+  showMessage(`Created invite for ${created.email}. Copy this one-time URL now: ${created.invite_url || created.token}`, "ok");
   await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
+}
+
+async function markStaffInviteDelivered(token) {
+  const delivered = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}/delivery`, {
+    method: "POST",
+    body: JSON.stringify({ channel: "manual_copy" }),
+  });
+  await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
+  showMessage(`Recorded invite delivery for ${delivered.email}`, "ok");
 }
 
 async function revokeStaffInvite(token) {
@@ -2944,9 +2962,15 @@ function wireEvents() {
     refreshStaffInvites().catch((error) => showMessage(error.message, "error"));
   });
   els.staffInvites.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-revoke-invite-token]");
-    if (!button) return;
-    revokeStaffInvite(button.dataset.revokeInviteToken)
+    const deliverButton = event.target.closest("[data-deliver-invite-token]");
+    if (deliverButton) {
+      markStaffInviteDelivered(deliverButton.dataset.deliverInviteToken)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
+    const revokeButton = event.target.closest("[data-revoke-invite-token]");
+    if (!revokeButton) return;
+    revokeStaffInvite(revokeButton.dataset.revokeInviteToken)
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshModelVersions.addEventListener("click", () => {

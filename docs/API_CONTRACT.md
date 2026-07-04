@@ -266,10 +266,10 @@ POST /admin/users/{email}/mfa/attest
 ```
 
 These endpoints require an `admin` bearer token. Security Readiness v1 combines
-MFA posture, invite hygiene, session lifetime, and remaining production caveats
-into one pre-pilot gate. It returns `status`, `blockers_count`,
-`warnings_count`, structured `checks`, `recommended_actions`, and a `limitation`
-stating that this is not a completed production security review.
+MFA posture, invite hygiene, audited invite delivery, session lifetime, and
+remaining production caveats into one pre-pilot gate. It returns `status`,
+`blockers_count`, `warnings_count`, structured `checks`,
+`recommended_actions`, and a `limitation` stating that this is not a completed production security review.
 
 MFA Readiness v2 records admin attestation for active `admin` and
 `mfi_analyst` accounts and the local prototype requires a second-factor code
@@ -282,8 +282,13 @@ repeated attestation is idempotent and returns `was_already_attested: true`.
 Successful staff login records `staff_mfa_login_verified`.
 
 In Security Readiness v1, `mfa_enforcement` is `pass` when staff login requires
-both attestation and the prototype code. The recommended action still points
-to production IdP/TOTP/WebAuthn replacement before real user data.
+both attestation and the prototype code. `invite_delivery` is `pass` when there
+are no active pending staff invites, or when every active pending invite has
+audited delivery metadata with an HTTPS URL base or a local-development HTTP
+base. It is a blocker while an active pending invite has not been marked
+delivered, or when a delivered invite records an unsafe non-local HTTP base. The
+recommended actions still point to production IdP/TOTP/WebAuthn replacement and
+transactional delivery before real user data.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
@@ -328,12 +333,41 @@ POST /admin/staff-invites
 ```
 
 `expires_in_hours` can be 1 to 168 hours and defaults to 48. Successful invite
-creation records `staff_invite_created` and returns a one-time raw `token` plus
-safe invite metadata: `token_id`, `token_preview`, `created_at`, `expires_at`,
-`accepted_at`, `accepted_by`, `revoked_at`, and `revoked_by`.
+creation records `staff_invite_created` and returns a one-time raw `token`, a
+one-time `invite_url`, and safe invite metadata: `token_id`, `token_preview`,
+`created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`,
+`revoked_by`, `delivered_at`, `delivered_by`, `delivery_channel`,
+`delivery_recipient`, `delivery_url_base`, and `delivery_note`.
 
 The raw `token` must be copied at creation time. Later admin list/revoke
-responses expose only `token_id` and `token_preview`.
+responses expose only `token_id`, `token_preview`, and delivery metadata.
+
+Record audited delivery for an active pending invite:
+
+```http
+POST /admin/staff-invites/{token_id}/delivery
+```
+
+```json
+{
+  "channel": "manual_copy",
+  "recipient": "analyst@mfi.example",
+  "note": "Sent through approved onboarding channel"
+}
+```
+
+Delivery requires an `admin` bearer token and accepts `email`,
+`secure_message`, `manual_copy`, or `local_demo` as `channel`. The endpoint
+rejects accepted, revoked, and expired invites; otherwise it records
+`delivered_at`, `delivered_by`, `delivery_channel`, `delivery_recipient`,
+`delivery_url_base`, and `delivery_note`, emits `staff_invite_delivered`, and
+returns `was_already_delivered`. Repeating the request is idempotent and does
+not overwrite the first delivery record.
+
+`delivery_url_base` comes from `MICROSCORE_INVITE_WEB_BASE_URL` and defaults to
+`http://127.0.0.1:5173` for local development. Non-local bases must be HTTPS.
+The static GitHub Pages demo records
+`https://alex-tereshkovv.github.io/micro-score` as its delivery base.
 
 Revoke an unused invite:
 
@@ -371,7 +405,7 @@ Legacy local development invites created before Staff Invite v3 can still be
 accepted by their original raw token during migration.
 
 Before any real user data, the production version still needs TOTP/WebAuthn or
-an external identity provider, email delivery, and HTTPS-only invite links.
+an external identity provider and transactional invite delivery.
 
 ## Borrower Application Form
 
@@ -861,6 +895,7 @@ Current audited actions:
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`
+- `staff_invite_delivered`
 - `staff_invite_accepted`
 - `staff_invite_revoked`
 - `organization_created`

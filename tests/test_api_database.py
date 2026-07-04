@@ -201,8 +201,31 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(created["email"], "invited@example.com")
         self.assertIsNone(created["accepted_at"])
         self.assertIsNone(created["revoked_at"])
+        self.assertIsNone(created["delivered_at"])
         self.assertEqual(self.repository.get_staff_invite("staff-invite-token")["role"], "mfi_analyst")
         self.assertEqual(len(self.repository.list_staff_invites()), 1)
+        delivered = self.repository.mark_staff_invite_delivered(
+            "staff-invite-token",
+            delivered_by="admin@example.com",
+            channel="manual_copy",
+            recipient="invited@example.com",
+            url_base="http://127.0.0.1:5173",
+            note="copied during local onboarding",
+        )
+        self.assertEqual(delivered["delivered_by"], "admin@example.com")
+        self.assertEqual(delivered["delivery_channel"], "manual_copy")
+        self.assertEqual(delivered["delivery_recipient"], "invited@example.com")
+        self.assertFalse(delivered["was_already_delivered"])
+        repeated_delivery = self.repository.mark_staff_invite_delivered(
+            "staff-invite-token",
+            delivered_by="admin@example.com",
+            channel="email",
+            recipient="changed@example.com",
+            url_base="https://example.org",
+            note=None,
+        )
+        self.assertTrue(repeated_delivery["was_already_delivered"])
+        self.assertEqual(repeated_delivery["delivery_channel"], "manual_copy")
         self.repository.create_user(
             "invited@example.com",
             "analyst-hash",
@@ -226,6 +249,8 @@ class ApiDatabaseTests(unittest.TestCase):
         accepted = reopened.get_staff_invite("staff-invite-token")
         self.assertEqual(accepted["accepted_by"], "invited@example.com")
         self.assertIsNotNone(accepted["accepted_at"])
+        self.assertIsNotNone(accepted["delivered_at"])
+        self.assertEqual(accepted["delivery_url_base"], "http://127.0.0.1:5173")
         self.assertFalse(
             reopened.mark_staff_invite_revoked(
                 "staff-invite-token",

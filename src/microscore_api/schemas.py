@@ -195,6 +195,15 @@ class StaffInviteAccept(BaseModel):
     mfa_code: str | None = Field(default=None, min_length=6, max_length=32)
 
 
+InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
+
+
+class StaffInviteDeliveryCreate(BaseModel):
+    channel: InviteDeliveryChannel = "manual_copy"
+    recipient: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=500)
+
+
 class StaffInviteResponse(BaseModel):
     token_id: str
     token_preview: str
@@ -208,10 +217,21 @@ class StaffInviteResponse(BaseModel):
     accepted_by: str | None = None
     revoked_at: str | None = None
     revoked_by: str | None = None
+    delivered_at: str | None = None
+    delivered_by: str | None = None
+    delivery_channel: InviteDeliveryChannel | None = None
+    delivery_recipient: str | None = None
+    delivery_url_base: str | None = None
+    delivery_note: str | None = None
 
 
 class StaffInviteCreatedResponse(StaffInviteResponse):
     token: str
+    invite_url: str
+
+
+class StaffInviteDeliveryResponse(StaffInviteResponse):
+    was_already_delivered: bool = False
 
 
 class StaffInviteHealthResponse(BaseModel):

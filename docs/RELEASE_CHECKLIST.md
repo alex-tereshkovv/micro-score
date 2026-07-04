@@ -70,12 +70,16 @@ git diff --check
   audit events; direct temporary-password provisioning remains prototype-only.
 - Staff Invite Health v1 exposes invite rotation health, including expired and
   soon-expiring pending invites, in both the API and static demo.
+- Invite Delivery v1 returns a one-time invite URL at creation, records
+  audited delivery metadata before active pending invites can pass Security
+  Readiness, and emits `staff_invite_delivered` without exposing raw tokens.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly
   states that production IdP/TOTP/WebAuthn remains future work.
-- Security Readiness v1 aggregates MFA posture, invite hygiene, session TTL,
-  and remaining production caveats into a pre-pilot admin gate.
+- Security Readiness v1 aggregates MFA posture, invite hygiene, audited invite
+  delivery, session TTL, and remaining production caveats into a pre-pilot
+  admin gate.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

@@ -20,6 +20,7 @@ import hmac
 from io import StringIO
 import os
 from typing import Any
+from urllib.parse import quote, urlparse
 from uuid import uuid4
 
 try:
@@ -77,6 +78,8 @@ from .schemas import (
     StaffInviteAccept,
     StaffInviteCreate,
     StaffInviteCreatedResponse,
+    StaffInviteDeliveryCreate,
+    StaffInviteDeliveryResponse,
     StaffInviteHealthResponse,
     StaffInviteResponse,
     StaffUserCreate,
@@ -96,6 +99,8 @@ DEFAULT_CORS_ORIGINS = (
 )
 MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
 DEFAULT_PROTOTYPE_MFA_CODE = "246810"
+DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
+LOCAL_INVITE_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
 MFA_READINESS_LIMITATION = (
     "MFA Readiness v2 records staff attestation and the local prototype requires "
     "a second-factor code for staff sessions; it is not a production identity provider."
@@ -112,6 +117,10 @@ def configured_cors_origins() -> list[str]:
 
 def configured_prototype_mfa_code() -> str:
     return os.environ.get("MICROSCORE_PROTOTYPE_MFA_CODE", DEFAULT_PROTOTYPE_MFA_CODE).strip()
+
+
+def configured_invite_web_base_url() -> str:
+    return os.environ.get("MICROSCORE_INVITE_WEB_BASE_URL", DEFAULT_INVITE_WEB_BASE_URL).strip()
 
 
 app = FastAPI(
@@ -220,10 +229,36 @@ def _staff_invite_token_preview(token_id: str) -> str:
     return f"{token_id[:12]}..."
 
 
+def _invite_url_base_is_safe(url_base: str | None) -> bool:
+    parsed = urlparse((url_base or "").strip())
+    if parsed.scheme == "https" and parsed.netloc:
+        return True
+    if parsed.scheme == "http" and parsed.hostname in LOCAL_INVITE_HOSTS:
+        return True
+    return False
+
+
+def _validated_invite_url_base() -> str:
+    base = configured_invite_web_base_url().rstrip("/")
+    if not _invite_url_base_is_safe(base):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "MICROSCORE_INVITE_WEB_BASE_URL must be HTTPS, or local HTTP for development."
+            ),
+        )
+    return base
+
+
+def _build_staff_invite_url(raw_token: str) -> str:
+    return f"{_validated_invite_url_base()}/#/accept-staff-invite?token={quote(raw_token, safe='')}"
+
+
 def _staff_invite_response(
     invite: dict[str, Any],
     *,
     raw_token: str | None = None,
+    invite_url: str | None = None,
 ) -> dict[str, Any]:
     response = {
         "token_id": invite["token"],
@@ -238,9 +273,19 @@ def _staff_invite_response(
         "accepted_by": invite.get("accepted_by"),
         "revoked_at": invite.get("revoked_at"),
         "revoked_by": invite.get("revoked_by"),
+        "delivered_at": invite.get("delivered_at"),
+        "delivered_by": invite.get("delivered_by"),
+        "delivery_channel": invite.get("delivery_channel"),
+        "delivery_recipient": invite.get("delivery_recipient"),
+        "delivery_url_base": invite.get("delivery_url_base"),
+        "delivery_note": invite.get("delivery_note"),
     }
     if raw_token is not None:
         response["token"] = raw_token
+    if invite_url is not None:
+        response["invite_url"] = invite_url
+    if "was_already_delivered" in invite:
+        response["was_already_delivered"] = invite["was_already_delivered"]
     return response
 
 
@@ -443,15 +488,68 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
                 "summary": "Staff login requires an MFA-attested account and a prototype second-factor code.",
                 "action": "Replace the prototype shared-code control with TOTP/WebAuthn or an external identity provider before real user data.",
             },
+        ]
+    )
+
+    now = datetime.now(timezone.utc)
+    active_pending_invites = [
+        invite
+        for invite in invites
+        if not invite.get("accepted_at")
+        and not invite.get("revoked_at")
+        and _parse_utc_datetime(invite["expires_at"]) > now
+    ]
+    undelivered_invites = [
+        invite for invite in active_pending_invites if not invite.get("delivered_at")
+    ]
+    unsafe_delivered_invites = [
+        invite
+        for invite in active_pending_invites
+        if invite.get("delivered_at")
+        and not _invite_url_base_is_safe(invite.get("delivery_url_base"))
+    ]
+    if undelivered_invites:
+        checks.append(
             {
                 "key": "invite_delivery",
                 "label": "Invite delivery and HTTPS links",
                 "status": "blocker",
-                "summary": "Invite links are local prototype secrets, not delivered through audited email with HTTPS-only URLs.",
-                "action": "Add email delivery, HTTPS-only links, and delivery audit before production onboarding.",
-            },
-        ]
-    )
+                "summary": (
+                    f"{len(undelivered_invites)} active pending staff invite(s) "
+                    "lack audited delivery metadata."
+                ),
+                "action": "Record invite delivery before sharing onboarding links.",
+            }
+        )
+    elif unsafe_delivered_invites:
+        checks.append(
+            {
+                "key": "invite_delivery",
+                "label": "Invite delivery and HTTPS links",
+                "status": "blocker",
+                "summary": (
+                    f"{len(unsafe_delivered_invites)} delivered staff invite(s) "
+                    "use a non-HTTPS, non-local URL base."
+                ),
+                "action": "Use HTTPS invite URLs outside local development.",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "key": "invite_delivery",
+                "label": "Invite delivery and HTTPS links",
+                "status": "pass",
+                "summary": (
+                    "All active pending staff invites have audited delivery metadata."
+                    if active_pending_invites
+                    else "No active pending staff invites require delivery."
+                ),
+                "action": (
+                    "Use audited delivery records and move to transactional email before production onboarding."
+                ),
+            }
+        )
 
     blockers = [check for check in checks if check["status"] == "blocker"]
     warnings = [check for check in checks if check["status"] == "warning"]
@@ -1906,7 +2004,77 @@ def create_staff_invite(
             "token_preview": _staff_invite_token_preview(token_id),
         },
     )
-    return _staff_invite_response(created, raw_token=raw_token)
+    return _staff_invite_response(
+        created,
+        raw_token=raw_token,
+        invite_url=_build_staff_invite_url(raw_token),
+    )
+
+
+@app.post(
+    "/admin/staff-invites/{token_id}/delivery",
+    response_model=StaffInviteDeliveryResponse,
+)
+def mark_staff_invite_delivery(
+    token_id: str,
+    payload: StaffInviteDeliveryCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    invite = repository.get_staff_invite(token_id)
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if invite.get("accepted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted staff invite delivery is already complete",
+        )
+    if invite.get("revoked_at"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Revoked staff invite cannot be delivered",
+        )
+    if _parse_utc_datetime(invite["expires_at"]) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Expired staff invite cannot be delivered",
+        )
+
+    delivery_url_base = _validated_invite_url_base()
+    delivered = repository.mark_staff_invite_delivered(
+        token_id,
+        delivered_by=user["email"],
+        channel=payload.channel,
+        recipient=(payload.recipient or invite["email"]).strip() or invite["email"],
+        url_base=delivery_url_base,
+        note=payload.note.strip() if payload.note else None,
+    )
+    if delivered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if not delivered.get("was_already_delivered", False):
+        repository.record_audit_event(
+            actor_email=user["email"],
+            action="staff_invite_delivered",
+            entity_type="staff_invite",
+            entity_id=token_id,
+            details={
+                "email": invite["email"],
+                "role": invite["role"],
+                "organization_id": invite["organization_id"],
+                "token_preview": _staff_invite_token_preview(token_id),
+                "delivery_channel": payload.channel,
+                "delivery_recipient": delivered.get("delivery_recipient"),
+                "delivery_url_base": delivery_url_base,
+                "note_present": bool(payload.note),
+            },
+        )
+    return _staff_invite_response(delivered)
 
 
 @app.delete("/admin/staff-invites/{token_id}", response_model=StaffInviteResponse)
