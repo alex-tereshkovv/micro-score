@@ -54,6 +54,9 @@ The smoke test verifies that the in-browser static backend can:
   enforcement and one-time raw token handling
 - record audited invite delivery metadata and verify undelivered active pending
   invites block Security Readiness until delivery is marked
+- rotate unused staff invites as the safe resend path, verify the old raw token
+  is revoked, and assert `staff_invite_rotated` contains previews rather than
+  raw secrets
 - summarize staff invite rotation health and flag soon-expiring pending invites
 - summarize staff MFA readiness, record pilot attestation, and verify the
   `staff_mfa_attested` audit event plus login-time prototype MFA enforcement

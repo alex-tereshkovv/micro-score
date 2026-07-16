@@ -189,6 +189,10 @@ class StaffInviteCreate(BaseModel):
     expires_in_hours: int = Field(default=48, ge=1, le=168)
 
 
+class StaffInviteRotateCreate(BaseModel):
+    expires_in_hours: int = Field(default=48, ge=1, le=168)
+
+
 class StaffInviteAccept(BaseModel):
     token: str = Field(min_length=16, max_length=200)
     password: str = Field(min_length=1, max_length=128)

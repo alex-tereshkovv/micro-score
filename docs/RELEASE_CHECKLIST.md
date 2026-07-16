@@ -73,6 +73,9 @@ git diff --check
 - Invite Delivery v1 returns a one-time invite URL at creation, records
   audited delivery metadata before active pending invites can pass Security
   Readiness, and emits `staff_invite_delivered` without exposing raw tokens.
+- Safe Invite Rotation v1 rotates unused invites instead of resending old raw
+  secrets, closes the source invite, returns only the new one-time URL, and
+  emits `staff_invite_rotated` with token previews only.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

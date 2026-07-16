@@ -272,6 +272,9 @@ Invite Delivery v1 adds audited delivery metadata for active staff invites,
 returns a one-time invite URL only at creation, marks undelivered active
 pending invites as a Security Readiness blocker, and records
 `staff_invite_delivered` without exposing raw tokens in list/audit surfaces.
+Safe Invite Rotation v1 adds the resend-safe path: admins rotate unused invites
+instead of re-exposing an old secret, which closes the source invite, issues a
+new one-time URL, and records `staff_invite_rotated` with old/new previews only.
 Staff/User Lifecycle v1 now adds admin-only MFI analyst disable, active-session
 revocation, disabled-login rejection, user status listing, and
 `staff_user_disabled` audit events.

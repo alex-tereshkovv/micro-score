@@ -474,6 +474,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteCreatedResponse", schemas)
         self.assertIn("StaffInviteDeliveryCreate", schemas)
         self.assertIn("StaffInviteDeliveryResponse", schemas)
+        self.assertIn("StaffInviteRotateCreate", schemas)
         self.assertIn("StaffInviteHealthResponse", schemas)
         self.assertIn("OrganizationCreate", schemas)
         self.assertIn("OrganizationPublic", schemas)
@@ -565,6 +566,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
+        self.assertIn("/admin/staff-invites/{token_id}/rotate", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
         self.assertIn("/admin/users/{email}/disable", paths)
@@ -1092,6 +1094,13 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(accepted_revoke.status_code, 409, accepted_revoke.text)
 
+        accepted_rotate = self.client.post(
+            f"/admin/staff-invites/{invite_payload['token_id']}/rotate",
+            headers=self._headers(admin_token),
+            json={"expires_in_hours": 24},
+        )
+        self.assertEqual(accepted_rotate.status_code, 409, accepted_rotate.text)
+
         invites = self.client.get(
             "/admin/staff-invites",
             headers=self._headers(admin_token),
@@ -1109,6 +1118,62 @@ class ApiIntegrationTests(unittest.TestCase):
                 for row in invites.json()
             )
         )
+
+        rotate_source = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "rotated-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "expires_in_hours": 24,
+            },
+        )
+        self.assertEqual(rotate_source.status_code, 201, rotate_source.text)
+        rotate_source_payload = rotate_source.json()
+        rotated = self.client.post(
+            f"/admin/staff-invites/{rotate_source_payload['token_id']}/rotate",
+            headers=self._headers(admin_token),
+            json={"expires_in_hours": 72},
+        )
+        self.assertEqual(rotated.status_code, 201, rotated.text)
+        rotated_payload = rotated.json()
+        self.assertEqual(rotated_payload["email"], "rotated-analyst@example.com")
+        self.assertNotEqual(rotated_payload["token_id"], rotate_source_payload["token_id"])
+        self.assertNotEqual(rotated_payload["token"], rotate_source_payload["token"])
+        self.assertIn(rotated_payload["token"], rotated_payload["invite_url"])
+        self.assertNotIn(rotate_source_payload["token"], rotated_payload["invite_url"])
+        self.assertNotIn(rotate_source_payload["token_id"], rotated_payload["invite_url"])
+        self.assertIsNone(rotated_payload["revoked_at"])
+        old_rotated_accept = self.client.post(
+            "/auth/accept-staff-invite",
+            json={"token": rotate_source_payload["token"], "password": TEST_PASSWORD},
+        )
+        self.assertEqual(old_rotated_accept.status_code, 410, old_rotated_accept.text)
+        rotated_invites = self.client.get(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(rotated_invites.status_code, 200, rotated_invites.text)
+        old_rotated_row = next(
+            row for row in rotated_invites.json()
+            if row["token_id"] == rotate_source_payload["token_id"]
+        )
+        self.assertIsNotNone(old_rotated_row["revoked_at"])
+        self.assertEqual(old_rotated_row["revoked_by"], "provisioning-admin@example.com")
+        new_rotated_row = next(
+            row for row in rotated_invites.json()
+            if row["token_id"] == rotated_payload["token_id"]
+        )
+        self.assertIsNone(new_rotated_row["delivered_at"])
+        self.assertNotIn("token", new_rotated_row)
+        repeated_rotation = self.client.post(
+            f"/admin/staff-invites/{rotate_source_payload['token_id']}/rotate",
+            headers=self._headers(admin_token),
+            json={"expires_in_hours": 72},
+        )
+        self.assertEqual(repeated_rotation.status_code, 409, repeated_rotation.text)
+        self.assertIn("Active staff invite already exists", repeated_rotation.json()["detail"])
 
         revokable = self.client.post(
             "/admin/staff-invites",
@@ -1220,6 +1285,21 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(invite_delivered_event["details"]["delivery_channel"], "manual_copy")
         self.assertEqual(invite_delivered_event["details"]["delivery_url_base"], "http://127.0.0.1:5173")
         self.assertNotIn(invite_payload["token"], invite_delivered_event["details"].values())
+        invite_rotated_event = next(
+            event for event in audit if event["action"] == "staff_invite_rotated"
+        )
+        self.assertEqual(invite_rotated_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(invite_rotated_event["entity_id"], rotated_payload["token_id"])
+        self.assertEqual(invite_rotated_event["details"]["previous_status"], "pending")
+        self.assertEqual(
+            invite_rotated_event["details"]["previous_token_preview"],
+            rotate_source_payload["token_preview"],
+        )
+        self.assertEqual(
+            invite_rotated_event["details"]["new_token_preview"],
+            rotated_payload["token_preview"],
+        )
+        self.assertNotIn(rotate_source_payload["token"], invite_rotated_event["details"].values())
         invite_accepted_event = next(
             event for event in audit if event["action"] == "staff_invite_accepted"
         )

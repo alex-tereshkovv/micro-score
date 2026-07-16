@@ -589,6 +589,92 @@ async function main() {
   if (!acceptedInviteRevokeRejected) {
     throw new Error("Expected accepted staff invite revoke to be rejected");
   }
+  let acceptedInviteRotateRejected = false;
+  try {
+    await api.request(
+      `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/rotate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expires_in_hours: 24 }),
+      },
+      adminSession,
+    );
+  } catch (error) {
+    acceptedInviteRotateRejected = String(error.message).includes("cannot be rotated");
+  }
+  if (!acceptedInviteRotateRejected) {
+    throw new Error("Expected accepted staff invite rotation to be rejected");
+  }
+
+  const rotateInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "rotated-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 24,
+      }),
+    },
+    adminSession,
+  );
+  const rotatedInvite = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(rotateInvite.token_id)}/rotate`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expires_in_hours: 12 }),
+    },
+    adminSession,
+  );
+  if (
+    rotatedInvite.email !== rotateInvite.email
+    || rotatedInvite.token_id === rotateInvite.token_id
+    || rotatedInvite.token === rotateInvite.token
+    || !String(rotatedInvite.invite_url || "").includes(rotatedInvite.token)
+    || String(rotatedInvite.invite_url || "").includes(rotateInvite.token)
+  ) {
+    throw new Error("Expected staff invite rotation to issue a new one-time URL only");
+  }
+  let oldRotatedInviteRejected = false;
+  try {
+    await api.request("/auth/accept-staff-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        token: rotateInvite.token,
+        password: "StrongPassword1!",
+        mfa_code: "246810",
+      }),
+    });
+  } catch (error) {
+    oldRotatedInviteRejected = String(error.message).includes("revoked");
+  }
+  if (!oldRotatedInviteRejected) {
+    throw new Error("Expected old rotated invite token to be revoked");
+  }
+  const invitesAfterRotation = await api.request("/admin/staff-invites", {}, adminSession);
+  if (!invitesAfterRotation.some((invite) => invite.token_id === rotateInvite.token_id && invite.revoked_at)) {
+    throw new Error("Expected rotated source invite to be closed");
+  }
+  if (!invitesAfterRotation.some((invite) => invite.token_id === rotatedInvite.token_id && !invite.token && !invite.delivered_at)) {
+    throw new Error("Expected rotated invite list row to hide raw token and require delivery");
+  }
+  let duplicateRotationRejected = false;
+  try {
+    await api.request(
+      `/admin/staff-invites/${encodeURIComponent(rotateInvite.token_id)}/rotate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expires_in_hours: 48 }),
+      },
+      adminSession,
+    );
+  } catch (error) {
+    duplicateRotationRejected = String(error.message).includes("Active staff invite already exists");
+  }
+  if (!duplicateRotationRejected) {
+    throw new Error("Expected duplicate active invite rotation to be rejected");
+  }
 
   const revokeInvite = await api.request(
     "/admin/staff-invites",
@@ -665,6 +751,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_delivered")) {
     throw new Error("Expected staff invite delivery audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_rotated")) {
+    throw new Error("Expected staff invite rotation audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_accepted")) {
     throw new Error("Expected staff invite acceptance audit event");
@@ -930,6 +1019,7 @@ async function main() {
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
       staff_invite_delivery: true,
+      staff_invite_rotation: true,
       staff_invite_health: true,
       mfa_readiness: true,
       security_readiness: true,

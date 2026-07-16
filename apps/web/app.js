@@ -2516,9 +2516,13 @@ function renderStaffInvites(rows) {
     .map((invite) => {
       const status = staffInviteStatus(invite);
       const canRevoke = status === "pending";
+      const canRotate = status !== "accepted";
       const actions = [];
       if (canRevoke && !invite.delivered_at) {
         actions.push(`<button class="secondary-button compact-button" type="button" data-deliver-invite-token="${escapeHtml(invite.token_id)}">Mark delivered</button>`);
+      }
+      if (canRotate) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-rotate-invite-token="${escapeHtml(invite.token_id)}">Rotate</button>`);
       }
       if (canRevoke) {
         actions.push(`<button class="secondary-button compact-button" type="button" data-revoke-invite-token="${escapeHtml(invite.token_id)}">Revoke</button>`);
@@ -2786,6 +2790,15 @@ async function markStaffInviteDelivered(token) {
   showMessage(`Recorded invite delivery for ${delivered.email}`, "ok");
 }
 
+async function rotateStaffInvite(token) {
+  const rotated = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}/rotate`, {
+    method: "POST",
+    body: JSON.stringify({ expires_in_hours: 48 }),
+  });
+  await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
+  showMessage(`Rotated invite for ${rotated.email}. Copy this new one-time URL now: ${rotated.invite_url || rotated.token}`, "ok");
+}
+
 async function revokeStaffInvite(token) {
   const revoked = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}`, {
     method: "DELETE",
@@ -2965,6 +2978,12 @@ function wireEvents() {
     const deliverButton = event.target.closest("[data-deliver-invite-token]");
     if (deliverButton) {
       markStaffInviteDelivered(deliverButton.dataset.deliverInviteToken)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
+    const rotateButton = event.target.closest("[data-rotate-invite-token]");
+    if (rotateButton) {
+      rotateStaffInvite(rotateButton.dataset.rotateInviteToken)
         .catch((error) => showMessage(error.message, "error"));
       return;
     }

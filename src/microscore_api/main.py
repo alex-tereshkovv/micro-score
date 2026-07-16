@@ -81,6 +81,7 @@ from .schemas import (
     StaffInviteDeliveryCreate,
     StaffInviteDeliveryResponse,
     StaffInviteHealthResponse,
+    StaffInviteRotateCreate,
     StaffInviteResponse,
     StaffUserCreate,
     StaffUserDisableResponse,
@@ -254,6 +255,46 @@ def _build_staff_invite_url(raw_token: str) -> str:
     return f"{_validated_invite_url_base()}/#/accept-staff-invite?token={quote(raw_token, safe='')}"
 
 
+def _staff_invite_status_value(invite: dict[str, Any]) -> str:
+    if invite.get("revoked_at"):
+        return "revoked"
+    if invite.get("accepted_at"):
+        return "accepted"
+    if _parse_utc_datetime(invite["expires_at"]) <= datetime.now(timezone.utc):
+        return "expired"
+    return "pending"
+
+
+def _staff_invite_is_active_pending(
+    invite: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> bool:
+    now = now or datetime.now(timezone.utc)
+    return (
+        not invite.get("accepted_at")
+        and not invite.get("revoked_at")
+        and _parse_utc_datetime(invite["expires_at"]) > now
+    )
+
+
+def _active_pending_staff_invite_for_email(
+    repository: MicroScoreRepository,
+    email: str,
+    *,
+    exclude_token_id: str | None = None,
+) -> dict[str, Any] | None:
+    normalized_email = email.strip().lower()
+    for invite in repository.list_staff_invites():
+        if invite["token"] == exclude_token_id:
+            continue
+        if invite["email"] != normalized_email:
+            continue
+        if _staff_invite_is_active_pending(invite):
+            return invite
+    return None
+
+
 def _staff_invite_response(
     invite: dict[str, Any],
     *,
@@ -287,6 +328,33 @@ def _staff_invite_response(
     if "was_already_delivered" in invite:
         response["was_already_delivered"] = invite["was_already_delivered"]
     return response
+
+
+def _record_staff_invite_created(
+    repository: MicroScoreRepository,
+    *,
+    actor_email: str,
+    token_id: str,
+    email: str,
+    role: str,
+    organization_id: str,
+    expires_at: str,
+    source: str = "admin_create",
+) -> None:
+    repository.record_audit_event(
+        actor_email=actor_email,
+        action="staff_invite_created",
+        entity_type="staff_invite",
+        entity_id=token_id,
+        details={
+            "email": email,
+            "role": role,
+            "organization_id": organization_id,
+            "expires_at": expires_at,
+            "token_preview": _staff_invite_token_preview(token_id),
+            "source": source,
+        },
+    )
 
 
 def _staff_invite_health_response(
@@ -493,11 +561,7 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
 
     now = datetime.now(timezone.utc)
     active_pending_invites = [
-        invite
-        for invite in invites
-        if not invite.get("accepted_at")
-        and not invite.get("revoked_at")
-        and _parse_utc_datetime(invite["expires_at"]) > now
+        invite for invite in invites if _staff_invite_is_active_pending(invite, now=now)
     ]
     undelivered_invites = [
         invite for invite in active_pending_invites if not invite.get("delivered_at")
@@ -1977,6 +2041,11 @@ def create_staff_invite(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already exists",
         )
+    if _active_pending_staff_invite_for_email(repository, email) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Active staff invite already exists",
+        )
 
     expires_at = (
         datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
@@ -1991,18 +2060,14 @@ def create_staff_invite(
         created_by=user["email"],
         expires_at=expires_at,
     )
-    repository.record_audit_event(
+    _record_staff_invite_created(
+        repository,
         actor_email=user["email"],
-        action="staff_invite_created",
-        entity_type="staff_invite",
-        entity_id=token_id,
-        details={
-            "email": email,
-            "role": payload.role,
-            "organization_id": payload.organization_id,
-            "expires_at": expires_at,
-            "token_preview": _staff_invite_token_preview(token_id),
-        },
+        token_id=token_id,
+        email=email,
+        role=payload.role,
+        organization_id=payload.organization_id,
+        expires_at=expires_at,
     )
     return _staff_invite_response(
         created,
@@ -2075,6 +2140,97 @@ def mark_staff_invite_delivery(
             },
         )
     return _staff_invite_response(delivered)
+
+
+@app.post(
+    "/admin/staff-invites/{token_id}/rotate",
+    response_model=StaffInviteCreatedResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def rotate_staff_invite(
+    token_id: str,
+    payload: StaffInviteRotateCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    invite = repository.get_staff_invite(token_id)
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if invite.get("accepted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted staff invite cannot be rotated",
+        )
+    if repository.get_user(invite["email"]) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists",
+        )
+    if repository.get_organization(invite["organization_id"]) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Select a valid MFI organization",
+        )
+    if _active_pending_staff_invite_for_email(
+        repository,
+        invite["email"],
+        exclude_token_id=token_id,
+    ) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Active staff invite already exists",
+        )
+
+    previous_status = _staff_invite_status_value(invite)
+    if not invite.get("revoked_at"):
+        repository.mark_staff_invite_revoked(token_id, user["email"])
+
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
+    ).isoformat()
+    raw_token = create_token()
+    rotated_token_id = _staff_invite_token_id(raw_token)
+    created = repository.create_staff_invite(
+        token=rotated_token_id,
+        email=invite["email"],
+        role=invite["role"],
+        organization_id=invite["organization_id"],
+        created_by=user["email"],
+        expires_at=expires_at,
+    )
+    _record_staff_invite_created(
+        repository,
+        actor_email=user["email"],
+        token_id=rotated_token_id,
+        email=invite["email"],
+        role=invite["role"],
+        organization_id=invite["organization_id"],
+        expires_at=expires_at,
+        source="staff_invite_rotation",
+    )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="staff_invite_rotated",
+        entity_type="staff_invite",
+        entity_id=rotated_token_id,
+        details={
+            "email": invite["email"],
+            "role": invite["role"],
+            "organization_id": invite["organization_id"],
+            "previous_status": previous_status,
+            "previous_token_preview": _staff_invite_token_preview(token_id),
+            "new_token_preview": _staff_invite_token_preview(rotated_token_id),
+            "expires_at": expires_at,
+        },
+    )
+    return _staff_invite_response(
+        created,
+        raw_token=raw_token,
+        invite_url=_build_staff_invite_url(raw_token),
+    )
 
 
 @app.delete("/admin/staff-invites/{token_id}", response_model=StaffInviteResponse)

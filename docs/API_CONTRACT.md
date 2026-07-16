@@ -341,6 +341,8 @@ one-time `invite_url`, and safe invite metadata: `token_id`, `token_preview`,
 
 The raw `token` must be copied at creation time. Later admin list/revoke
 responses expose only `token_id`, `token_preview`, and delivery metadata.
+The API rejects creation while the same email already has another active
+pending staff invite; rotate the existing invite instead.
 
 Record audited delivery for an active pending invite:
 
@@ -368,6 +370,29 @@ not overwrite the first delivery record.
 `http://127.0.0.1:5173` for local development. Non-local bases must be HTTPS.
 The static GitHub Pages demo records
 `https://alex-tereshkovv.github.io/micro-score` as its delivery base.
+
+Rotate an unused invite and issue a fresh one-time URL:
+
+```http
+POST /admin/staff-invites/{token_id}/rotate
+```
+
+```json
+{
+  "expires_in_hours": 48
+}
+```
+
+Rotation requires an `admin` bearer token and is the safe resend path: the API
+does not store or re-expose the previous raw token. Accepted invites cannot be
+rotated. Pending, expired, or already revoked invites can be rotated; the
+source invite is closed with `revoked_at`/`revoked_by` when needed, a new invite
+is created for the same email/role/organization, and the response returns only
+the new one-time raw `token` and `invite_url`. Rotation records
+`staff_invite_created` with `source: "staff_invite_rotation"` and
+`staff_invite_rotated` with old/new token previews, not raw tokens.
+Rotation is rejected when another active pending invite for the same email
+already exists, preventing multiple live onboarding links for one account.
 
 Revoke an unused invite:
 
@@ -896,6 +921,7 @@ Current audited actions:
 - `staff_user_reactivated`
 - `staff_invite_created`
 - `staff_invite_delivered`
+- `staff_invite_rotated`
 - `staff_invite_accepted`
 - `staff_invite_revoked`
 - `organization_created`

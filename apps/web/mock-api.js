@@ -342,6 +342,24 @@
     return publicStaffInvite(invite, token);
   }
 
+  function staffInviteLifecycleStatus(invite) {
+    if (invite.revoked_at) return "revoked";
+    if (invite.accepted_at) return "accepted";
+    if (Date.parse(invite.expires_at) <= Date.now()) return "expired";
+    return "pending";
+  }
+
+  function activePendingInviteForEmail(email, excludeTokenId = null) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    return Object.values(demo.staffInvites).find((invite) => (
+      invite.token_id !== excludeTokenId
+      && invite.email === normalizedEmail
+      && !invite.accepted_at
+      && !invite.revoked_at
+      && Date.parse(invite.expires_at) > Date.now()
+    ));
+  }
+
   function staffInviteHealth(invites, windowHours = 24) {
     const now = new Date();
     const expiringDeadline = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
@@ -2192,6 +2210,7 @@
       }
       if (!demo.organizations[body.organization_id]) throw new Error("Select a valid MFI organization");
       if (demo.users[email]) throw new Error("User already exists in static demo");
+      if (activePendingInviteForEmail(email)) throw new Error("Active staff invite already exists");
       const invite = createStaffInviteRecord({ ...body, email, role: "mfi_analyst" }, user.email);
       addAudit("staff_invite_created", "staff_invite", invite.token_id, user.email, {
         email: invite.email,
@@ -2199,6 +2218,7 @@
         organization_id: invite.organization_id,
         expires_at: invite.expires_at,
         token_preview: invite.token_preview,
+        source: "admin_create",
       });
       return clone(invite);
     }
@@ -2232,6 +2252,50 @@
         });
       }
       return clone(publicStaffInvite({ ...invite, was_already_delivered: wasAlreadyDelivered }));
+    }
+
+    const rotateStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/rotate$/);
+    if (rotateStaffInviteMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const tokenId = decodeURIComponent(rotateStaffInviteMatch[1]);
+      const invite = demo.staffInvites[tokenId];
+      if (!invite) throw new Error("Staff invite not found");
+      if (invite.accepted_at) throw new Error("Accepted staff invite cannot be rotated");
+      if (demo.users[invite.email]) throw new Error("User already exists in static demo");
+      if (!demo.organizations[invite.organization_id]) throw new Error("Select a valid MFI organization");
+      if (activePendingInviteForEmail(invite.email, tokenId)) throw new Error("Active staff invite already exists");
+      const previousStatus = staffInviteLifecycleStatus(invite);
+      if (!invite.revoked_at) {
+        invite.revoked_at = nowIso();
+        invite.revoked_by = user.email;
+      }
+      const rotated = createStaffInviteRecord(
+        {
+          email: invite.email,
+          role: invite.role,
+          organization_id: invite.organization_id,
+          expires_in_hours: body.expires_in_hours || 48,
+        },
+        user.email,
+      );
+      addAudit("staff_invite_created", "staff_invite", rotated.token_id, user.email, {
+        email: rotated.email,
+        role: rotated.role,
+        organization_id: rotated.organization_id,
+        expires_at: rotated.expires_at,
+        token_preview: rotated.token_preview,
+        source: "staff_invite_rotation",
+      });
+      addAudit("staff_invite_rotated", "staff_invite", rotated.token_id, user.email, {
+        email: rotated.email,
+        role: rotated.role,
+        organization_id: rotated.organization_id,
+        previous_status: previousStatus,
+        previous_token_preview: invite.token_preview,
+        new_token_preview: rotated.token_preview,
+        expires_at: rotated.expires_at,
+      });
+      return clone(rotated);
     }
 
     const revokeStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)$/);
