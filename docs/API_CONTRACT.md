@@ -328,7 +328,10 @@ POST /admin/staff-invites
   "email": "analyst@mfi.example",
   "role": "mfi_analyst",
   "organization_id": "pavlodar-demo-mfi",
-  "expires_in_hours": 48
+  "expires_in_hours": 48,
+  "queue_delivery": true,
+  "delivery_channel": "email",
+  "delivery_recipient": "analyst@mfi.example"
 }
 ```
 
@@ -337,12 +340,22 @@ creation records `staff_invite_created` and returns a one-time raw `token`, a
 one-time `invite_url`, and safe invite metadata: `token_id`, `token_preview`,
 `created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`,
 `revoked_by`, `delivered_at`, `delivered_by`, `delivery_channel`,
-`delivery_recipient`, `delivery_url_base`, and `delivery_note`.
+`delivery_recipient`, `delivery_url_base`, `delivery_note`,
+`delivery_attempt_count`, `last_delivery_attempt_at`, `last_delivery_status`,
+and `last_delivery_provider`.
 
 The raw `token` must be copied at creation time. Later admin list/revoke
 responses expose only `token_id`, `token_preview`, and delivery metadata.
 The API rejects creation while the same email already has another active
 pending staff invite; rotate the existing invite instead.
+
+When `queue_delivery` is `true`, creation records a local delivery attempt while
+the raw token is still available in process, marks the invite delivered, and
+returns a `delivery_attempt` object with `attempt_id`, `provider`, `status`,
+`channel`, `recipient`, `delivery_url_base`, and timestamps. The default
+provider is `local_outbox`; override the label with
+`MICROSCORE_INVITE_DELIVERY_PROVIDER` for deployment experiments. The outbox
+never stores the raw token or full invite URL.
 
 Record audited delivery for an active pending invite:
 
@@ -364,12 +377,23 @@ rejects accepted, revoked, and expired invites; otherwise it records
 `delivered_at`, `delivered_by`, `delivery_channel`, `delivery_recipient`,
 `delivery_url_base`, and `delivery_note`, emits `staff_invite_delivered`, and
 returns `was_already_delivered`. Repeating the request is idempotent and does
-not overwrite the first delivery record.
+not overwrite the first delivery record, but every request appends a
+`manual_receipt` delivery attempt.
 
 `delivery_url_base` comes from `MICROSCORE_INVITE_WEB_BASE_URL` and defaults to
 `http://127.0.0.1:5173` for local development. Non-local bases must be HTTPS.
 The static GitHub Pages demo records
 `https://alex-tereshkovv.github.io/micro-score` as its delivery base.
+
+List delivery attempts for an invite:
+
+```http
+GET /admin/staff-invites/{token_id}/delivery-attempts
+```
+
+This returns newest-first `StaffInviteDeliveryAttemptResponse` rows. Attempts
+contain the invite `token_id`, provider, status, channel, recipient, URL base,
+and optional note/error; they never contain raw tokens.
 
 Rotate an unused invite and issue a fresh one-time URL:
 
@@ -379,7 +403,9 @@ POST /admin/staff-invites/{token_id}/rotate
 
 ```json
 {
-  "expires_in_hours": 48
+  "expires_in_hours": 48,
+  "queue_delivery": true,
+  "delivery_channel": "email"
 }
 ```
 
@@ -393,6 +419,8 @@ the new one-time raw `token` and `invite_url`. Rotation records
 `staff_invite_rotated` with old/new token previews, not raw tokens.
 Rotation is rejected when another active pending invite for the same email
 already exists, preventing multiple live onboarding links for one account.
+When `queue_delivery` is true, rotation also records a `local_outbox` delivery
+attempt for the new invite and returns that attempt in the response.
 
 Revoke an unused invite:
 
@@ -920,6 +948,7 @@ Current audited actions:
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`
+- `staff_invite_delivery_attempted`
 - `staff_invite_delivered`
 - `staff_invite_rotated`
 - `staff_invite_accepted`

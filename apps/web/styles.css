@@ -901,6 +901,17 @@ label.field-invalid > textarea {
   align-items: end;
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
 .model-registry-panel {
   border-top: 3px solid var(--amber);
 }

@@ -473,6 +473,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteResponse", schemas)
         self.assertIn("StaffInviteCreatedResponse", schemas)
         self.assertIn("StaffInviteDeliveryCreate", schemas)
+        self.assertIn("StaffInviteDeliveryAttemptResponse", schemas)
         self.assertIn("StaffInviteDeliveryResponse", schemas)
         self.assertIn("StaffInviteRotateCreate", schemas)
         self.assertIn("StaffInviteHealthResponse", schemas)
@@ -546,6 +547,13 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("delivered_at", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("delivery_channel", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("delivery_url_base", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("delivery_attempt_count", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("last_delivery_status", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("queue_delivery", schemas["StaffInviteCreate"]["properties"])
+        self.assertIn("delivery_attempt", schemas["StaffInviteCreatedResponse"]["properties"])
+        self.assertIn("delivery_attempt", schemas["StaffInviteDeliveryResponse"]["properties"])
+        self.assertIn("provider", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
+        self.assertIn("invite_token_id", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
         self.assertNotIn("token", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token", schemas["StaffInviteCreatedResponse"]["properties"])
         self.assertIn("invite_url", schemas["StaffInviteCreatedResponse"]["properties"])
@@ -566,6 +574,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
+        self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts", paths)
         self.assertIn("/admin/staff-invites/{token_id}/rotate", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
@@ -1013,6 +1022,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn(invite_payload["token"], invite_payload["invite_url"])
         self.assertNotIn(invite_payload["token_id"], invite_payload["invite_url"])
         self.assertEqual(len(invite_payload["token_id"]), 64)
+        self.assertEqual(invite_payload["delivery_attempt_count"], 0)
+        self.assertIsNone(invite_payload["delivery_attempt"])
         self.assertNotIn("password", invite_payload)
 
         undelivered_readiness = self.client.get(
@@ -1037,6 +1048,13 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(delivered.json()["delivered_by"], "provisioning-admin@example.com")
         self.assertEqual(delivered.json()["delivery_channel"], "manual_copy")
         self.assertEqual(delivered.json()["delivery_url_base"], "http://127.0.0.1:5173")
+        self.assertEqual(delivered.json()["delivery_attempt_count"], 1)
+        self.assertEqual(delivered.json()["last_delivery_status"], "sent")
+        self.assertEqual(delivered.json()["last_delivery_provider"], "manual_receipt")
+        self.assertEqual(delivered.json()["delivery_attempt"]["provider"], "manual_receipt")
+        self.assertEqual(delivered.json()["delivery_attempt"]["status"], "sent")
+        self.assertEqual(delivered.json()["delivery_attempt"]["channel"], "manual_copy")
+        self.assertNotIn(invite_payload["token"], delivered.json()["delivery_attempt"].values())
         self.assertFalse(delivered.json()["was_already_delivered"])
 
         repeated_delivery = self.client.post(
@@ -1046,6 +1064,19 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(repeated_delivery.status_code, 200, repeated_delivery.text)
         self.assertTrue(repeated_delivery.json()["was_already_delivered"])
+        self.assertEqual(repeated_delivery.json()["delivery_attempt_count"], 2)
+        delivery_attempts = self.client.get(
+            f"/admin/staff-invites/{invite_payload['token_id']}/delivery-attempts",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(delivery_attempts.status_code, 200, delivery_attempts.text)
+        self.assertEqual(len(delivery_attempts.json()), 2)
+        self.assertTrue(
+            all(attempt["provider"] == "manual_receipt" for attempt in delivery_attempts.json())
+        )
+        self.assertTrue(
+            all(invite_payload["token"] not in attempt.values() for attempt in delivery_attempts.json())
+        )
 
         delivered_readiness = self.client.get(
             "/admin/security/readiness",
@@ -1115,6 +1146,7 @@ class ApiIntegrationTests(unittest.TestCase):
                 and row["accepted_at"]
                 and row["accepted_by"] == "invited-analyst@example.com"
                 and row["delivered_at"]
+                and row["delivery_attempt_count"] == 2
                 for row in invites.json()
             )
         )
@@ -1134,7 +1166,12 @@ class ApiIntegrationTests(unittest.TestCase):
         rotated = self.client.post(
             f"/admin/staff-invites/{rotate_source_payload['token_id']}/rotate",
             headers=self._headers(admin_token),
-            json={"expires_in_hours": 72},
+            json={
+                "expires_in_hours": 72,
+                "queue_delivery": True,
+                "delivery_channel": "email",
+                "delivery_recipient": "rotated-analyst@example.com",
+            },
         )
         self.assertEqual(rotated.status_code, 201, rotated.text)
         rotated_payload = rotated.json()
@@ -1145,6 +1182,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertNotIn(rotate_source_payload["token"], rotated_payload["invite_url"])
         self.assertNotIn(rotate_source_payload["token_id"], rotated_payload["invite_url"])
         self.assertIsNone(rotated_payload["revoked_at"])
+        self.assertIsNotNone(rotated_payload["delivered_at"])
+        self.assertEqual(rotated_payload["delivery_attempt_count"], 1)
+        self.assertEqual(rotated_payload["delivery_attempt"]["provider"], "local_outbox")
+        self.assertEqual(rotated_payload["delivery_attempt"]["channel"], "email")
+        self.assertNotIn(rotate_source_payload["token"], rotated_payload["delivery_attempt"].values())
         old_rotated_accept = self.client.post(
             "/auth/accept-staff-invite",
             json={"token": rotate_source_payload["token"], "password": TEST_PASSWORD},
@@ -1165,7 +1207,9 @@ class ApiIntegrationTests(unittest.TestCase):
             row for row in rotated_invites.json()
             if row["token_id"] == rotated_payload["token_id"]
         )
-        self.assertIsNone(new_rotated_row["delivered_at"])
+        self.assertIsNotNone(new_rotated_row["delivered_at"])
+        self.assertEqual(new_rotated_row["delivery_attempt_count"], 1)
+        self.assertEqual(new_rotated_row["last_delivery_provider"], "local_outbox")
         self.assertNotIn("token", new_rotated_row)
         repeated_rotation = self.client.post(
             f"/admin/staff-invites/{rotate_source_payload['token_id']}/rotate",
@@ -1278,13 +1322,35 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(invite_created_event["details"]["email"], "invited-analyst@example.com")
         self.assertEqual(invite_created_event["details"]["token_preview"], invite_payload["token_preview"])
         invite_delivered_event = next(
-            event for event in audit if event["action"] == "staff_invite_delivered"
+            event
+            for event in audit
+            if event["action"] == "staff_invite_delivered"
+            and event["entity_id"] == invite_payload["token_id"]
         )
         self.assertEqual(invite_delivered_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(invite_delivered_event["entity_id"], invite_payload["token_id"])
         self.assertEqual(invite_delivered_event["details"]["delivery_channel"], "manual_copy")
         self.assertEqual(invite_delivered_event["details"]["delivery_url_base"], "http://127.0.0.1:5173")
+        self.assertIn("delivery_attempt_id", invite_delivered_event["details"])
         self.assertNotIn(invite_payload["token"], invite_delivered_event["details"].values())
+        delivery_attempt_events = [
+            event for event in audit if event["action"] == "staff_invite_delivery_attempted"
+        ]
+        self.assertGreaterEqual(len(delivery_attempt_events), 3)
+        self.assertIn(
+            "manual_receipt",
+            {event["details"]["provider"] for event in delivery_attempt_events},
+        )
+        self.assertIn(
+            "local_outbox",
+            {event["details"]["provider"] for event in delivery_attempt_events},
+        )
+        self.assertTrue(
+            all(
+                invite_payload["token"] not in event["details"].values()
+                for event in delivery_attempt_events
+            )
+        )
         invite_rotated_event = next(
             event for event in audit if event["action"] == "staff_invite_rotated"
         )

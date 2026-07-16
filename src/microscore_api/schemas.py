@@ -182,14 +182,25 @@ class SecurityReadinessResponse(BaseModel):
     limitation: str
 
 
-class StaffInviteCreate(BaseModel):
+InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
+InviteDeliveryAttemptStatus = Literal["queued", "sent", "failed"]
+
+
+class StaffInviteDeliveryOptions(BaseModel):
+    queue_delivery: bool = False
+    delivery_channel: InviteDeliveryChannel = "email"
+    delivery_recipient: str | None = Field(default=None, max_length=200)
+    delivery_note: str | None = Field(default=None, max_length=500)
+
+
+class StaffInviteCreate(StaffInviteDeliveryOptions):
     email: str
     role: Literal["mfi_analyst"] = "mfi_analyst"
     organization_id: str = Field(min_length=1, max_length=100)
     expires_in_hours: int = Field(default=48, ge=1, le=168)
 
 
-class StaffInviteRotateCreate(BaseModel):
+class StaffInviteRotateCreate(StaffInviteDeliveryOptions):
     expires_in_hours: int = Field(default=48, ge=1, le=168)
 
 
@@ -197,9 +208,6 @@ class StaffInviteAccept(BaseModel):
     token: str = Field(min_length=16, max_length=200)
     password: str = Field(min_length=1, max_length=128)
     mfa_code: str | None = Field(default=None, min_length=6, max_length=32)
-
-
-InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
 
 
 class StaffInviteDeliveryCreate(BaseModel):
@@ -227,15 +235,35 @@ class StaffInviteResponse(BaseModel):
     delivery_recipient: str | None = None
     delivery_url_base: str | None = None
     delivery_note: str | None = None
+    delivery_attempt_count: int = Field(default=0, ge=0)
+    last_delivery_attempt_at: str | None = None
+    last_delivery_status: InviteDeliveryAttemptStatus | None = None
+    last_delivery_provider: str | None = None
+
+
+class StaffInviteDeliveryAttemptResponse(BaseModel):
+    attempt_id: str
+    invite_token_id: str
+    attempted_at: str
+    attempted_by: str | None = None
+    provider: str
+    status: InviteDeliveryAttemptStatus
+    channel: InviteDeliveryChannel
+    recipient: str | None = None
+    delivery_url_base: str | None = None
+    note: str | None = None
+    error: str | None = None
 
 
 class StaffInviteCreatedResponse(StaffInviteResponse):
     token: str
     invite_url: str
+    delivery_attempt: StaffInviteDeliveryAttemptResponse | None = None
 
 
 class StaffInviteDeliveryResponse(StaffInviteResponse):
     was_already_delivered: bool = False
+    delivery_attempt: StaffInviteDeliveryAttemptResponse | None = None
 
 
 class StaffInviteHealthResponse(BaseModel):

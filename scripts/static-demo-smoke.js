@@ -523,6 +523,9 @@ async function main() {
     || deliveredInvite.delivered_by !== "admin@test.com"
     || deliveredInvite.delivery_channel !== "manual_copy"
     || deliveredInvite.delivery_url_base !== "https://alex-tereshkovv.github.io/micro-score"
+    || deliveredInvite.delivery_attempt_count !== 1
+    || deliveredInvite.delivery_attempt?.provider !== "manual_receipt"
+    || deliveredInvite.delivery_attempt?.status !== "sent"
   ) {
     throw new Error("Expected audited staff invite delivery metadata");
   }
@@ -533,6 +536,21 @@ async function main() {
   );
   if (!repeatedDelivery.was_already_delivered) {
     throw new Error("Expected repeated invite delivery to be idempotent");
+  }
+  if (repeatedDelivery.delivery_attempt_count !== 2) {
+    throw new Error("Expected repeated invite delivery to append an attempt");
+  }
+  const deliveryAttempts = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/delivery-attempts`,
+    {},
+    adminSession,
+  );
+  if (
+    deliveryAttempts.length !== 2
+    || !deliveryAttempts.every((attempt) => attempt.provider === "manual_receipt")
+    || deliveryAttempts.some((attempt) => Object.values(attempt).includes(staffInvite.token))
+  ) {
+    throw new Error("Expected delivery attempts to hide raw tokens and preserve manual receipts");
   }
   const securityReadinessAfterDelivery = await api.request("/admin/security/readiness", {}, adminSession);
   if (!securityReadinessAfterDelivery.checks.some((check) => check.key === "invite_delivery" && check.status === "pass")) {
@@ -623,7 +641,12 @@ async function main() {
     `/admin/staff-invites/${encodeURIComponent(rotateInvite.token_id)}/rotate`,
     {
       method: "POST",
-      body: JSON.stringify({ expires_in_hours: 12 }),
+      body: JSON.stringify({
+        expires_in_hours: 72,
+        queue_delivery: true,
+        delivery_channel: "email",
+        delivery_recipient: "rotated-analyst@test.com",
+      }),
     },
     adminSession,
   );
@@ -633,6 +656,9 @@ async function main() {
     || rotatedInvite.token === rotateInvite.token
     || !String(rotatedInvite.invite_url || "").includes(rotatedInvite.token)
     || String(rotatedInvite.invite_url || "").includes(rotateInvite.token)
+    || !rotatedInvite.delivered_at
+    || rotatedInvite.delivery_attempt_count !== 1
+    || rotatedInvite.delivery_attempt?.provider !== "local_outbox"
   ) {
     throw new Error("Expected staff invite rotation to issue a new one-time URL only");
   }
@@ -656,8 +682,22 @@ async function main() {
   if (!invitesAfterRotation.some((invite) => invite.token_id === rotateInvite.token_id && invite.revoked_at)) {
     throw new Error("Expected rotated source invite to be closed");
   }
-  if (!invitesAfterRotation.some((invite) => invite.token_id === rotatedInvite.token_id && !invite.token && !invite.delivered_at)) {
-    throw new Error("Expected rotated invite list row to hide raw token and require delivery");
+  if (!invitesAfterRotation.some((invite) => (
+    invite.token_id === rotatedInvite.token_id
+    && !invite.token
+    && invite.delivered_at
+    && invite.delivery_attempt_count === 1
+    && invite.last_delivery_provider === "local_outbox"
+  ))) {
+    throw new Error("Expected rotated invite list row to hide raw token and show local outbox delivery");
+  }
+  const rotatedDeliveryAttempts = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(rotatedInvite.token_id)}/delivery-attempts`,
+    {},
+    adminSession,
+  );
+  if (rotatedDeliveryAttempts.length !== 1 || rotatedDeliveryAttempts[0].provider !== "local_outbox") {
+    throw new Error("Expected rotated invite to expose local outbox delivery attempt");
   }
   let duplicateRotationRejected = false;
   try {
@@ -751,6 +791,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_delivered")) {
     throw new Error("Expected staff invite delivery audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_delivery_attempted")) {
+    throw new Error("Expected staff invite delivery attempt audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_rotated")) {
     throw new Error("Expected staff invite rotation audit event");
@@ -1019,6 +1062,7 @@ async function main() {
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
       staff_invite_delivery: true,
+      staff_invite_delivery_outbox: true,
       staff_invite_rotation: true,
       staff_invite_health: true,
       mfa_readiness: true,

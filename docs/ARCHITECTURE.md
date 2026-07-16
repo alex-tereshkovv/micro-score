@@ -88,8 +88,8 @@ Main local components:
 - admin-only MFI analyst creation plus expiring/revocable staff invites with
   one-time raw tokens, analyst-side password setup, public user listings,
   invite status listings, invite rotation health, audited invite delivery,
-  safe invite rotation for resend without re-exposing old secrets, staff MFA
-  readiness attestation, aggregated security readiness, analyst
+  persistent delivery attempts, safe invite rotation for resend without
+  re-exposing old secrets, staff MFA readiness attestation, aggregated security readiness, analyst
   disable/reactivation, session revocation, and audit events;
 - organization-scoped applications, queues, review packets, exports, and
   analytics, with global visibility reserved for admins;

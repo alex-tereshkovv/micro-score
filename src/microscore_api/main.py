@@ -78,6 +78,7 @@ from .schemas import (
     StaffInviteAccept,
     StaffInviteCreate,
     StaffInviteCreatedResponse,
+    StaffInviteDeliveryAttemptResponse,
     StaffInviteDeliveryCreate,
     StaffInviteDeliveryResponse,
     StaffInviteHealthResponse,
@@ -101,6 +102,7 @@ DEFAULT_CORS_ORIGINS = (
 MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
 DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
+DEFAULT_INVITE_DELIVERY_PROVIDER = "local_outbox"
 LOCAL_INVITE_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
 MFA_READINESS_LIMITATION = (
     "MFA Readiness v2 records staff attestation and the local prototype requires "
@@ -122,6 +124,13 @@ def configured_prototype_mfa_code() -> str:
 
 def configured_invite_web_base_url() -> str:
     return os.environ.get("MICROSCORE_INVITE_WEB_BASE_URL", DEFAULT_INVITE_WEB_BASE_URL).strip()
+
+
+def configured_invite_delivery_provider() -> str:
+    return os.environ.get(
+        "MICROSCORE_INVITE_DELIVERY_PROVIDER",
+        DEFAULT_INVITE_DELIVERY_PROVIDER,
+    ).strip() or DEFAULT_INVITE_DELIVERY_PROVIDER
 
 
 app = FastAPI(
@@ -300,6 +309,7 @@ def _staff_invite_response(
     *,
     raw_token: str | None = None,
     invite_url: str | None = None,
+    delivery_attempt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     response = {
         "token_id": invite["token"],
@@ -320,14 +330,38 @@ def _staff_invite_response(
         "delivery_recipient": invite.get("delivery_recipient"),
         "delivery_url_base": invite.get("delivery_url_base"),
         "delivery_note": invite.get("delivery_note"),
+        "delivery_attempt_count": invite.get("delivery_attempt_count", 0),
+        "last_delivery_attempt_at": invite.get("last_delivery_attempt_at"),
+        "last_delivery_status": invite.get("last_delivery_status"),
+        "last_delivery_provider": invite.get("last_delivery_provider"),
     }
     if raw_token is not None:
         response["token"] = raw_token
     if invite_url is not None:
         response["invite_url"] = invite_url
+    if delivery_attempt is not None:
+        response["delivery_attempt"] = _staff_invite_delivery_attempt_response(delivery_attempt)
     if "was_already_delivered" in invite:
         response["was_already_delivered"] = invite["was_already_delivered"]
     return response
+
+
+def _staff_invite_delivery_attempt_response(
+    attempt: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "attempt_id": attempt["attempt_id"],
+        "invite_token_id": attempt["invite_token"],
+        "attempted_at": attempt["attempted_at"],
+        "attempted_by": attempt.get("attempted_by"),
+        "provider": attempt["provider"],
+        "status": attempt["status"],
+        "channel": attempt["channel"],
+        "recipient": attempt.get("recipient"),
+        "delivery_url_base": attempt.get("delivery_url_base"),
+        "note": attempt.get("note"),
+        "error": attempt.get("error"),
+    }
 
 
 def _record_staff_invite_created(
@@ -355,6 +389,83 @@ def _record_staff_invite_created(
             "source": source,
         },
     )
+
+
+def _record_staff_invite_delivery_attempt(
+    repository: MicroScoreRepository,
+    *,
+    invite: dict[str, Any],
+    actor_email: str,
+    channel: str,
+    recipient: str | None,
+    note: str | None,
+    provider: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    token_id = invite["token"]
+    delivery_url_base = _validated_invite_url_base()
+    normalized_recipient = (recipient or invite["email"]).strip() or invite["email"]
+    normalized_note = note.strip() if note else None
+    provider_name = provider or configured_invite_delivery_provider()
+    attempt = repository.record_staff_invite_delivery_attempt(
+        attempt_id=str(uuid4()),
+        token=token_id,
+        attempted_by=actor_email,
+        provider=provider_name,
+        status="sent",
+        channel=channel,
+        recipient=normalized_recipient,
+        url_base=delivery_url_base,
+        note=normalized_note,
+    )
+    repository.record_audit_event(
+        actor_email=actor_email,
+        action="staff_invite_delivery_attempted",
+        entity_type="staff_invite_delivery_attempt",
+        entity_id=attempt["attempt_id"],
+        details={
+            "staff_invite_token_preview": _staff_invite_token_preview(token_id),
+            "staff_invite_token_id": token_id,
+            "provider": provider_name,
+            "status": attempt["status"],
+            "delivery_channel": channel,
+            "delivery_recipient": normalized_recipient,
+            "delivery_url_base": delivery_url_base,
+            "note_present": bool(normalized_note),
+        },
+    )
+    delivered = repository.mark_staff_invite_delivered(
+        token_id,
+        delivered_by=actor_email,
+        channel=channel,
+        recipient=normalized_recipient,
+        url_base=delivery_url_base,
+        note=normalized_note,
+    )
+    if delivered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if not delivered.get("was_already_delivered", False):
+        repository.record_audit_event(
+            actor_email=actor_email,
+            action="staff_invite_delivered",
+            entity_type="staff_invite",
+            entity_id=token_id,
+            details={
+                "email": invite["email"],
+                "role": invite["role"],
+                "organization_id": invite["organization_id"],
+                "token_preview": _staff_invite_token_preview(token_id),
+                "delivery_attempt_id": attempt["attempt_id"],
+                "delivery_provider": provider_name,
+                "delivery_channel": channel,
+                "delivery_recipient": normalized_recipient,
+                "delivery_url_base": delivery_url_base,
+                "note_present": bool(normalized_note),
+            },
+        )
+    return attempt, delivered
 
 
 def _staff_invite_health_response(
@@ -2069,10 +2180,22 @@ def create_staff_invite(
         organization_id=payload.organization_id,
         expires_at=expires_at,
     )
+    delivery_attempt = None
+    response_invite = created
+    if payload.queue_delivery:
+        delivery_attempt, response_invite = _record_staff_invite_delivery_attempt(
+            repository,
+            invite=created,
+            actor_email=user["email"],
+            channel=payload.delivery_channel,
+            recipient=payload.delivery_recipient,
+            note=payload.delivery_note,
+        )
     return _staff_invite_response(
-        created,
+        response_invite,
         raw_token=raw_token,
         invite_url=_build_staff_invite_url(raw_token),
+        delivery_attempt=delivery_attempt,
     )
 
 
@@ -2108,38 +2231,36 @@ def mark_staff_invite_delivery(
             detail="Expired staff invite cannot be delivered",
         )
 
-    delivery_url_base = _validated_invite_url_base()
-    delivered = repository.mark_staff_invite_delivered(
-        token_id,
-        delivered_by=user["email"],
+    delivery_attempt, delivered = _record_staff_invite_delivery_attempt(
+        repository,
+        invite=invite,
+        actor_email=user["email"],
         channel=payload.channel,
-        recipient=(payload.recipient or invite["email"]).strip() or invite["email"],
-        url_base=delivery_url_base,
-        note=payload.note.strip() if payload.note else None,
+        recipient=payload.recipient,
+        note=payload.note,
+        provider="manual_receipt",
     )
-    if delivered is None:
+    return _staff_invite_response(delivered, delivery_attempt=delivery_attempt)
+
+
+@app.get(
+    "/admin/staff-invites/{token_id}/delivery-attempts",
+    response_model=list[StaffInviteDeliveryAttemptResponse],
+)
+def list_staff_invite_delivery_attempts(
+    token_id: str,
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    if repository.get_staff_invite(token_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Staff invite not found",
         )
-    if not delivered.get("was_already_delivered", False):
-        repository.record_audit_event(
-            actor_email=user["email"],
-            action="staff_invite_delivered",
-            entity_type="staff_invite",
-            entity_id=token_id,
-            details={
-                "email": invite["email"],
-                "role": invite["role"],
-                "organization_id": invite["organization_id"],
-                "token_preview": _staff_invite_token_preview(token_id),
-                "delivery_channel": payload.channel,
-                "delivery_recipient": delivered.get("delivery_recipient"),
-                "delivery_url_base": delivery_url_base,
-                "note_present": bool(payload.note),
-            },
-        )
-    return _staff_invite_response(delivered)
+    return [
+        _staff_invite_delivery_attempt_response(attempt)
+        for attempt in repository.list_staff_invite_delivery_attempts(token_id)
+    ]
 
 
 @app.post(
@@ -2226,10 +2347,22 @@ def rotate_staff_invite(
             "expires_at": expires_at,
         },
     )
+    delivery_attempt = None
+    response_invite = created
+    if payload.queue_delivery:
+        delivery_attempt, response_invite = _record_staff_invite_delivery_attempt(
+            repository,
+            invite=created,
+            actor_email=user["email"],
+            channel=payload.delivery_channel,
+            recipient=payload.delivery_recipient,
+            note=payload.delivery_note,
+        )
     return _staff_invite_response(
-        created,
+        response_invite,
         raw_token=raw_token,
         invite_url=_build_staff_invite_url(raw_token),
+        delivery_attempt=delivery_attempt,
     )
 
 

@@ -202,8 +202,30 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertIsNone(created["accepted_at"])
         self.assertIsNone(created["revoked_at"])
         self.assertIsNone(created["delivered_at"])
+        self.assertEqual(created["delivery_attempt_count"], 0)
         self.assertEqual(self.repository.get_staff_invite("staff-invite-token")["role"], "mfi_analyst")
         self.assertEqual(len(self.repository.list_staff_invites()), 1)
+        attempt = self.repository.record_staff_invite_delivery_attempt(
+            attempt_id="attempt-1",
+            token="staff-invite-token",
+            attempted_by="admin@example.com",
+            provider="local_outbox",
+            status="sent",
+            channel="email",
+            recipient="invited@example.com",
+            url_base="http://127.0.0.1:5173",
+            note="queued from local outbox",
+        )
+        self.assertEqual(attempt["provider"], "local_outbox")
+        self.assertEqual(attempt["status"], "sent")
+        self.assertEqual(attempt["invite_token"], "staff-invite-token")
+        attempts = self.repository.list_staff_invite_delivery_attempts("staff-invite-token")
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["attempt_id"], "attempt-1")
+        invite_with_attempt = self.repository.get_staff_invite("staff-invite-token")
+        self.assertEqual(invite_with_attempt["delivery_attempt_count"], 1)
+        self.assertEqual(invite_with_attempt["last_delivery_status"], "sent")
+        self.assertEqual(invite_with_attempt["last_delivery_provider"], "local_outbox")
         delivered = self.repository.mark_staff_invite_delivered(
             "staff-invite-token",
             delivered_by="admin@example.com",

@@ -76,6 +76,9 @@ git diff --check
 - Safe Invite Rotation v1 rotates unused invites instead of resending old raw
   secrets, closes the source invite, returns only the new one-time URL, and
   emits `staff_invite_rotated` with token previews only.
+- Invite Delivery Outbox v1 persists delivery attempts, supports optional
+  local outbox delivery during create/rotate, exposes attempt history to admins,
+  and emits `staff_invite_delivery_attempted` without storing raw tokens.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

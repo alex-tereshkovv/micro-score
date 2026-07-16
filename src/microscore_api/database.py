@@ -260,6 +260,20 @@ class MicroScoreRepository:
                     delivery_note TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS staff_invite_delivery_attempts (
+                    attempt_id TEXT PRIMARY KEY,
+                    invite_token TEXT NOT NULL REFERENCES staff_invites(token) ON DELETE CASCADE,
+                    attempted_at TEXT NOT NULL,
+                    attempted_by TEXT REFERENCES users(email),
+                    provider TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    channel TEXT NOT NULL,
+                    recipient TEXT,
+                    delivery_url_base TEXT,
+                    note TEXT,
+                    error TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS loan_applications (
                     id TEXT PRIMARY KEY,
                     borrower_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
@@ -330,6 +344,8 @@ class MicroScoreRepository:
                     ON audit_events(entity_type, entity_id);
                 CREATE INDEX IF NOT EXISTS idx_staff_invites_email
                     ON staff_invites(email, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_staff_invite_delivery_attempts_invite
+                    ON staff_invite_delivery_attempts(invite_token, attempted_at DESC);
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_model_versions_single_active
                     ON model_versions(is_active)
                     WHERE is_active = 1;
@@ -873,7 +889,33 @@ class MicroScoreRepository:
                     delivery_channel,
                     delivery_recipient,
                     delivery_url_base,
-                    delivery_note
+                    delivery_note,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                    ), 0) AS delivery_attempt_count,
+                    (
+                        SELECT attempted_at
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_attempt_at,
+                    (
+                        SELECT status
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_status,
+                    (
+                        SELECT provider
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_provider
                 FROM staff_invites
                 WHERE token = ?
                 """,
@@ -902,7 +944,33 @@ class MicroScoreRepository:
                     delivery_channel,
                     delivery_recipient,
                     delivery_url_base,
-                    delivery_note
+                    delivery_note,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                    ), 0) AS delivery_attempt_count,
+                    (
+                        SELECT attempted_at
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_attempt_at,
+                    (
+                        SELECT status
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_status,
+                    (
+                        SELECT provider
+                        FROM staff_invite_delivery_attempts
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY attempted_at DESC, attempt_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_provider
                 FROM staff_invites
                 ORDER BY created_at DESC
                 """
@@ -969,6 +1037,108 @@ class MicroScoreRepository:
         delivered = self.get_staff_invite(token) or existing
         delivered["was_already_delivered"] = was_already_delivered
         return delivered
+
+    def record_staff_invite_delivery_attempt(
+        self,
+        *,
+        attempt_id: str,
+        token: str,
+        attempted_by: str,
+        provider: str,
+        status: str,
+        channel: str,
+        recipient: str | None,
+        url_base: str | None,
+        note: str | None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        attempted_at = _now_iso()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO staff_invite_delivery_attempts (
+                    attempt_id,
+                    invite_token,
+                    attempted_at,
+                    attempted_by,
+                    provider,
+                    status,
+                    channel,
+                    recipient,
+                    delivery_url_base,
+                    note,
+                    error
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    attempt_id,
+                    token,
+                    attempted_at,
+                    attempted_by,
+                    provider,
+                    status,
+                    channel,
+                    recipient,
+                    url_base,
+                    note,
+                    error,
+                ),
+            )
+        return self.get_staff_invite_delivery_attempt(attempt_id) or {}
+
+    def get_staff_invite_delivery_attempt(
+        self,
+        attempt_id: str,
+    ) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    attempt_id,
+                    invite_token,
+                    attempted_at,
+                    attempted_by,
+                    provider,
+                    status,
+                    channel,
+                    recipient,
+                    delivery_url_base,
+                    note,
+                    error
+                FROM staff_invite_delivery_attempts
+                WHERE attempt_id = ?
+                """,
+                (attempt_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_staff_invite_delivery_attempts(
+        self,
+        token: str,
+    ) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    attempt_id,
+                    invite_token,
+                    attempted_at,
+                    attempted_by,
+                    provider,
+                    status,
+                    channel,
+                    recipient,
+                    delivery_url_base,
+                    note,
+                    error
+                FROM staff_invite_delivery_attempts
+                WHERE invite_token = ?
+                ORDER BY attempted_at DESC, attempt_id DESC
+                """,
+                (token,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def assign_user_organization(self, email: str, organization_id: str | None) -> None:
         with self._connection() as connection:

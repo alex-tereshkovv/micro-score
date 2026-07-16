@@ -2530,6 +2530,10 @@ function renderStaffInvites(rows) {
       const delivery = invite.delivered_at
         ? `${formatPolicyName(invite.delivery_channel || "delivered")} by ${invite.delivered_by || "-"}`
         : "not delivered";
+      const deliveryAttempts = Number(invite.delivery_attempt_count || 0);
+      const deliverySummary = deliveryAttempts
+        ? `${delivery}; ${deliveryAttempts} attempt(s), last ${formatPolicyName(invite.last_delivery_status || "unknown")} via ${invite.last_delivery_provider || "-"}`
+        : delivery;
       return `
         <tr>
           <td>${escapeHtml(invite.email)}</td>
@@ -2537,7 +2541,7 @@ function renderStaffInvites(rows) {
           <td>${escapeHtml(invite.organization_id)}</td>
           <td>${escapeHtml(invite.expires_at || "-")}</td>
           <td>${escapeHtml(invite.accepted_at || invite.revoked_at || "-")}</td>
-          <td>${escapeHtml(delivery)}</td>
+          <td>${escapeHtml(deliverySummary)}</td>
           <td>${escapeHtml(invite.token_preview || invite.token_id || "-")}</td>
           <td>${actions.join(" ") || "-"}</td>
         </tr>
@@ -2773,11 +2777,17 @@ async function createStaffInvite(event) {
       role: "mfi_analyst",
       organization_id: form.elements.organization_id.value,
       expires_in_hours: Number(form.elements.expires_in_hours.value || 48),
+      queue_delivery: Boolean(form.elements.queue_delivery?.checked),
+      delivery_channel: "email",
+      delivery_recipient: form.elements.email.value.trim(),
     }),
   });
   form.reset();
   form.elements.expires_in_hours.value = "48";
-  showMessage(`Created invite for ${created.email}. Copy this one-time URL now: ${created.invite_url || created.token}`, "ok");
+  const deliveryNote = created.delivery_attempt
+    ? ` Local delivery attempt ${created.delivery_attempt.status} via ${created.delivery_attempt.provider}.`
+    : "";
+  showMessage(`Created invite for ${created.email}. Copy this one-time URL now: ${created.invite_url || created.token}.${deliveryNote}`, "ok");
   await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
 }
 
