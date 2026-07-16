@@ -376,6 +376,10 @@ async function main() {
   if (!missingMfaLoginRejected) {
     throw new Error("Expected provisioned staff login to require MFA attestation first");
   }
+  const mfaFailureReadiness = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!mfaFailureReadiness.checks.some((check) => check.key === "mfa_challenge_failures" && check.status === "warning")) {
+    throw new Error("Expected failed staff MFA challenge to raise Security Readiness warning");
+  }
   const analystMfaAttested = await api.request(
     `/admin/users/${encodeURIComponent("new-analyst@test.com")}/mfa/attest`,
     {
@@ -856,6 +860,13 @@ async function main() {
   if (!adminAudit.some((event) => event.action === "staff_mfa_attested")) {
     throw new Error("Expected staff MFA attestation audit event");
   }
+  const mfaFailureEvents = adminAudit.filter((event) => event.action === "staff_mfa_challenge_failed");
+  if (!mfaFailureEvents.some((event) => event.details?.reason === "missing_attestation" && event.details?.source === "login")) {
+    throw new Error("Expected failed staff MFA challenge audit event");
+  }
+  if (mfaFailureEvents.some((event) => Object.values(event.details || {}).includes("246810"))) {
+    throw new Error("Expected failed staff MFA challenge audit event to hide raw MFA codes");
+  }
   if (!adminAudit.some((event) => event.action === "staff_invite_created")) {
     throw new Error("Expected staff invite creation audit event");
   }
@@ -1137,6 +1148,7 @@ async function main() {
       staff_invite_rotation: true,
       staff_invite_health: true,
       mfa_readiness: true,
+      mfa_challenge_monitoring: true,
       security_readiness: true,
       staff_user_disable: true,
       staff_user_reactivation: true,

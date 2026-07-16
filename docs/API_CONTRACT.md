@@ -280,13 +280,20 @@ accounts lack attestation and includes `missing_mfa_count`,
 provider. Successful first-time attestation records `staff_mfa_attested`;
 repeated attestation is idempotent and returns `was_already_attested: true`.
 Successful staff login records `staff_mfa_login_verified`.
+Failed staff MFA challenges record `staff_mfa_challenge_failed` without storing
+the submitted code. The audit details include `reason` (`missing_attestation`,
+`missing_code`, or `invalid_code`), `source` (`login` or
+`staff_invite_acceptance`), `mfa_code_present`, method, and prototype
+limitation metadata.
 
 In Security Readiness v1, `mfa_enforcement` is `pass` when staff login requires
-both attestation and the prototype code. `invite_delivery` is `pass` when there
-are no active pending staff invites, or when every active pending invite has
-audited delivery metadata with an HTTPS URL base or a local-development HTTP
-base. It is a blocker while an active pending invite has not been marked
-delivered, or when a delivered invite records an unsafe non-local HTTP base. The
+both attestation and the prototype code. `mfa_challenge_failures` is a warning
+when failed staff MFA challenges were recorded in the last 24 hours.
+`invite_delivery` is `pass` when there are no active pending staff invites, or
+when every active pending invite has audited delivery metadata with an HTTPS URL
+base or a local-development HTTP base. It is a blocker while an active pending
+invite has not been marked delivered, or when a delivered invite records an
+unsafe non-local HTTP base. The
 `invite_delivery_attempts` check is a warning when an active pending invite's
 latest delivery attempt failed, so operators can retry delivery before sharing
 the onboarding link. The recommended actions still point to production
@@ -975,6 +982,7 @@ Current audited actions:
 - `staff_user_created`
 - `staff_mfa_attested`
 - `staff_mfa_login_verified`
+- `staff_mfa_challenge_failed`
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`

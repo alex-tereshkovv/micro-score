@@ -64,6 +64,8 @@ The smoke test verifies that the in-browser static backend can:
 - summarize staff invite rotation health and flag soon-expiring pending invites
 - summarize staff MFA readiness, record pilot attestation, and verify the
   `staff_mfa_attested` audit event plus login-time prototype MFA enforcement
+- reject failed staff MFA challenges, verify `staff_mfa_challenge_failed`
+  audit events hide raw codes, and confirm Security Readiness warning
 - aggregate MFA posture, invite hygiene, audited invite delivery, session TTL,
   and known production blockers in Security Readiness v1
 - disable an MFI analyst, revoke their active static session, reject future

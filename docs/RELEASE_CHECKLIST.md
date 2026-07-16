@@ -87,6 +87,8 @@ git diff --check
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly
   states that production IdP/TOTP/WebAuthn remains future work.
+- MFA Challenge Monitoring v1 records failed staff MFA challenges without raw
+  codes and raises a Security Readiness warning for recent failed challenges.
 - Security Readiness v1 aggregates MFA posture, invite hygiene, audited invite
   delivery, session TTL, and remaining production caveats into a pre-pilot
   admin gate.

@@ -576,6 +576,34 @@
     };
   }
 
+  function recordStaffMfaChallengeFailed({
+    actorEmail,
+    entityType,
+    entityId,
+    reason,
+    source,
+    mfaCode,
+    method = "prototype_mfa_code",
+    details = {},
+  }) {
+    addAudit("staff_mfa_challenge_failed", entityType, entityId, actorEmail, {
+      reason,
+      source,
+      method,
+      prototype: true,
+      mfa_code_present: Boolean(String(mfaCode || "").trim()),
+      ...details,
+    });
+  }
+
+  function recentStaffMfaFailures(windowHours = 24) {
+    const cutoff = Date.now() - windowHours * 60 * 60 * 1000;
+    return demo.auditEvents.filter((event) => (
+      event.action === "staff_mfa_challenge_failed"
+      && Date.parse(event.created_at) >= cutoff
+    ));
+  }
+
   function securityReadiness() {
     const mfa = mfaReadiness(demo.users);
     const inviteHealth = staffInviteHealth(Object.values(demo.staffInvites));
@@ -628,6 +656,25 @@
       summary: "Staff login requires an MFA-attested account and a prototype second-factor code.",
       action: "Replace the prototype shared-code control with TOTP/WebAuthn or an external identity provider before real user data.",
     });
+    const mfaFailures = recentStaffMfaFailures();
+    if (mfaFailures.length) {
+      const affectedEntities = new Set(mfaFailures.map((event) => event.entity_id).filter(Boolean));
+      checks.push({
+        key: "mfa_challenge_failures",
+        label: "Recent staff MFA challenge failures",
+        status: "warning",
+        summary: `${mfaFailures.length} failed staff MFA challenge(s) across ${affectedEntities.size} account/invite target(s) in the last 24 hours.`,
+        action: "Review failed MFA audit events before pilot access and rotate credentials if needed.",
+      });
+    } else {
+      checks.push({
+        key: "mfa_challenge_failures",
+        label: "Recent staff MFA challenge failures",
+        status: "pass",
+        summary: "No failed staff MFA challenges were recorded in the last 24 hours.",
+        action: "Continue monitoring MFA challenge failures in the audit log.",
+      });
+    }
     const activePendingInvites = Object.values(demo.staffInvites).filter((invite) => (
       !invite.accepted_at
       && !invite.revoked_at
@@ -1876,9 +1923,45 @@
       if (!user || user.password !== body.password) throw new Error("Invalid demo credentials");
       if (user.disabled_at) throw new Error("Account disabled");
       if (["admin", "mfi_analyst"].includes(user.role)) {
-        if (!user.mfa_attested_at) throw new Error("MFA attestation required before staff login");
-        if (!String(body.mfa_code || "").trim()) throw new Error("MFA code required");
-        if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) throw new Error("Invalid MFA code");
+        if (!user.mfa_attested_at) {
+          recordStaffMfaChallengeFailed({
+            actorEmail: email,
+            entityType: "user",
+            entityId: email,
+            reason: "missing_attestation",
+            source: "login",
+            mfaCode: body.mfa_code,
+            method: user.mfa_method || "prototype_mfa_code",
+            details: { role: user.role, organization_id: user.organization_id || null },
+          });
+          throw new Error("MFA attestation required before staff login");
+        }
+        if (!String(body.mfa_code || "").trim()) {
+          recordStaffMfaChallengeFailed({
+            actorEmail: email,
+            entityType: "user",
+            entityId: email,
+            reason: "missing_code",
+            source: "login",
+            mfaCode: body.mfa_code,
+            method: user.mfa_method || "prototype_mfa_code",
+            details: { role: user.role, organization_id: user.organization_id || null },
+          });
+          throw new Error("MFA code required");
+        }
+        if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) {
+          recordStaffMfaChallengeFailed({
+            actorEmail: email,
+            entityType: "user",
+            entityId: email,
+            reason: "invalid_code",
+            source: "login",
+            mfaCode: body.mfa_code,
+            method: user.mfa_method || "prototype_mfa_code",
+            details: { role: user.role, organization_id: user.organization_id || null },
+          });
+          throw new Error("Invalid MFA code");
+        }
       }
       const sessionRecord = createDemoSession(email);
       if (["admin", "mfi_analyst"].includes(user.role)) {
@@ -1942,8 +2025,40 @@
       if (passwordViolations.length) {
         throw new Error(`Password does not meet the registration policy: ${passwordViolations.join(", ")}`);
       }
-      if (!String(body.mfa_code || "").trim()) throw new Error("MFA code required");
-      if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) throw new Error("Invalid MFA code");
+      if (!String(body.mfa_code || "").trim()) {
+        recordStaffMfaChallengeFailed({
+          actorEmail: invite.email,
+          entityType: "staff_invite",
+          entityId: tokenId,
+          reason: "missing_code",
+          source: "staff_invite_acceptance",
+          mfaCode: body.mfa_code,
+          details: {
+            email: invite.email,
+            role: invite.role,
+            organization_id: invite.organization_id,
+            token_preview: invite.token_preview,
+          },
+        });
+        throw new Error("MFA code required");
+      }
+      if (String(body.mfa_code).trim() !== DEMO_MFA_CODE) {
+        recordStaffMfaChallengeFailed({
+          actorEmail: invite.email,
+          entityType: "staff_invite",
+          entityId: tokenId,
+          reason: "invalid_code",
+          source: "staff_invite_acceptance",
+          mfaCode: body.mfa_code,
+          details: {
+            email: invite.email,
+            role: invite.role,
+            organization_id: invite.organization_id,
+            token_preview: invite.token_preview,
+          },
+        });
+        throw new Error("Invalid MFA code");
+      }
       if (demo.users[invite.email]) throw new Error("User already exists in static demo");
       demo.users[invite.email] = {
         email: invite.email,

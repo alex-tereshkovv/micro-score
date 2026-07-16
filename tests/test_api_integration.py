@@ -855,6 +855,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(security_checks["mfa_attestation"]["status"], "pass")
         self.assertEqual(security_checks["session_ttl"]["status"], "pass")
         self.assertEqual(security_checks["mfa_enforcement"]["status"], "pass")
+        self.assertEqual(security_checks["mfa_challenge_failures"]["status"], "pass")
         self.assertEqual(security_checks["invite_delivery"]["status"], "pass")
         self.assertIn("not a completed production security review", security_readiness.json()["limitation"])
 
@@ -916,6 +917,18 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(invalid_mfa_login.status_code, 401, invalid_mfa_login.text)
         self.assertIn("Invalid MFA code", invalid_mfa_login.json()["detail"])
+
+        mfa_failure_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(mfa_failure_readiness.status_code, 200, mfa_failure_readiness.text)
+        mfa_failure_check = next(
+            check for check in mfa_failure_readiness.json()["checks"]
+            if check["key"] == "mfa_challenge_failures"
+        )
+        self.assertEqual(mfa_failure_check["status"], "warning")
+        self.assertIn("failed staff MFA challenge", mfa_failure_check["summary"])
 
         analyst_login = self.client.post(
             "/auth/login",
@@ -1186,6 +1199,17 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(weak_accept.status_code, 422, weak_accept.text)
 
+        invalid_invite_mfa = self.client.post(
+            "/auth/accept-staff-invite",
+            json={
+                "token": invite_payload["token"],
+                "password": TEST_PASSWORD,
+                "mfa_code": "000000",
+            },
+        )
+        self.assertEqual(invalid_invite_mfa.status_code, 401, invalid_invite_mfa.text)
+        self.assertIn("Invalid MFA code", invalid_invite_mfa.json()["detail"])
+
         accepted = self.client.post(
             "/auth/accept-staff-invite",
             json={
@@ -1401,6 +1425,24 @@ class ApiIntegrationTests(unittest.TestCase):
             and event["entity_id"] == "new-analyst@example.com"
         )
         self.assertTrue(mfa_login_event["details"]["prototype"])
+        mfa_failure_events = [
+            event for event in audit if event["action"] == "staff_mfa_challenge_failed"
+        ]
+        self.assertGreaterEqual(len(mfa_failure_events), 3)
+        mfa_failure_reasons = {event["details"]["reason"] for event in mfa_failure_events}
+        self.assertIn("missing_attestation", mfa_failure_reasons)
+        self.assertIn("invalid_code", mfa_failure_reasons)
+        self.assertIn(
+            "staff_invite_acceptance",
+            {event["details"]["source"] for event in mfa_failure_events},
+        )
+        self.assertTrue(
+            all(
+                "000000" not in event["details"].values()
+                and invite_payload["token"] not in event["details"].values()
+                for event in mfa_failure_events
+            )
+        )
         invite_created_event = next(
             event
             for event in audit

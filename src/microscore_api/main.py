@@ -104,6 +104,7 @@ MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
 DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
 DEFAULT_INVITE_DELIVERY_PROVIDER = "local_outbox"
+MFA_CHALLENGE_FAILURE_WINDOW_HOURS = 24
 INVITE_DELIVERY_PROVIDER_RESULTS: dict[str, tuple[str, str | None]] = {
     "local_outbox": ("sent", None),
     "manual_receipt": ("sent", None),
@@ -194,6 +195,47 @@ def _prototype_mfa_code_matches(mfa_code: str | None) -> bool:
     expected = configured_prototype_mfa_code()
     provided = (mfa_code or "").strip()
     return bool(expected and provided and hmac.compare_digest(provided, expected))
+
+
+def _staff_mfa_failure_reason_from_exception(exc: HTTPException) -> str:
+    detail = str(exc.detail)
+    if "attestation required" in detail:
+        return "missing_attestation"
+    if "MFA code required" in detail:
+        return "missing_code"
+    if "Invalid MFA code" in detail:
+        return "invalid_code"
+    return "challenge_failed"
+
+
+def _record_staff_mfa_challenge_failed(
+    repository: MicroScoreRepository,
+    *,
+    actor_email: str,
+    entity_type: str,
+    entity_id: str,
+    reason: str,
+    source: str,
+    mfa_code: str | None,
+    method: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    event_details = {
+        "reason": reason,
+        "source": source,
+        "method": method or "prototype_mfa_code",
+        "prototype": True,
+        "mfa_code_present": bool((mfa_code or "").strip()),
+    }
+    if details:
+        event_details.update(details)
+    repository.record_audit_event(
+        actor_email=actor_email,
+        action="staff_mfa_challenge_failed",
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details=event_details,
+    )
 
 
 def _verify_staff_mfa_for_session(user: dict[str, Any], mfa_code: str | None) -> bool:
@@ -562,6 +604,26 @@ def _staff_invite_health_response(
     return health
 
 
+def _recent_staff_mfa_failure_events(
+    events: list[dict[str, Any]],
+    *,
+    now: datetime,
+    window_hours: int = MFA_CHALLENGE_FAILURE_WINDOW_HOURS,
+) -> list[dict[str, Any]]:
+    cutoff = now - timedelta(hours=window_hours)
+    recent: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("action") != "staff_mfa_challenge_failed":
+            continue
+        try:
+            created_at = _parse_utc_datetime(event["created_at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if created_at >= cutoff:
+            recent.append(event)
+    return recent
+
+
 def _mfa_readiness_response(users: list[dict[str, Any]]) -> dict[str, Any]:
     accounts = []
     active_staff_count = 0
@@ -703,6 +765,43 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
     )
 
     now = datetime.now(timezone.utc)
+    recent_mfa_failures = _recent_staff_mfa_failure_events(
+        repository.list_audit_events(),
+        now=now,
+    )
+    if recent_mfa_failures:
+        affected_entities = {
+            event.get("entity_id")
+            for event in recent_mfa_failures
+            if event.get("entity_id")
+        }
+        checks.append(
+            {
+                "key": "mfa_challenge_failures",
+                "label": "Recent staff MFA challenge failures",
+                "status": "warning",
+                "summary": (
+                    f"{len(recent_mfa_failures)} failed staff MFA challenge(s) "
+                    f"across {len(affected_entities)} account/invite target(s) in the last "
+                    f"{MFA_CHALLENGE_FAILURE_WINDOW_HOURS} hours."
+                ),
+                "action": "Review failed MFA audit events before pilot access and rotate credentials if needed.",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "key": "mfa_challenge_failures",
+                "label": "Recent staff MFA challenge failures",
+                "status": "pass",
+                "summary": (
+                    f"No failed staff MFA challenges were recorded in the last "
+                    f"{MFA_CHALLENGE_FAILURE_WINDOW_HOURS} hours."
+                ),
+                "action": "Continue monitoring MFA challenge failures in the audit log.",
+            }
+        )
+
     active_pending_invites = [
         invite for invite in invites if _staff_invite_is_active_pending(invite, now=now)
     ]
@@ -1504,6 +1603,21 @@ def login(
     try:
         mfa_verified = _verify_staff_mfa_for_session(user, payload.mfa_code)
     except HTTPException as exc:
+        if user["role"] in MFA_REQUIRED_ROLES:
+            _record_staff_mfa_challenge_failed(
+                repository,
+                actor_email=email,
+                entity_type="user",
+                entity_id=email,
+                reason=_staff_mfa_failure_reason_from_exception(exc),
+                source="login",
+                mfa_code=payload.mfa_code,
+                method=user.get("mfa_method") or "prototype_mfa_code",
+                details={
+                    "role": user["role"],
+                    "organization_id": user.get("organization_id"),
+                },
+            )
         if exc.status_code == status.HTTP_401_UNAUTHORIZED:
             retry_after = limiter.record_failure(rate_key)
             if retry_after:
@@ -1563,7 +1677,27 @@ def accept_staff_invite(
         )
 
     _validate_new_password(payload.password)
-    _verify_invite_acceptance_mfa(invite["role"], payload.mfa_code)
+    try:
+        _verify_invite_acceptance_mfa(invite["role"], payload.mfa_code)
+    except HTTPException as exc:
+        if invite["role"] in MFA_REQUIRED_ROLES:
+            _record_staff_mfa_challenge_failed(
+                repository,
+                actor_email=invite["email"],
+                entity_type="staff_invite",
+                entity_id=token_id,
+                reason=_staff_mfa_failure_reason_from_exception(exc),
+                source="staff_invite_acceptance",
+                mfa_code=payload.mfa_code,
+                method="prototype_mfa_code",
+                details={
+                    "email": invite["email"],
+                    "role": invite["role"],
+                    "organization_id": invite["organization_id"],
+                    "token_preview": _staff_invite_token_preview(token_id),
+                },
+            )
+        raise
     email = invite["email"].strip().lower()
     if repository.get_user(email) is not None:
         raise HTTPException(

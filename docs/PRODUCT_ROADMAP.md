@@ -293,6 +293,9 @@ MFA Enforcement v1 adds login-time staff MFA enforcement for active
 admin/MFI analyst accounts using recorded attestation plus a local prototype
 second-factor code. The explicit limitation is now that the code is a prototype
 control, not a production IdP/TOTP/WebAuthn flow.
+MFA Challenge Monitoring v1 records failed staff MFA challenges without storing
+submitted codes, surfaces recent failures as a Security Readiness warning, and
+covers both staff login and staff-invite acceptance paths.
 Security Readiness v1 now combines MFA posture, invite hygiene, audited invite
 delivery, session TTL, and remaining production caveats into one admin-only
 pre-pilot gate.
