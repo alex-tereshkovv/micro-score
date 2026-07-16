@@ -127,6 +127,26 @@ class StaffUserReactivateResponse(UserPublic):
     was_already_active: bool = False
 
 
+class StaffSessionResponse(BaseModel):
+    session_id: str
+    session_preview: str
+    email: str
+    role: Literal["admin", "mfi_analyst"]
+    organization_id: str | None = None
+    session_created_at: str
+    session_expires_at: str
+    session_ttl_seconds: int = Field(ge=1)
+    is_current_session: bool = False
+
+
+class StaffSessionRevokeResponse(BaseModel):
+    revoked: bool
+    session_id: str
+    email: str
+    role: Literal["admin", "mfi_analyst"]
+    organization_id: str | None = None
+
+
 class MfaAttestationCreate(BaseModel):
     method: Literal[
         "pilot_attestation",

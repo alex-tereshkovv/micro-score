@@ -391,7 +391,7 @@ async function main() {
   if (!analystMfaAttested.mfa_attested_at) {
     throw new Error("Expected provisioned analyst MFA attestation metadata");
   }
-  const newAnalystAuth = await api.request("/auth/login", {
+  let newAnalystAuth = await api.request("/auth/login", {
     method: "POST",
     body: JSON.stringify({
       email: "new-analyst@test.com",
@@ -399,7 +399,52 @@ async function main() {
       mfa_code: "246810",
     }),
   });
-  const newAnalystSession = {
+  let newAnalystSession = {
+    token: newAnalystAuth.access_token,
+    role: newAnalystAuth.role,
+    email: "new-analyst@test.com",
+  };
+  const staffSessions = await api.request("/admin/staff-sessions", {}, adminSession);
+  const currentAdminSession = staffSessions.find((item) => item.email === "admin@test.com" && item.is_current_session);
+  const analystSession = staffSessions.find((item) => item.email === "new-analyst@test.com" && !item.is_current_session);
+  if (!currentAdminSession || !analystSession || analystSession.token || !analystSession.session_expires_at) {
+    throw new Error("Expected staff session inventory to expose safe active session metadata");
+  }
+  let selfRevokeRejected = false;
+  try {
+    await api.request(
+      `/admin/staff-sessions/${encodeURIComponent(currentAdminSession.session_id)}`,
+      { method: "DELETE" },
+      adminSession,
+    );
+  } catch (error) {
+    selfRevokeRejected = String(error.message).includes("Current admin session");
+  }
+  if (!selfRevokeRejected) throw new Error("Expected current admin session revoke guard");
+  const revokedStaffSession = await api.request(
+    `/admin/staff-sessions/${encodeURIComponent(analystSession.session_id)}`,
+    { method: "DELETE" },
+    adminSession,
+  );
+  if (!revokedStaffSession.revoked || revokedStaffSession.email !== "new-analyst@test.com") {
+    throw new Error("Expected admin staff session revoke response");
+  }
+  let revokedStaffSessionRejected = false;
+  try {
+    await api.request("/me", {}, newAnalystSession);
+  } catch (error) {
+    revokedStaffSessionRejected = String(error.message).includes("session expired");
+  }
+  if (!revokedStaffSessionRejected) throw new Error("Expected revoked staff session token to fail");
+  newAnalystAuth = await api.request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: "new-analyst@test.com",
+      password: "StrongPassword1!",
+      mfa_code: "246810",
+    }),
+  });
+  newAnalystSession = {
     token: newAnalystAuth.access_token,
     role: newAnalystAuth.role,
     email: "new-analyst@test.com",
@@ -888,6 +933,9 @@ async function main() {
   if (!adminAudit.some((event) => event.action === "staff_user_disabled")) {
     throw new Error("Expected staff disable audit event");
   }
+  if (!adminAudit.some((event) => event.action === "staff_session_revoked")) {
+    throw new Error("Expected staff session revoke audit event");
+  }
   if (!adminAudit.some((event) => event.action === "staff_user_reactivated")) {
     throw new Error("Expected staff reactivation audit event");
   }
@@ -1150,6 +1198,7 @@ async function main() {
       mfa_readiness: true,
       mfa_challenge_monitoring: true,
       security_readiness: true,
+      staff_session_control: true,
       staff_user_disable: true,
       staff_user_reactivation: true,
       model_registry: true,

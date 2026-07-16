@@ -257,6 +257,22 @@ a session automatically; the analyst must sign in again with their existing
 password. Repeating the request is idempotent and returns
 `was_already_active: true`.
 
+List and revoke active staff sessions:
+
+```http
+GET /admin/staff-sessions
+DELETE /admin/staff-sessions/{session_id}
+```
+
+Both endpoints require an `admin` bearer token. The list endpoint returns active
+`admin` and `mfi_analyst` sessions only, with `session_id` as a SHA-256 hash of
+the bearer token, `session_preview`, `email`, `role`, `organization_id`,
+`session_created_at`, `session_expires_at`, `session_ttl_seconds`, and
+`is_current_session`. It never returns raw bearer tokens and omits borrower
+sessions. Deleting a session revokes that one staff session and records
+`staff_session_revoked` with safe session preview metadata. The current admin
+session is protected from this endpoint; use `/auth/logout` to revoke it.
+
 MFA readiness and attestation:
 
 ```http
@@ -983,6 +999,7 @@ Current audited actions:
 - `staff_mfa_attested`
 - `staff_mfa_login_verified`
 - `staff_mfa_challenge_failed`
+- `staff_session_revoked`
 - `staff_user_disabled`
 - `staff_user_reactivated`
 - `staff_invite_created`

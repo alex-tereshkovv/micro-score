@@ -289,6 +289,9 @@ revocation, disabled-login rejection, user status listing, and
 Staff/User Lifecycle v2 adds admin-only analyst reactivation, restores normal
 login without creating sessions automatically, and records
 `staff_user_reactivated` with prior disable metadata.
+Staff Session Control v1 adds admin-only active staff session inventory and
+targeted session revocation using safe session ids/previews instead of raw
+bearer tokens, with `staff_session_revoked` audit events.
 MFA Enforcement v1 adds login-time staff MFA enforcement for active
 admin/MFI analyst accounts using recorded attestation plus a local prototype
 second-factor code. The explicit limitation is now that the code is a prototype

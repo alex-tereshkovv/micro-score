@@ -542,6 +542,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("checks", schemas["SecurityReadinessResponse"]["properties"])
         self.assertIn("revoked_session_count", schemas["StaffUserDisableResponse"]["properties"])
         self.assertIn("was_already_active", schemas["StaffUserReactivateResponse"]["properties"])
+        self.assertIn("session_id", schemas["StaffSessionResponse"]["properties"])
+        self.assertIn("session_preview", schemas["StaffSessionResponse"]["properties"])
+        self.assertIn("is_current_session", schemas["StaffSessionResponse"]["properties"])
+        self.assertNotIn("token", schemas["StaffSessionResponse"]["properties"])
+        self.assertIn("revoked", schemas["StaffSessionRevokeResponse"]["properties"])
         self.assertIn("token_id", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token_preview", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("delivered_at", schemas["StaffInviteResponse"]["properties"])
@@ -573,6 +578,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/security/readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
+        self.assertIn("/admin/staff-sessions", paths)
+        self.assertIn("/admin/staff-sessions/{session_id}", paths)
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
@@ -940,6 +947,59 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
         self.assertEqual(analyst_login.json()["role"], "mfi_analyst")
+        analyst_token = analyst_login.json()["access_token"]
+
+        staff_sessions = self.client.get(
+            "/admin/staff-sessions",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(staff_sessions.status_code, 200, staff_sessions.text)
+        session_rows = staff_sessions.json()
+        self.assertGreaterEqual(len(session_rows), 2)
+        self.assertTrue(all("token" not in row for row in session_rows))
+        admin_session_row = next(
+            row for row in session_rows
+            if row["email"] == "provisioning-admin@example.com" and row["is_current_session"]
+        )
+        analyst_session_row = next(
+            row for row in session_rows
+            if row["email"] == "new-analyst@example.com" and not row["is_current_session"]
+        )
+        self.assertEqual(analyst_session_row["role"], "mfi_analyst")
+        self.assertEqual(analyst_session_row["organization_id"], TEST_ORGANIZATION_ID)
+        self.assertIn("session_expires_at", analyst_session_row)
+
+        self_revoke = self.client.delete(
+            f"/admin/staff-sessions/{admin_session_row['session_id']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(self_revoke.status_code, 409, self_revoke.text)
+
+        revoked_staff_session = self.client.delete(
+            f"/admin/staff-sessions/{analyst_session_row['session_id']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(revoked_staff_session.status_code, 200, revoked_staff_session.text)
+        self.assertTrue(revoked_staff_session.json()["revoked"])
+        self.assertEqual(revoked_staff_session.json()["email"], "new-analyst@example.com")
+        self.assertEqual(revoked_staff_session.json()["role"], "mfi_analyst")
+        revoked_analyst_session = self.client.get("/me", headers=self._headers(analyst_token))
+        self.assertEqual(revoked_analyst_session.status_code, 401, revoked_analyst_session.text)
+        repeated_session_revoke = self.client.delete(
+            f"/admin/staff-sessions/{analyst_session_row['session_id']}",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(repeated_session_revoke.status_code, 404, repeated_session_revoke.text)
+
+        analyst_login = self.client.post(
+            "/auth/login",
+            json={
+                "email": "new-analyst@example.com",
+                "password": TEST_PASSWORD,
+                "mfa_code": TEST_MFA_CODE,
+            },
+        )
+        self.assertEqual(analyst_login.status_code, 200, analyst_login.text)
         analyst_token = analyst_login.json()["access_token"]
 
         disabled = self.client.post(
@@ -1521,6 +1581,14 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(staff_disabled_event["actor_email"], "provisioning-admin@example.com")
         self.assertEqual(staff_disabled_event["entity_id"], "new-analyst@example.com")
         self.assertEqual(staff_disabled_event["details"]["revoked_session_count"], 1)
+        staff_session_revoked_event = next(
+            event for event in audit if event["action"] == "staff_session_revoked"
+        )
+        self.assertEqual(staff_session_revoked_event["actor_email"], "provisioning-admin@example.com")
+        self.assertEqual(staff_session_revoked_event["entity_id"], analyst_session_row["session_id"])
+        self.assertEqual(staff_session_revoked_event["details"]["email"], "new-analyst@example.com")
+        self.assertIn("session_preview", staff_session_revoked_event["details"])
+        self.assertNotIn(analyst_token, staff_session_revoked_event["details"].values())
         staff_reactivated_event = next(
             event for event in audit if event["action"] == "staff_user_reactivated"
         )

@@ -97,6 +97,9 @@ git diff --check
   `staff_user_disabled`.
 - Staff/User Lifecycle v2 reactivates disabled MFI analysts without creating a
   session automatically and records `staff_user_reactivated`.
+- Staff Session Control v1 lists active staff sessions without raw bearer
+  tokens, protects the current admin session, and records
+  `staff_session_revoked` for targeted revocation.
 - Borrower history lists only the signed-in account's applications and excludes
   internal scores, analyst identity, and review notes.
 - Lifecycle transitions preserve `under_review` during re-scoring and reject

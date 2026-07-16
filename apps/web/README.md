@@ -87,7 +87,7 @@ the API contract for expiring/revocable analyst invites, one-time raw token and
 invite URL handling, audited invite delivery, safe invite rotation, password
 setup at acceptance, persistent local delivery attempts, retryable local provider
 outcomes (`local_outbox`, `local_queue`, `local_fail`, `manual_receipt`), invite health monitoring, MFA readiness attestation,
-failed MFA challenge monitoring, aggregated security readiness, analyst disable/session revocation, and reactivation, plus
+failed MFA challenge monitoring, active staff session control, aggregated security readiness, analyst disable/session revocation, and reactivation, plus
 invite/user lifecycle audit events in the static backend. Application
 Intake v2 adds field-level feedback and a strict shared allowlist for ranges,
 count fields, categories, and district/settlement consistency; the FastAPI

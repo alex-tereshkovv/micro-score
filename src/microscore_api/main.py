@@ -85,6 +85,8 @@ from .schemas import (
     StaffInviteHealthResponse,
     StaffInviteRotateCreate,
     StaffInviteResponse,
+    StaffSessionResponse,
+    StaffSessionRevokeResponse,
     StaffUserCreate,
     StaffUserDisableResponse,
     StaffUserReactivateResponse,
@@ -423,6 +425,29 @@ def _staff_invite_delivery_attempt_response(
         "delivery_url_base": attempt.get("delivery_url_base"),
         "note": attempt.get("note"),
         "error": attempt.get("error"),
+    }
+
+
+def _session_id_for_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _staff_session_response(
+    session: dict[str, Any],
+    *,
+    current_session_id: str | None = None,
+) -> dict[str, Any]:
+    session_id = session["session_id"]
+    return {
+        "session_id": session_id,
+        "session_preview": f"{session_id[:12]}...",
+        "email": session["email"],
+        "role": session["role"],
+        "organization_id": session.get("organization_id"),
+        "session_created_at": session["session_created_at"],
+        "session_expires_at": session["session_expires_at"],
+        "session_ttl_seconds": session["session_ttl_seconds"],
+        "is_current_session": session_id == current_session_id,
     }
 
 
@@ -2308,6 +2333,68 @@ def reactivate_staff_user(
             },
         )
     return reactivated
+
+
+@app.get("/admin/staff-sessions", response_model=list[StaffSessionResponse])
+def list_staff_sessions(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    current_session_id = _session_id_for_token(credentials.credentials)
+    return [
+        _staff_session_response(session, current_session_id=current_session_id)
+        for session in repository.list_active_sessions(staff_only=True)
+    ]
+
+
+@app.delete(
+    "/admin/staff-sessions/{session_id}",
+    response_model=StaffSessionRevokeResponse,
+)
+def revoke_staff_session(
+    session_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    normalized_session_id = session_id.strip().lower()
+    if normalized_session_id == _session_id_for_token(credentials.credentials):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Current admin session cannot be revoked from this endpoint; use logout.",
+        )
+
+    revoked_session = repository.revoke_session_by_id(
+        normalized_session_id,
+        staff_only=True,
+    )
+    if revoked_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff session not found",
+        )
+    repository.record_audit_event(
+        actor_email=user["email"],
+        action="staff_session_revoked",
+        entity_type="session",
+        entity_id=normalized_session_id,
+        details={
+            "session_preview": f"{normalized_session_id[:12]}...",
+            "email": revoked_session["email"],
+            "role": revoked_session["role"],
+            "organization_id": revoked_session.get("organization_id"),
+            "session_created_at": revoked_session["session_created_at"],
+            "session_expires_at": revoked_session["session_expires_at"],
+        },
+    )
+    return {
+        "revoked": True,
+        "session_id": normalized_session_id,
+        "email": revoked_session["email"],
+        "role": revoked_session["role"],
+        "organization_id": revoked_session.get("organization_id"),
+    }
 
 
 @app.get("/admin/staff-invites", response_model=list[StaffInviteResponse])

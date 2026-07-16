@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import hashlib
 import json
 import os
 import sqlite3
@@ -1213,6 +1214,67 @@ class MicroScoreRepository:
         with self._connection() as connection:
             cursor = connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
         return cursor.rowcount > 0
+
+    def list_active_sessions(
+        self,
+        *,
+        staff_only: bool = False,
+        now: datetime | None = None,
+        ttl_hours: float | None = None,
+    ) -> list[dict[str, Any]]:
+        now = now or datetime.now(timezone.utc)
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    sessions.token,
+                    sessions.email,
+                    sessions.created_at AS session_created_at,
+                    users.role,
+                    users.organization_id,
+                    users.disabled_at
+                FROM sessions
+                JOIN users ON users.email = sessions.email
+                ORDER BY sessions.created_at DESC
+                """
+            ).fetchall()
+
+        active_sessions: list[dict[str, Any]] = []
+        expired_or_disabled_tokens: list[str] = []
+        for row in rows:
+            if row["disabled_at"] is not None:
+                expired_or_disabled_tokens.append(row["token"])
+                continue
+            if staff_only and row["role"] not in {"admin", "mfi_analyst"}:
+                continue
+            metadata = session_expiry_metadata(row["session_created_at"], ttl_hours=ttl_hours)
+            expires_at = _parse_utc_datetime(metadata["session_expires_at"])
+            if expires_at <= now:
+                expired_or_disabled_tokens.append(row["token"])
+                continue
+            session = dict(row)
+            session.update(metadata)
+            session["session_id"] = hashlib.sha256(row["token"].encode("utf-8")).hexdigest()
+            active_sessions.append(session)
+
+        for token in expired_or_disabled_tokens:
+            self.revoke_session(token)
+        return active_sessions
+
+    def revoke_session_by_id(
+        self,
+        session_id: str,
+        *,
+        staff_only: bool = False,
+    ) -> dict[str, Any] | None:
+        normalized_session_id = session_id.strip().lower()
+        for session in self.list_active_sessions(staff_only=staff_only):
+            if session["session_id"] != normalized_session_id:
+                continue
+            if self.revoke_session(session["token"]):
+                return session
+            return None
+        return None
 
     def create_application(
         self,

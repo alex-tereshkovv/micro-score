@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 import sqlite3
 import sys
 import tempfile
@@ -393,6 +394,59 @@ class ApiDatabaseTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.repository.revoke_session("expired-token"))
+
+    def test_active_staff_sessions_hide_tokens_and_revoke_by_hash(self) -> None:
+        self.repository.create_organization(
+            organization_id="pavlodar-mfi-a",
+            name="Pavlodar MFI A",
+            region="Pavlodar region",
+        )
+        self.repository.create_user("borrower@example.com", "password-hash", "borrower")
+        self.repository.create_user("admin@example.com", "password-hash", "admin")
+        self.repository.create_user(
+            "analyst@example.com",
+            "password-hash",
+            "mfi_analyst",
+            "pavlodar-mfi-a",
+        )
+        now = datetime.now(timezone.utc)
+        self.repository.create_session(
+            "borrower-token",
+            "borrower@example.com",
+            created_at=(now - timedelta(hours=1)).isoformat(),
+        )
+        self.repository.create_session(
+            "admin-token",
+            "admin@example.com",
+            created_at=(now - timedelta(hours=1)).isoformat(),
+        )
+        self.repository.create_session(
+            "analyst-token",
+            "analyst@example.com",
+            created_at=(now - timedelta(hours=1)).isoformat(),
+        )
+        self.repository.create_session(
+            "expired-analyst-token",
+            "analyst@example.com",
+            created_at=(now - timedelta(hours=9)).isoformat(),
+        )
+
+        sessions = self.repository.list_active_sessions(
+            staff_only=True,
+            now=now,
+            ttl_hours=8,
+        )
+        self.assertEqual({session["email"] for session in sessions}, {"admin@example.com", "analyst@example.com"})
+        self.assertTrue(all(session["role"] in {"admin", "mfi_analyst"} for session in sessions))
+        self.assertIn("token", sessions[0])
+        analyst_session_id = hashlib.sha256("analyst-token".encode("utf-8")).hexdigest()
+        self.assertTrue(any(session["session_id"] == analyst_session_id for session in sessions))
+
+        revoked = self.repository.revoke_session_by_id(analyst_session_id, staff_only=True)
+        self.assertIsNotNone(revoked)
+        self.assertEqual(revoked["email"], "analyst@example.com")
+        self.assertFalse(self.repository.revoke_session_by_id(analyst_session_id, staff_only=True))
+        self.assertIsNone(self.repository.get_user_by_token("analyst-token", now=now, ttl_hours=8))
 
     def test_model_registry_has_active_default_and_atomic_activation(self) -> None:
         default_model = self.repository.get_active_model_version()

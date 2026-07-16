@@ -68,6 +68,8 @@ The smoke test verifies that the in-browser static backend can:
   audit events hide raw codes, and confirm Security Readiness warning
 - aggregate MFA posture, invite hygiene, audited invite delivery, session TTL,
   and known production blockers in Security Readiness v1
+- list active staff sessions without raw bearer tokens, reject current-session
+  self-revocation, revoke another staff session, and verify `staff_session_revoked`
 - disable an MFI analyst, revoke their active static session, reject future
   login, and verify the `staff_user_disabled` audit event
 - reactivate the analyst, verify login resumes without automatic session

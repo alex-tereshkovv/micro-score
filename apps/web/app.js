@@ -100,9 +100,11 @@ const els = {
   staffInviteForm: document.querySelector("#staffInviteForm"),
   mfaReadiness: document.querySelector("#mfaReadiness"),
   staffUsers: document.querySelector("#staffUsers"),
+  staffSessions: document.querySelector("#staffSessions"),
   staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
   refreshUsers: document.querySelector("#refreshUsers"),
+  refreshStaffSessions: document.querySelector("#refreshStaffSessions"),
   refreshStaffInvites: document.querySelector("#refreshStaffInvites"),
   applicationOrganization: document.querySelector("#applicationOrganization"),
   staffOrganization: document.querySelector("#staffOrganization"),
@@ -669,6 +671,7 @@ async function loadRoleWorkspace(role) {
       refreshAudit(),
       refreshSecurityReadiness(),
       refreshStaffUsers(),
+      refreshStaffSessions(),
       refreshStaffInvites(),
       refreshOrganizations(),
       refreshModelVersions(),
@@ -933,6 +936,7 @@ function resetPrivilegedViews() {
     [els.auditTrail, "No audit events loaded."],
     [els.securityReadiness, "Security readiness not loaded."],
     [els.staffUsers, "No staff users loaded."],
+    [els.staffSessions, "No staff sessions loaded."],
     [els.staffInvites, "No staff invites loaded."],
     [els.organizationDirectory, "No organizations loaded."],
     [els.modelVersionRegistry, "No model versions loaded."],
@@ -2459,6 +2463,57 @@ function renderStaffUsers(rows) {
   `;
 }
 
+function renderStaffSessions(rows) {
+  if (!rows.length) {
+    setPanelState(
+      els.staffSessions,
+      "table-shell",
+      "empty",
+      "No active staff sessions",
+      "Active admin and analyst sessions will appear here without exposing bearer tokens.",
+    );
+    return;
+  }
+  els.staffSessions.className = "table-shell";
+  const body = rows
+    .map((session) => {
+      const actions = session.is_current_session
+        ? "Current session"
+        : `<button class="secondary-button compact-button" type="button" data-revoke-session-id="${escapeHtml(session.session_id)}">Revoke</button>`;
+      return `
+        <tr>
+          <td>${escapeHtml(session.email)}</td>
+          <td>${escapeHtml(formatPolicyName(session.role))}</td>
+          <td>${escapeHtml(session.organization_id || "-")}</td>
+          <td>${escapeHtml(session.session_expires_at || "-")}</td>
+          <td>${escapeHtml(session.session_preview || "-")}</td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  els.staffSessions.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Organization</th>
+          <th>Expires</th>
+          <th>Session preview</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+
+async function refreshStaffSessions() {
+  const rows = await apiFetch("/admin/staff-sessions");
+  renderStaffSessions(rows);
+}
+
 function staffInviteStatus(invite) {
   if (invite.revoked_at) return "revoked";
   if (invite.accepted_at) return "accepted";
@@ -2751,7 +2806,7 @@ async function disableStaffUser(email) {
   const disabled = await apiFetch(`/admin/users/${encodeURIComponent(email)}/disable`, {
     method: "POST",
   });
-  await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
+  await Promise.all([refreshStaffUsers(), refreshStaffSessions(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(
     `Disabled ${disabled.email}; revoked ${disabled.revoked_session_count} active session(s).`,
     "ok",
@@ -2773,6 +2828,14 @@ async function attestStaffMfa(email) {
   });
   await Promise.all([refreshStaffUsers(), refreshSecurityReadiness(), refreshAudit()]);
   showMessage(`Recorded MFA attestation for ${attested.email}.`, "ok");
+}
+
+async function revokeStaffSession(sessionId) {
+  const revoked = await apiFetch(`/admin/staff-sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+  await Promise.all([refreshStaffSessions(), refreshSecurityReadiness(), refreshAudit()]);
+  showMessage(`Revoked staff session for ${revoked.email}.`, "ok");
 }
 
 async function createStaffInvite(event) {
@@ -2997,6 +3060,15 @@ function wireEvents() {
     const reactivateButton = event.target.closest("[data-reactivate-user-email]");
     if (!reactivateButton) return;
     reactivateStaffUser(reactivateButton.dataset.reactivateUserEmail)
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.refreshStaffSessions.addEventListener("click", () => {
+    refreshStaffSessions().catch((error) => showMessage(error.message, "error"));
+  });
+  els.staffSessions.addEventListener("click", (event) => {
+    const revokeSessionButton = event.target.closest("[data-revoke-session-id]");
+    if (!revokeSessionButton) return;
+    revokeStaffSession(revokeSessionButton.dataset.revokeSessionId)
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshStaffInvites.addEventListener("click", () => {

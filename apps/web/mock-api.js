@@ -266,6 +266,43 @@
     return { token, ...metadata };
   }
 
+  function sessionIdForToken(rawToken) {
+    let hash = 0x811c9dc5;
+    String(rawToken).split("").forEach((character) => {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 0x01000193);
+    });
+    return `static-session-${(hash >>> 0).toString(16).padStart(8, "0")}-${String(rawToken).length}`;
+  }
+
+  function publicStaffSession(token, record, currentToken = null) {
+    const user = demo.users[record.email];
+    if (!user || !["admin", "mfi_analyst"].includes(user.role) || user.disabled_at) return null;
+    if (record.session_expires_at && Date.parse(record.session_expires_at) <= Date.now()) {
+      delete demo.sessions[token];
+      return null;
+    }
+    const sessionId = sessionIdForToken(token);
+    return {
+      session_id: sessionId,
+      session_preview: `${sessionId.slice(0, 12)}...`,
+      email: user.email,
+      role: user.role,
+      organization_id: user.organization_id || null,
+      session_created_at: record.session_created_at,
+      session_expires_at: record.session_expires_at,
+      session_ttl_seconds: record.session_ttl_seconds || DEMO_SESSION_TTL_SECONDS,
+      is_current_session: token === currentToken,
+    };
+  }
+
+  function activeStaffSessions(currentToken = null) {
+    return Object.entries(demo.sessions)
+      .map(([token, record]) => publicStaffSession(token, record, currentToken))
+      .filter(Boolean)
+      .sort((left, right) => right.session_created_at.localeCompare(left.session_created_at));
+  }
+
   function staffInviteTokenId(rawToken) {
     let hash = 0x811c9dc5;
     String(rawToken).split("").forEach((character) => {
@@ -2441,6 +2478,41 @@
         mfa_attested_by: target.mfa_attested_by || null,
         mfa_method: target.mfa_method || null,
         was_already_active: wasAlreadyActive,
+      });
+    }
+
+    if (cleanPath === "/admin/staff-sessions" && method === "GET") {
+      requireAdmin(session);
+      return clone(activeStaffSessions(session.token));
+    }
+
+    const revokeStaffSessionMatch = cleanPath.match(/^\/admin\/staff-sessions\/([^/]+)$/);
+    if (revokeStaffSessionMatch && method === "DELETE") {
+      const user = requireAdmin(session);
+      const sessionId = decodeURIComponent(revokeStaffSessionMatch[1]).trim();
+      const currentSessionId = sessionIdForToken(session.token);
+      if (sessionId === currentSessionId) {
+        throw new Error("Current admin session cannot be revoked from this endpoint; use logout.");
+      }
+      const target = Object.entries(demo.sessions)
+        .map(([token, record]) => ({ token, row: publicStaffSession(token, record, session.token) }))
+        .find((item) => item.row?.session_id === sessionId);
+      if (!target?.row) throw new Error("Staff session not found");
+      delete demo.sessions[target.token];
+      addAudit("staff_session_revoked", "session", sessionId, user.email, {
+        session_preview: target.row.session_preview,
+        email: target.row.email,
+        role: target.row.role,
+        organization_id: target.row.organization_id,
+        session_created_at: target.row.session_created_at,
+        session_expires_at: target.row.session_expires_at,
+      });
+      return clone({
+        revoked: true,
+        session_id: target.row.session_id,
+        email: target.row.email,
+        role: target.row.role,
+        organization_id: target.row.organization_id,
       });
     }
 

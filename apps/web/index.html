@@ -584,6 +584,19 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Access</p>
+                <h3>Staff sessions</h3>
+              </div>
+              <button id="refreshStaffSessions" class="icon-button" type="button" title="Refresh staff sessions" aria-label="Refresh staff sessions">
+                <span aria-hidden="true">&#8635;</span>
+              </button>
+            </div>
+            <div id="staffSessions" class="table-shell empty">No staff sessions loaded.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Access</p>
                 <h3>Staff invites</h3>
               </div>
               <button id="refreshStaffInvites" class="icon-button" type="button" title="Refresh staff invites" aria-label="Refresh staff invites">
@@ -664,8 +677,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260623-dashboard"></script>
-    <script src="./mock-api.js?v=20260716-mfa-monitoring-v1"></script>
+    <script src="./mock-api.js?v=20260716-staff-session-control-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260716-mfa-monitoring-v1"></script>
+    <script src="./app.js?v=20260716-staff-session-control-v1"></script>
   </body>
 </html>
