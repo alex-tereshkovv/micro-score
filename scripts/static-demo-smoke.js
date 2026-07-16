@@ -556,6 +556,76 @@ async function main() {
   if (!securityReadinessAfterDelivery.checks.some((check) => check.key === "invite_delivery" && check.status === "pass")) {
     throw new Error("Expected delivered pending invite to pass delivery readiness");
   }
+  const failedDeliveryInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "failed-delivery-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 72,
+        queue_delivery: true,
+        delivery_channel: "email",
+        delivery_recipient: "failed-delivery-analyst@test.com",
+        delivery_provider: "local_fail",
+      }),
+    },
+    adminSession,
+  );
+  if (
+    failedDeliveryInvite.delivered_at
+    || failedDeliveryInvite.delivery_attempt_count !== 1
+    || failedDeliveryInvite.last_delivery_status !== "failed"
+    || failedDeliveryInvite.last_delivery_provider !== "local_fail"
+    || failedDeliveryInvite.delivery_attempt?.status !== "failed"
+    || failedDeliveryInvite.delivery_attempt?.provider !== "local_fail"
+    || !String(failedDeliveryInvite.delivery_attempt?.error || "").includes("simulated failure")
+  ) {
+    throw new Error("Expected local_fail provider to record a failed undelivered attempt");
+  }
+  const failedDeliveryReadiness = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!failedDeliveryReadiness.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")) {
+    throw new Error("Expected failed invite delivery to keep delivery readiness blocked");
+  }
+  if (!failedDeliveryReadiness.checks.some((check) => check.key === "invite_delivery_attempts" && check.status === "warning")) {
+    throw new Error("Expected failed invite delivery attempt to raise readiness warning");
+  }
+  const retriedDeliveryInvite = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(failedDeliveryInvite.token_id)}/delivery-attempts/retry`,
+    {
+      method: "POST",
+      body: JSON.stringify({ channel: "email", provider: "local_outbox" }),
+    },
+    adminSession,
+  );
+  if (
+    !retriedDeliveryInvite.delivered_at
+    || retriedDeliveryInvite.was_already_delivered
+    || retriedDeliveryInvite.delivery_attempt_count !== 2
+    || retriedDeliveryInvite.last_delivery_status !== "sent"
+    || retriedDeliveryInvite.last_delivery_provider !== "local_outbox"
+    || retriedDeliveryInvite.delivery_attempt?.status !== "sent"
+  ) {
+    throw new Error("Expected retry delivery to append a sent attempt and mark invite delivered");
+  }
+  const retriedDeliveryAttempts = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(failedDeliveryInvite.token_id)}/delivery-attempts`,
+    {},
+    adminSession,
+  );
+  if (
+    retriedDeliveryAttempts.length !== 2
+    || retriedDeliveryAttempts[0].status !== "sent"
+    || retriedDeliveryAttempts[1].status !== "failed"
+    || retriedDeliveryAttempts.some((attempt) => Object.values(attempt).includes(failedDeliveryInvite.token))
+  ) {
+    throw new Error("Expected retried delivery attempts to preserve failed and sent statuses without raw token leakage");
+  }
+  const retriedDeliveryReadiness = await api.request("/admin/security/readiness", {}, adminSession);
+  if (!retriedDeliveryReadiness.checks.some((check) => check.key === "invite_delivery_attempts" && check.status === "pass")) {
+    throw new Error("Expected retry to clear failed delivery attempt warning");
+  }
   let weakInvitePasswordRejected = false;
   try {
     await api.request("/auth/accept-staff-invite", {
@@ -1063,6 +1133,7 @@ async function main() {
       staff_invite_token_hygiene: true,
       staff_invite_delivery: true,
       staff_invite_delivery_outbox: true,
+      staff_invite_delivery_retry: true,
       staff_invite_rotation: true,
       staff_invite_health: true,
       mfa_readiness: true,

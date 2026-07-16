@@ -2517,7 +2517,15 @@ function renderStaffInvites(rows) {
       const status = staffInviteStatus(invite);
       const canRevoke = status === "pending";
       const canRotate = status !== "accepted";
+      const canRetryDelivery = (
+        canRevoke
+        && !invite.delivered_at
+        && ["failed", "queued"].includes(invite.last_delivery_status)
+      );
       const actions = [];
+      if (canRetryDelivery) {
+        actions.push(`<button class="secondary-button compact-button" type="button" data-retry-delivery-token="${escapeHtml(invite.token_id)}">Retry delivery</button>`);
+      }
       if (canRevoke && !invite.delivered_at) {
         actions.push(`<button class="secondary-button compact-button" type="button" data-deliver-invite-token="${escapeHtml(invite.token_id)}">Mark delivered</button>`);
       }
@@ -2800,6 +2808,16 @@ async function markStaffInviteDelivered(token) {
   showMessage(`Recorded invite delivery for ${delivered.email}`, "ok");
 }
 
+async function retryStaffInviteDelivery(token) {
+  const retried = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}/delivery-attempts/retry`, {
+    method: "POST",
+    body: JSON.stringify({ channel: "email" }),
+  });
+  const attempt = retried.delivery_attempt || {};
+  await Promise.all([refreshStaffInvites(), refreshSecurityReadiness(), refreshAudit()]);
+  showMessage(`Retried invite delivery for ${retried.email}: ${attempt.status || "queued"} via ${attempt.provider || "local_outbox"}.`, "ok");
+}
+
 async function rotateStaffInvite(token) {
   const rotated = await apiFetch(`/admin/staff-invites/${encodeURIComponent(token)}/rotate`, {
     method: "POST",
@@ -2985,6 +3003,12 @@ function wireEvents() {
     refreshStaffInvites().catch((error) => showMessage(error.message, "error"));
   });
   els.staffInvites.addEventListener("click", (event) => {
+    const retryDeliveryButton = event.target.closest("[data-retry-delivery-token]");
+    if (retryDeliveryButton) {
+      retryStaffInviteDelivery(retryDeliveryButton.dataset.retryDeliveryToken)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
     const deliverButton = event.target.closest("[data-deliver-invite-token]");
     if (deliverButton) {
       markStaffInviteDelivered(deliverButton.dataset.deliverInviteToken)

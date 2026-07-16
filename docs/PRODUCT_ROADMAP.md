@@ -278,6 +278,11 @@ new one-time URL, and records `staff_invite_rotated` with old/new previews only.
 Invite Delivery Outbox v1 adds persistent delivery attempts, optional
 `queue_delivery` during create/rotate, local outbox provider metadata, and
 `staff_invite_delivery_attempted` audit events without storing raw tokens.
+Invite Delivery Retry v1 gives those attempts operational semantics:
+`local_outbox`/`manual_receipt` mark invites delivered, `local_queue` keeps them
+queued, `local_fail` records a failed attempt, failed latest attempts surface as
+a Security Readiness warning, and admins can retry delivery without re-exposing
+raw invite tokens.
 Staff/User Lifecycle v1 now adds admin-only MFI analyst disable, active-session
 revocation, disabled-login rejection, user status listing, and
 `staff_user_disabled` audit events.

@@ -287,8 +287,10 @@ are no active pending staff invites, or when every active pending invite has
 audited delivery metadata with an HTTPS URL base or a local-development HTTP
 base. It is a blocker while an active pending invite has not been marked
 delivered, or when a delivered invite records an unsafe non-local HTTP base. The
-recommended actions still point to production IdP/TOTP/WebAuthn replacement and
-transactional delivery before real user data.
+`invite_delivery_attempts` check is a warning when an active pending invite's
+latest delivery attempt failed, so operators can retry delivery before sharing
+the onboarding link. The recommended actions still point to production
+IdP/TOTP/WebAuthn replacement and transactional delivery before real user data.
 
 The temporary-password flow remains as a prototype/admin fallback. The safer
 default for new staff is Staff Invite v3: administrators create an expiring
@@ -331,7 +333,8 @@ POST /admin/staff-invites
   "expires_in_hours": 48,
   "queue_delivery": true,
   "delivery_channel": "email",
-  "delivery_recipient": "analyst@mfi.example"
+  "delivery_recipient": "analyst@mfi.example",
+  "delivery_provider": "local_outbox"
 }
 ```
 
@@ -350,12 +353,17 @@ The API rejects creation while the same email already has another active
 pending staff invite; rotate the existing invite instead.
 
 When `queue_delivery` is `true`, creation records a local delivery attempt while
-the raw token is still available in process, marks the invite delivered, and
-returns a `delivery_attempt` object with `attempt_id`, `provider`, `status`,
-`channel`, `recipient`, `delivery_url_base`, and timestamps. The default
-provider is `local_outbox`; override the label with
-`MICROSCORE_INVITE_DELIVERY_PROVIDER` for deployment experiments. The outbox
-never stores the raw token or full invite URL.
+the raw token is still available in process and returns a `delivery_attempt`
+object with `attempt_id`, `provider`, `status`, `channel`, `recipient`,
+`delivery_url_base`, timestamps, and optional `error`. The default provider is
+`local_outbox`; override it per request with `delivery_provider`, or globally
+with `MICROSCORE_INVITE_DELIVERY_PROVIDER` for deployment experiments. Local
+provider semantics are explicit: `local_outbox` and `manual_receipt` record
+`sent` and mark the invite delivered; `local_queue` records `queued` and leaves
+the invite undelivered; `local_fail` records `failed` with an error and leaves
+the invite undelivered. Unknown provider names are recorded as `queued` with a
+local implementation warning. Delivery attempts never store the raw token or
+full invite URL.
 
 Record audited delivery for an active pending invite:
 
@@ -395,6 +403,26 @@ This returns newest-first `StaffInviteDeliveryAttemptResponse` rows. Attempts
 contain the invite `token_id`, provider, status, channel, recipient, URL base,
 and optional note/error; they never contain raw tokens.
 
+Retry delivery for an active pending invite:
+
+```http
+POST /admin/staff-invites/{token_id}/delivery-attempts/retry
+```
+
+```json
+{
+  "channel": "email",
+  "recipient": "analyst@mfi.example",
+  "provider": "local_outbox",
+  "note": "Retry after failed local provider check"
+}
+```
+
+Retry requires an `admin` bearer token and rejects accepted, revoked, and
+expired invites. It appends a new delivery attempt using the same provider
+semantics as queued creation/rotation, returns `was_already_delivered`, and
+marks the invite delivered only when the retry attempt is `sent`.
+
 Rotate an unused invite and issue a fresh one-time URL:
 
 ```http
@@ -405,7 +433,8 @@ POST /admin/staff-invites/{token_id}/rotate
 {
   "expires_in_hours": 48,
   "queue_delivery": true,
-  "delivery_channel": "email"
+  "delivery_channel": "email",
+  "delivery_provider": "local_outbox"
 }
 ```
 
@@ -419,8 +448,9 @@ the new one-time raw `token` and `invite_url`. Rotation records
 `staff_invite_rotated` with old/new token previews, not raw tokens.
 Rotation is rejected when another active pending invite for the same email
 already exists, preventing multiple live onboarding links for one account.
-When `queue_delivery` is true, rotation also records a `local_outbox` delivery
-attempt for the new invite and returns that attempt in the response.
+When `queue_delivery` is true, rotation also records a delivery attempt for the
+new invite using the configured or requested provider semantics and returns
+that attempt in the response.
 
 Revoke an unused invite:
 

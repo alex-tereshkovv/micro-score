@@ -191,6 +191,7 @@ class StaffInviteDeliveryOptions(BaseModel):
     delivery_channel: InviteDeliveryChannel = "email"
     delivery_recipient: str | None = Field(default=None, max_length=200)
     delivery_note: str | None = Field(default=None, max_length=500)
+    delivery_provider: str | None = Field(default=None, max_length=100)
 
 
 class StaffInviteCreate(StaffInviteDeliveryOptions):
@@ -214,6 +215,13 @@ class StaffInviteDeliveryCreate(BaseModel):
     channel: InviteDeliveryChannel = "manual_copy"
     recipient: str | None = Field(default=None, max_length=200)
     note: str | None = Field(default=None, max_length=500)
+
+
+class StaffInviteDeliveryRetryCreate(BaseModel):
+    channel: InviteDeliveryChannel = "email"
+    recipient: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=500)
+    provider: str | None = Field(default=None, max_length=100)
 
 
 class StaffInviteResponse(BaseModel):

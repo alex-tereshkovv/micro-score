@@ -80,6 +80,7 @@ from .schemas import (
     StaffInviteCreatedResponse,
     StaffInviteDeliveryAttemptResponse,
     StaffInviteDeliveryCreate,
+    StaffInviteDeliveryRetryCreate,
     StaffInviteDeliveryResponse,
     StaffInviteHealthResponse,
     StaffInviteRotateCreate,
@@ -103,6 +104,12 @@ MFA_REQUIRED_ROLES = {"admin", "mfi_analyst"}
 DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
 DEFAULT_INVITE_DELIVERY_PROVIDER = "local_outbox"
+INVITE_DELIVERY_PROVIDER_RESULTS: dict[str, tuple[str, str | None]] = {
+    "local_outbox": ("sent", None),
+    "manual_receipt": ("sent", None),
+    "local_queue": ("queued", None),
+    "local_fail": ("failed", "Local delivery provider simulated failure."),
+}
 LOCAL_INVITE_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
 MFA_READINESS_LIMITATION = (
     "MFA Readiness v2 records staff attestation and the local prototype requires "
@@ -131,6 +138,19 @@ def configured_invite_delivery_provider() -> str:
         "MICROSCORE_INVITE_DELIVERY_PROVIDER",
         DEFAULT_INVITE_DELIVERY_PROVIDER,
     ).strip() or DEFAULT_INVITE_DELIVERY_PROVIDER
+
+
+def _invite_delivery_provider_result(provider: str | None) -> tuple[str, str, str | None]:
+    provider_name = (provider or configured_invite_delivery_provider()).strip()
+    provider_name = provider_name or DEFAULT_INVITE_DELIVERY_PROVIDER
+    status_value, error = INVITE_DELIVERY_PROVIDER_RESULTS.get(
+        provider_name,
+        (
+            "queued",
+            "Delivery provider has no local sender implementation yet.",
+        ),
+    )
+    return provider_name, status_value, error
 
 
 app = FastAPI(
@@ -405,17 +425,18 @@ def _record_staff_invite_delivery_attempt(
     delivery_url_base = _validated_invite_url_base()
     normalized_recipient = (recipient or invite["email"]).strip() or invite["email"]
     normalized_note = note.strip() if note else None
-    provider_name = provider or configured_invite_delivery_provider()
+    provider_name, status_value, provider_error = _invite_delivery_provider_result(provider)
     attempt = repository.record_staff_invite_delivery_attempt(
         attempt_id=str(uuid4()),
         token=token_id,
         attempted_by=actor_email,
         provider=provider_name,
-        status="sent",
+        status=status_value,
         channel=channel,
         recipient=normalized_recipient,
         url_base=delivery_url_base,
         note=normalized_note,
+        error=provider_error,
     )
     repository.record_audit_event(
         actor_email=actor_email,
@@ -431,8 +452,19 @@ def _record_staff_invite_delivery_attempt(
             "delivery_recipient": normalized_recipient,
             "delivery_url_base": delivery_url_base,
             "note_present": bool(normalized_note),
+            "error_present": bool(provider_error),
         },
     )
+    if status_value != "sent":
+        refreshed = repository.get_staff_invite(token_id)
+        if refreshed is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Staff invite not found",
+            )
+        refreshed["was_already_delivered"] = False
+        return attempt, refreshed
+
     delivered = repository.mark_staff_invite_delivered(
         token_id,
         delivered_by=actor_email,
@@ -677,6 +709,11 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
     undelivered_invites = [
         invite for invite in active_pending_invites if not invite.get("delivered_at")
     ]
+    failed_delivery_invites = [
+        invite
+        for invite in active_pending_invites
+        if not invite.get("delivered_at") and invite.get("last_delivery_status") == "failed"
+    ]
     unsafe_delivered_invites = [
         invite
         for invite in active_pending_invites
@@ -723,6 +760,30 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
                 "action": (
                     "Use audited delivery records and move to transactional email before production onboarding."
                 ),
+            }
+        )
+
+    if failed_delivery_invites:
+        checks.append(
+            {
+                "key": "invite_delivery_attempts",
+                "label": "Invite delivery provider attempts",
+                "status": "warning",
+                "summary": (
+                    f"{len(failed_delivery_invites)} active pending staff invite(s) "
+                    "have a failed latest delivery attempt."
+                ),
+                "action": "Retry invite delivery with a working provider, or rotate/revoke stale links.",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "key": "invite_delivery_attempts",
+                "label": "Invite delivery provider attempts",
+                "status": "pass",
+                "summary": "No active pending staff invite has a failed latest delivery attempt.",
+                "action": "Monitor delivery attempts and retry failures before sharing onboarding links.",
             }
         )
 
@@ -2190,6 +2251,7 @@ def create_staff_invite(
             channel=payload.delivery_channel,
             recipient=payload.delivery_recipient,
             note=payload.delivery_note,
+            provider=payload.delivery_provider,
         )
     return _staff_invite_response(
         response_invite,
@@ -2261,6 +2323,50 @@ def list_staff_invite_delivery_attempts(
         _staff_invite_delivery_attempt_response(attempt)
         for attempt in repository.list_staff_invite_delivery_attempts(token_id)
     ]
+
+
+@app.post(
+    "/admin/staff-invites/{token_id}/delivery-attempts/retry",
+    response_model=StaffInviteDeliveryResponse,
+)
+def retry_staff_invite_delivery(
+    token_id: str,
+    payload: StaffInviteDeliveryRetryCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    invite = repository.get_staff_invite(token_id)
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    if invite.get("accepted_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted staff invite delivery is already complete",
+        )
+    if invite.get("revoked_at"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Revoked staff invite cannot be delivered",
+        )
+    if _parse_utc_datetime(invite["expires_at"]) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Expired staff invite cannot be delivered",
+        )
+
+    delivery_attempt, response_invite = _record_staff_invite_delivery_attempt(
+        repository,
+        invite=invite,
+        actor_email=user["email"],
+        channel=payload.channel,
+        recipient=payload.recipient,
+        note=payload.note,
+        provider=payload.provider,
+    )
+    return _staff_invite_response(response_invite, delivery_attempt=delivery_attempt)
 
 
 @app.post(
@@ -2357,6 +2463,7 @@ def rotate_staff_invite(
             channel=payload.delivery_channel,
             recipient=payload.delivery_recipient,
             note=payload.delivery_note,
+            provider=payload.delivery_provider,
         )
     return _staff_invite_response(
         response_invite,

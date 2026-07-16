@@ -79,6 +79,10 @@ git diff --check
 - Invite Delivery Outbox v1 persists delivery attempts, supports optional
   local outbox delivery during create/rotate, exposes attempt history to admins,
   and emits `staff_invite_delivery_attempted` without storing raw tokens.
+- Invite Delivery Retry v1 adds explicit local provider outcomes
+  (`local_outbox`, `local_queue`, `local_fail`, `manual_receipt`), failed-attempt
+  Security Readiness warnings, and a retry endpoint that appends attempts
+  without re-exposing raw invite tokens.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

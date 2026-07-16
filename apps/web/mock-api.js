@@ -337,8 +337,31 @@
       .filter((attempt) => attempt.invite_token === tokenId)
       .sort((left, right) => (
         right.attempted_at.localeCompare(left.attempted_at)
+        || Number(right.attempt_sequence || 0) - Number(left.attempt_sequence || 0)
         || right.attempt_id.localeCompare(left.attempt_id)
       ));
+  }
+
+  function staffInviteDeliveryProviderResult(provider) {
+    const providerName = String(provider || "local_outbox").trim() || "local_outbox";
+    if (providerName === "local_outbox" || providerName === "manual_receipt") {
+      return { provider: providerName, status: "sent", error: null };
+    }
+    if (providerName === "local_queue") {
+      return { provider: providerName, status: "queued", error: null };
+    }
+    if (providerName === "local_fail") {
+      return {
+        provider: providerName,
+        status: "failed",
+        error: "Local delivery provider simulated failure.",
+      };
+    }
+    return {
+      provider: providerName,
+      status: "queued",
+      error: "Delivery provider has no local sender implementation yet.",
+    };
   }
 
   function recordStaffInviteDeliveryAttempt(
@@ -353,18 +376,20 @@
   ) {
     const normalizedRecipient = String(recipient || invite.email).trim() || invite.email;
     const normalizedNote = note ? String(note).trim() : null;
+    const providerResult = staffInviteDeliveryProviderResult(provider);
     const attempt = {
       attempt_id: `invite-delivery-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      attempt_sequence: demo.staffInviteDeliveryAttempts.length + 1,
       invite_token: invite.token_id,
       attempted_at: nowIso(),
       attempted_by: actorEmail,
-      provider,
-      status: "sent",
+      provider: providerResult.provider,
+      status: providerResult.status,
       channel,
       recipient: normalizedRecipient,
       delivery_url_base: DEMO_INVITE_URL_BASE,
       note: normalizedNote,
-      error: null,
+      error: providerResult.error,
     };
     demo.staffInviteDeliveryAttempts.push(attempt);
     addAudit("staff_invite_delivery_attempted", "staff_invite_delivery_attempt", attempt.attempt_id, actorEmail, {
@@ -376,9 +401,10 @@
       delivery_recipient: attempt.recipient,
       delivery_url_base: attempt.delivery_url_base,
       note_present: Boolean(attempt.note),
+      error_present: Boolean(attempt.error),
     });
     const wasAlreadyDelivered = Boolean(invite.delivered_at);
-    if (!wasAlreadyDelivered) {
+    if (attempt.status === "sent" && !wasAlreadyDelivered) {
       invite.delivered_at = nowIso();
       invite.delivered_by = actorEmail;
       invite.delivery_channel = attempt.channel;
@@ -608,6 +634,10 @@
       && Date.parse(invite.expires_at) > Date.now()
     ));
     const undeliveredInvites = activePendingInvites.filter((invite) => !invite.delivered_at);
+    const failedDeliveryInvites = activePendingInvites.filter((invite) => {
+      const attempts = staffInviteDeliveryAttempts(invite.token_id);
+      return !invite.delivered_at && attempts[0]?.status === "failed";
+    });
     const unsafeDeliveredInvites = activePendingInvites.filter((invite) => (
       invite.delivered_at
       && !String(invite.delivery_url_base || "").startsWith("https://")
@@ -639,6 +669,23 @@
           ? "All active pending staff invites have audited delivery metadata."
           : "No active pending staff invites require delivery.",
         action: "Use audited delivery records and move to transactional email before production onboarding.",
+      });
+    }
+    if (failedDeliveryInvites.length) {
+      checks.push({
+        key: "invite_delivery_attempts",
+        label: "Invite delivery provider attempts",
+        status: "warning",
+        summary: `${failedDeliveryInvites.length} active pending staff invite(s) have a failed latest delivery attempt.`,
+        action: "Retry invite delivery with a working provider, or rotate/revoke stale links.",
+      });
+    } else {
+      checks.push({
+        key: "invite_delivery_attempts",
+        label: "Invite delivery provider attempts",
+        status: "pass",
+        summary: "No active pending staff invite has a failed latest delivery attempt.",
+        action: "Monitor delivery attempts and retry failures before sharing onboarding links.",
       });
     }
     const blockers = checks.filter((check) => check.status === "blocker");
@@ -2317,7 +2364,7 @@
       if (body.queue_delivery) {
         const storedInvite = demo.staffInvites[invite.token_id];
         const { attempt } = recordStaffInviteDeliveryAttempt(storedInvite, user.email, {
-          provider: "local_outbox",
+          provider: body.delivery_provider || "local_outbox",
           channel: body.delivery_channel || "email",
           recipient: body.delivery_recipient || email,
           note: body.delivery_note || null,
@@ -2358,6 +2405,27 @@
       const invite = demo.staffInvites[tokenId];
       if (!invite) throw new Error("Staff invite not found");
       return clone(staffInviteDeliveryAttempts(tokenId).map((attempt) => publicStaffInviteDeliveryAttempt(attempt)));
+    }
+
+    const retryStaffInviteDeliveryMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/delivery-attempts\/retry$/);
+    if (retryStaffInviteDeliveryMatch && method === "POST") {
+      const user = requireAdmin(session);
+      const tokenId = decodeURIComponent(retryStaffInviteDeliveryMatch[1]);
+      const invite = demo.staffInvites[tokenId];
+      if (!invite) throw new Error("Staff invite not found");
+      if (invite.accepted_at) throw new Error("Accepted staff invite delivery is already complete");
+      if (invite.revoked_at) throw new Error("Revoked staff invite cannot be delivered");
+      if (Date.parse(invite.expires_at) <= Date.now()) throw new Error("Expired staff invite cannot be delivered");
+      const { attempt, wasAlreadyDelivered } = recordStaffInviteDeliveryAttempt(invite, user.email, {
+        provider: body.provider || "local_outbox",
+        channel: body.channel || "email",
+        recipient: body.recipient || invite.email,
+        note: body.note || null,
+      });
+      return clone({
+        ...publicStaffInvite({ ...invite, was_already_delivered: wasAlreadyDelivered }),
+        delivery_attempt: publicStaffInviteDeliveryAttempt(attempt),
+      });
     }
 
     const rotateStaffInviteMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/rotate$/);
@@ -2404,7 +2472,7 @@
       if (body.queue_delivery) {
         const storedInvite = demo.staffInvites[rotated.token_id];
         const { attempt } = recordStaffInviteDeliveryAttempt(storedInvite, user.email, {
-          provider: "local_outbox",
+          provider: body.delivery_provider || "local_outbox",
           channel: body.delivery_channel || "email",
           recipient: body.delivery_recipient || storedInvite.email,
           note: body.delivery_note || null,

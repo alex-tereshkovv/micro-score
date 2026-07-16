@@ -550,6 +550,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("delivery_attempt_count", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("last_delivery_status", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("queue_delivery", schemas["StaffInviteCreate"]["properties"])
+        self.assertIn("delivery_provider", schemas["StaffInviteCreate"]["properties"])
+        self.assertIn("provider", schemas["StaffInviteDeliveryRetryCreate"]["properties"])
         self.assertIn("delivery_attempt", schemas["StaffInviteCreatedResponse"]["properties"])
         self.assertIn("delivery_attempt", schemas["StaffInviteDeliveryResponse"]["properties"])
         self.assertIn("provider", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
@@ -575,6 +577,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts", paths)
+        self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts/retry", paths)
         self.assertIn("/admin/staff-invites/{token_id}/rotate", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
@@ -1089,6 +1092,94 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(delivered_check["status"], "pass")
 
+        failed_delivery_invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "failed-delivery-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "expires_in_hours": 72,
+                "queue_delivery": True,
+                "delivery_channel": "email",
+                "delivery_recipient": "failed-delivery-analyst@example.com",
+                "delivery_provider": "local_fail",
+            },
+        )
+        self.assertEqual(failed_delivery_invite.status_code, 201, failed_delivery_invite.text)
+        failed_payload = failed_delivery_invite.json()
+        self.assertIsNone(failed_payload["delivered_at"])
+        self.assertEqual(failed_payload["delivery_attempt_count"], 1)
+        self.assertEqual(failed_payload["last_delivery_status"], "failed")
+        self.assertEqual(failed_payload["last_delivery_provider"], "local_fail")
+        self.assertEqual(failed_payload["delivery_attempt"]["status"], "failed")
+        self.assertEqual(failed_payload["delivery_attempt"]["provider"], "local_fail")
+        self.assertIn("simulated failure", failed_payload["delivery_attempt"]["error"])
+
+        failed_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(failed_readiness.status_code, 200, failed_readiness.text)
+        failed_delivery_check = next(
+            check for check in failed_readiness.json()["checks"]
+            if check["key"] == "invite_delivery"
+        )
+        failed_attempt_check = next(
+            check for check in failed_readiness.json()["checks"]
+            if check["key"] == "invite_delivery_attempts"
+        )
+        self.assertEqual(failed_delivery_check["status"], "blocker")
+        self.assertEqual(failed_attempt_check["status"], "warning")
+
+        retry_delivery = self.client.post(
+            f"/admin/staff-invites/{failed_payload['token_id']}/delivery-attempts/retry",
+            headers=self._headers(admin_token),
+            json={"channel": "email", "provider": "local_outbox"},
+        )
+        self.assertEqual(retry_delivery.status_code, 200, retry_delivery.text)
+        retry_payload = retry_delivery.json()
+        self.assertIsNotNone(retry_payload["delivered_at"])
+        self.assertFalse(retry_payload["was_already_delivered"])
+        self.assertEqual(retry_payload["delivery_attempt_count"], 2)
+        self.assertEqual(retry_payload["last_delivery_status"], "sent")
+        self.assertEqual(retry_payload["last_delivery_provider"], "local_outbox")
+        self.assertEqual(retry_payload["delivery_attempt"]["status"], "sent")
+        self.assertEqual(retry_payload["delivery_attempt"]["provider"], "local_outbox")
+
+        failed_retry_attempts = self.client.get(
+            f"/admin/staff-invites/{failed_payload['token_id']}/delivery-attempts",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(failed_retry_attempts.status_code, 200, failed_retry_attempts.text)
+        self.assertEqual(len(failed_retry_attempts.json()), 2)
+        self.assertEqual(
+            [attempt["status"] for attempt in failed_retry_attempts.json()],
+            ["sent", "failed"],
+        )
+        self.assertTrue(
+            all(
+                failed_payload["token"] not in attempt.values()
+                for attempt in failed_retry_attempts.json()
+            )
+        )
+
+        retried_readiness = self.client.get(
+            "/admin/security/readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(retried_readiness.status_code, 200, retried_readiness.text)
+        retried_delivery_check = next(
+            check for check in retried_readiness.json()["checks"]
+            if check["key"] == "invite_delivery"
+        )
+        retried_attempt_check = next(
+            check for check in retried_readiness.json()["checks"]
+            if check["key"] == "invite_delivery_attempts"
+        )
+        self.assertEqual(retried_delivery_check["status"], "pass")
+        self.assertEqual(retried_attempt_check["status"], "pass")
+
         weak_accept = self.client.post(
             "/auth/accept-staff-invite",
             json={"token": invite_payload["token"], "password": "password123"},
@@ -1336,7 +1427,7 @@ class ApiIntegrationTests(unittest.TestCase):
         delivery_attempt_events = [
             event for event in audit if event["action"] == "staff_invite_delivery_attempted"
         ]
-        self.assertGreaterEqual(len(delivery_attempt_events), 3)
+        self.assertGreaterEqual(len(delivery_attempt_events), 5)
         self.assertIn(
             "manual_receipt",
             {event["details"]["provider"] for event in delivery_attempt_events},
@@ -1345,9 +1436,14 @@ class ApiIntegrationTests(unittest.TestCase):
             "local_outbox",
             {event["details"]["provider"] for event in delivery_attempt_events},
         )
+        self.assertIn(
+            "local_fail",
+            {event["details"]["provider"] for event in delivery_attempt_events},
+        )
         self.assertTrue(
             all(
                 invite_payload["token"] not in event["details"].values()
+                and failed_payload["token"] not in event["details"].values()
                 for event in delivery_attempt_events
             )
         )
