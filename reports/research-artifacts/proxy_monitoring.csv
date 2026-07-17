@@ -1,0 +1,15 @@
+feature,single_feature_roc_auc,spearman_corr,min_group_high_risk_rate,max_group_high_risk_rate,risk_rate_spread,proxy_strength,feature_family,directional_roc_auc,risk_direction,monitoring_action,rationale
+late_payment_count,0.827,0.4835,0.5201,1.0,0.4799,high,repayment_history,0.827,higher_values_higher_risk,must_review_before_real_data_or_kzt_claims,Strong repayment-history proxy; must be audited separately before thin-file claims.
+annual_income,0.5134,0.0197,0.74,0.806,0.066,low,monetary_scale,0.5134,higher_values_higher_risk,monitor_for_drift,Prototype amount-unit affordability input; not verified KZT income.
+loan_application_amount,0.5119,0.0174,0.73,0.804,0.074,low,monetary_scale,0.5119,higher_values_higher_risk,monitor_for_drift,Prototype amount-unit feature; needs KZT calibration before monetary interpretation.
+atm_withdrawal_frequency,0.5117,0.0172,0.7388,0.7884,0.0496,low,digital_access,0.5117,higher_values_higher_risk,monitor_for_drift,"May proxy cash dependency, branch access, or rural infrastructure."
+loan_to_income_ratio,0.5078,0.0114,0.732,0.8,0.068,low,derived_affordability,0.5078,higher_values_higher_risk,monitor_for_drift,Derived prototype affordability ratio; not a verified repayment-capacity measure.
+total_outstanding_debt,0.5068,0.01,0.752,0.786,0.034,low,debt_burden,0.5068,higher_values_higher_risk,monitor_for_drift,May track legacy indebtedness and repayment access rather than thin-file behavior.
+num_open_loans,0.505,0.0074,0.7506,0.7911,0.0405,low,debt_burden,0.505,higher_values_higher_risk,monitor_for_drift,May reproduce access to formal credit rather than independent behavioral signal.
+online_transfer_frequency,0.4953,-0.0069,0.7206,0.7946,0.074,low,digital_access,0.5047,higher_values_lower_risk,monitor_for_drift,May proxy digital inclusion and account usage access.
+digital_activity_score,0.5039,0.0057,0.7452,0.7797,0.0345,low,digital_access,0.5039,higher_values_higher_risk,monitor_for_drift,Derived digital activity feature; needs segment checks for access bias.
+avg_monthly_balance,0.5038,0.0056,0.736,0.808,0.072,low,monetary_scale,0.5038,higher_values_higher_risk,monitor_for_drift,Prototype balance feature; may proxy wealth and account formalization.
+mobile_banking_logins,0.5035,0.0051,0.7465,0.8019,0.0554,low,digital_access,0.5035,higher_values_higher_risk,monitor_for_drift,"May proxy smartphone, internet, or branch access rather than borrower reliability."
+total_credit_pressure,0.502,0.0029,0.716,0.79,0.074,low,derived_affordability,0.502,higher_values_higher_risk,monitor_for_drift,Derived pressure ratio from prototype monetary fields.
+income_to_debt_ratio,0.4985,-0.0023,0.736,0.788,0.052,low,derived_affordability,0.5015,higher_values_lower_risk,monitor_for_drift,Derived prototype affordability ratio; depends on uncalibrated amount units.
+debt_per_open_loan,0.5002,0.0002,0.748,0.782,0.034,low,derived_affordability,0.5002,higher_values_higher_risk,monitor_for_drift,Derived debt concentration measure from prototype monetary fields.

@@ -80,6 +80,14 @@ importance. In the synthetic dataset, removing it drops ROC-AUC to roughly
 random performance. That makes it a central modeling and ethics question, not
 just a useful predictor.
 
+Proxy Monitoring v2 extends this into a multi-feature research guardrail. The
+reports workflow now scans repayment-history, debt/formal-credit,
+monetary-scale, derived affordability, and digital-access features for
+single-feature dominance. It writes `proxy_monitoring.csv` and keeps the result
+in the generated report summary. This is not a product decision rule; it is a
+research artifact that prevents thin-file, KZT, fairness, or pilot claims from
+quietly depending on one proxy-heavy feature family.
+
 ## Models
 
 The current baseline models are:
@@ -229,6 +237,11 @@ ranges are scenario-planning diagnostics only. They are not forecasts,
 regulatory VaR, capital requirements, pricing guidance, or evidence that a
 policy is safe.
 
+Monetary outputs use prototype amount units, not calibrated KZT. The
+pre-pilot boundary for requested amounts, margin, LGD, operating cost, policy
+thresholds, and evidence required before KZT-denominated claims is defined in
+[KZT_CALIBRATION_ASSUMPTIONS.md](KZT_CALIBRATION_ASSUMPTIONS.md).
+
 ## Local Explanations
 
 The API now returns individual local explanations for the current Logistic
@@ -262,6 +275,7 @@ The generated `reports/research-artifacts/` folder includes:
 
 - model metrics;
 - feature-group ablation results;
+- proxy monitoring results;
 - calibration bins;
 - false-positive and false-negative analysis;
 - threshold policy analysis;
@@ -284,6 +298,12 @@ The current audit layer reports metrics by:
 The goal is not to use protected or sensitive features blindly in decisions.
 The goal is to measure whether model behavior differs across groups and whether
 threshold choices unintentionally reduce access for underserved borrowers.
+
+Proxy monitoring is paired with these segment audits. A feature can be
+predictive and still unacceptable for real lending if it mainly reflects
+repayment-history exclusion, uncalibrated KZT scale, affordability assumptions,
+or digital-access gaps. Any high-strength proxy must be reviewed before the
+project makes real-data, KZT-denominated, or operational-readiness claims.
 
 ## Regional Methodology
 
@@ -318,4 +338,5 @@ and repayment-performance data.
 4. Add false-positive and false-negative case review artifacts.
 5. Add temporal features once longitudinal data exists.
 6. Replace regional assumptions with official open data where possible.
-7. Seek anonymized pilot data from a local MFI.
+7. Validate KZT calibration assumptions with consented local MFI data.
+8. Seek anonymized pilot data from a local MFI.

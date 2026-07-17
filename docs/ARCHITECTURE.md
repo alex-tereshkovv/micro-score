@@ -105,7 +105,9 @@ Main local components:
 - tenant-scoped, seeded Monte Carlo simulation for baseline/adverse/severe
   portfolio outcomes with audited assumptions, snapshot fingerprints, numerical
   precision diagnostics, and an immutable run registry;
-- SQLite demo database generated under `data/app/`;
+- SQLite demo database generated under `data/app/`, with explicit storage
+  readiness metadata and a PostgreSQL migration checklist exposed through
+  `/health`;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 

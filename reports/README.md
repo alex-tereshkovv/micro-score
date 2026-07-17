@@ -27,6 +27,7 @@ Expected files:
 - `manifest.json`
 - `model_metrics.csv`
 - `ablation_study.csv`
+- `proxy_monitoring.csv`
 - `calibration_bins.csv`
 - `error_analysis_summary.csv`
 - `segment_error_analysis.csv`
@@ -43,6 +44,10 @@ Expected files:
 These files are generated from synthetic borrower-level data. They are useful
 for research review and portfolio presentation, but they should not be treated
 as validation for real lending decisions.
+
+`proxy_monitoring.csv` is a research guardrail. It flags repayment-history,
+monetary-scale, affordability, debt/formal-credit, and digital-access proxies
+that need review before KZT, thin-file, fairness, or pilot-readiness claims.
 
 Benchmark artifacts are generated from public datasets such as UCI Default of
 Credit Card Clients. They validate the modeling pipeline on real public

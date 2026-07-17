@@ -1034,6 +1034,20 @@ Override with:
 $env:MICROSCORE_API_DB_PATH = "C:\path\to\microscore.sqlite3"
 ```
 
+The active storage backend is explicit and validated at startup:
+
+```powershell
+$env:MICROSCORE_STORAGE_BACKEND = "sqlite"
+```
+
+`sqlite` is the only implemented runtime backend in PostgreSQL Readiness v1.
+Configuring `postgres` or `postgresql` is rejected rather than silently running
+against an incomplete persistence layer. `GET /health` returns a typed
+`storage` readiness block with the active backend, database path, required
+tables, JSON text columns, tenant-scoped columns, capability statuses, and the
+PostgreSQL migration checklist. This is migration metadata only; it does not
+require or connect to a live PostgreSQL server.
+
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring
 sessions, applications, analyst decisions, audit events, and `model_versions`.
@@ -1046,3 +1060,9 @@ The current model is trained on synthetic data. Demo numeric values use the
 same prototype scale as that synthetic dataset. Real KZT-denominated borrower
 data will need a separate calibration step before the model can be interpreted
 as a realistic lending tool.
+
+The monetary boundary is defined in
+`docs/KZT_CALIBRATION_ASSUMPTIONS.md`: `requested_amount`, affordability
+inputs, Monte Carlo exposure, and portfolio result are prototype amount units
+until local KZT principal, income, debt, tenor, margin, LGD, operating cost, and
+repayment outcomes are documented and validated.

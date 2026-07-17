@@ -19,7 +19,12 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from .features import DEFAULT_DROP_COLUMNS, TARGET_COLUMN, make_model_frame
+from .features import (
+    DEFAULT_DROP_COLUMNS,
+    TARGET_COLUMN,
+    add_behavioral_features,
+    make_model_frame,
+)
 from .modeling import (
     DEFAULT_DATA_PATH,
     RANDOM_STATE,
@@ -35,8 +40,86 @@ from .modeling import (
 class AuditReport:
     proxy_summary: pd.DataFrame
     proxy_by_value: pd.DataFrame
+    proxy_monitoring: pd.DataFrame
     feature_drop_comparison: pd.DataFrame
     segment_metrics: pd.DataFrame
+
+
+DEFAULT_PROXY_MONITOR_FEATURES: tuple[str, ...] = (
+    "late_payment_count",
+    "num_open_loans",
+    "total_outstanding_debt",
+    "loan_application_amount",
+    "annual_income",
+    "avg_monthly_balance",
+    "mobile_banking_logins",
+    "online_transfer_frequency",
+    "atm_withdrawal_frequency",
+    "digital_activity_score",
+    "income_to_debt_ratio",
+    "loan_to_income_ratio",
+    "total_credit_pressure",
+    "debt_per_open_loan",
+)
+
+PROXY_FEATURE_RATIONALES: dict[str, tuple[str, str]] = {
+    "late_payment_count": (
+        "repayment_history",
+        "Strong repayment-history proxy; must be audited separately before thin-file claims.",
+    ),
+    "num_open_loans": (
+        "debt_burden",
+        "May reproduce access to formal credit rather than independent behavioral signal.",
+    ),
+    "total_outstanding_debt": (
+        "debt_burden",
+        "May track legacy indebtedness and repayment access rather than thin-file behavior.",
+    ),
+    "loan_application_amount": (
+        "monetary_scale",
+        "Prototype amount-unit feature; needs KZT calibration before monetary interpretation.",
+    ),
+    "annual_income": (
+        "monetary_scale",
+        "Prototype amount-unit affordability input; not verified KZT income.",
+    ),
+    "avg_monthly_balance": (
+        "monetary_scale",
+        "Prototype balance feature; may proxy wealth and account formalization.",
+    ),
+    "mobile_banking_logins": (
+        "digital_access",
+        "May proxy smartphone, internet, or branch access rather than borrower reliability.",
+    ),
+    "online_transfer_frequency": (
+        "digital_access",
+        "May proxy digital inclusion and account usage access.",
+    ),
+    "atm_withdrawal_frequency": (
+        "digital_access",
+        "May proxy cash dependency, branch access, or rural infrastructure.",
+    ),
+    "digital_activity_score": (
+        "digital_access",
+        "Derived digital activity feature; needs segment checks for access bias.",
+    ),
+    "income_to_debt_ratio": (
+        "derived_affordability",
+        "Derived prototype affordability ratio; depends on uncalibrated amount units.",
+    ),
+    "loan_to_income_ratio": (
+        "derived_affordability",
+        "Derived prototype affordability ratio; not a verified repayment-capacity measure.",
+    ),
+    "total_credit_pressure": (
+        "derived_affordability",
+        "Derived pressure ratio from prototype monetary fields.",
+    ),
+    "debt_per_open_loan": (
+        "derived_affordability",
+        "Derived debt concentration measure from prototype monetary fields.",
+    ),
+}
 
 
 def _safe_divide(numerator: float, denominator: float) -> float:
@@ -97,6 +180,157 @@ def proxy_feature_audit(
     )
 
     return summary, by_value
+
+
+def _proxy_strength(single_feature_roc_auc: float, risk_rate_spread: float) -> str:
+    directional_auc = max(single_feature_roc_auc, 1.0 - single_feature_roc_auc)
+    if directional_auc >= 0.8 or risk_rate_spread >= 0.5:
+        return "high"
+    if directional_auc >= 0.7 or risk_rate_spread >= 0.3:
+        return "moderate"
+    return "low"
+
+
+def _monitoring_action(proxy_strength: str) -> str:
+    if proxy_strength == "high":
+        return "must_review_before_real_data_or_kzt_claims"
+    if proxy_strength == "moderate":
+        return "track_in_artifacts_and_segment_reviews"
+    return "monitor_for_drift"
+
+
+def _monitoring_group_rates(
+    clean: pd.DataFrame,
+    *,
+    feature: str,
+    target: str,
+    max_bins: int = 10,
+) -> pd.DataFrame:
+    if clean[feature].nunique(dropna=False) > max_bins:
+        try:
+            group_key = pd.qcut(clean[feature], q=max_bins, duplicates="drop")
+        except ValueError:
+            group_key = clean[feature]
+    else:
+        group_key = clean[feature]
+
+    return (
+        clean.assign(_monitoring_group=group_key)
+        .groupby("_monitoring_group", dropna=False, observed=False)
+        .agg(n=(target, "size"), high_risk_rate=(target, "mean"))
+        .reset_index()
+    )
+
+
+def _monitoring_summary(
+    clean: pd.DataFrame,
+    *,
+    feature: str,
+    target: str,
+) -> dict[str, float | str]:
+    y = clean[target].astype(int)
+    score = clean[feature].astype(float)
+    by_group = _monitoring_group_rates(clean, feature=feature, target=target)
+
+    auc = float(roc_auc_score(y, score))
+    correlation = float(clean[[feature, target]].corr(method="spearman").loc[feature, target])
+    min_rate = float(by_group["high_risk_rate"].min())
+    max_rate = float(by_group["high_risk_rate"].max())
+    spread = max_rate - min_rate
+    strength = _proxy_strength(auc, spread)
+
+    return {
+        "feature": feature,
+        "single_feature_roc_auc": auc,
+        "spearman_corr": correlation,
+        "min_group_high_risk_rate": min_rate,
+        "max_group_high_risk_rate": max_rate,
+        "risk_rate_spread": spread,
+        "proxy_strength": strength,
+    }
+
+
+def proxy_monitoring_table(
+    frame: pd.DataFrame,
+    *,
+    features: tuple[str, ...] = DEFAULT_PROXY_MONITOR_FEATURES,
+    target: str = TARGET_COLUMN,
+) -> pd.DataFrame:
+    """Return a multi-feature proxy-monitoring table for research artifacts.
+
+    This is a research guardrail, not a product decision rule. It scans the
+    strongest known repayment-history, monetary-scale, affordability, and
+    digital-access proxies so reports keep synthetic limitations visible.
+    """
+
+    if target not in frame.columns:
+        raise ValueError(f"Target column '{target}' is missing from the dataset.")
+
+    enriched = add_behavioral_features(frame)
+    rows: list[dict[str, object]] = []
+    strength_order = {"high": 0, "moderate": 1, "low": 2}
+
+    for feature in features:
+        if feature not in enriched.columns:
+            continue
+
+        clean = enriched[[feature, target]].copy()
+        clean[feature] = pd.to_numeric(clean[feature], errors="coerce")
+        clean = clean.dropna(subset=[feature, target])
+        if clean[feature].nunique(dropna=False) < 2 or clean[target].nunique() < 2:
+            continue
+
+        row = _monitoring_summary(clean, feature=feature, target=target)
+        single_auc = float(row["single_feature_roc_auc"])
+        spread = float(row["risk_rate_spread"])
+        directional_auc = max(single_auc, 1.0 - single_auc)
+        strength = str(row["proxy_strength"])
+        family, rationale = PROXY_FEATURE_RATIONALES.get(
+            feature,
+            ("unclassified", "Monitor for unexpected single-feature dominance."),
+        )
+        row.update(
+            {
+                "feature_family": family,
+                "directional_roc_auc": directional_auc,
+                "risk_direction": (
+                    "higher_values_higher_risk"
+                    if single_auc >= 0.5
+                    else "higher_values_lower_risk"
+                ),
+                "proxy_strength": strength,
+                "monitoring_action": _monitoring_action(strength),
+                "rationale": rationale,
+            }
+        )
+        rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "feature",
+                "feature_family",
+                "single_feature_roc_auc",
+                "directional_roc_auc",
+                "spearman_corr",
+                "risk_rate_spread",
+                "risk_direction",
+                "proxy_strength",
+                "monitoring_action",
+                "rationale",
+            ]
+        )
+
+    result = pd.DataFrame(rows)
+    result["_strength_order"] = result["proxy_strength"].map(strength_order)
+    return (
+        result.sort_values(
+            ["_strength_order", "directional_roc_auc", "risk_rate_spread"],
+            ascending=[True, False, False],
+        )
+        .drop(columns=["_strength_order"])
+        .reset_index(drop=True)
+    )
 
 
 def _evaluate_models_on_frame(
@@ -272,6 +506,7 @@ def run_audit(
         frame,
         feature=proxy_feature,
     )
+    proxy_monitoring = proxy_monitoring_table(frame)
     feature_drop_comparison = compare_with_without_feature(
         frame,
         feature=proxy_feature,
@@ -286,6 +521,7 @@ def run_audit(
     return AuditReport(
         proxy_summary=proxy_summary,
         proxy_by_value=proxy_by_value,
+        proxy_monitoring=proxy_monitoring,
         feature_drop_comparison=feature_drop_comparison,
         segment_metrics=segment_metrics,
     )

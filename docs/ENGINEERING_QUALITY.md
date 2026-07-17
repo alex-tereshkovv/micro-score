@@ -19,6 +19,30 @@ It runs:
 - research pipeline smoke test
 - regional decision smoke test
 
+## Release Gate Matrix v1
+
+This matrix maps product, security, and research promises to the checks that
+prove them. A release should not claim a promise unless its row has a passing
+automated proof in the local gate or an explicitly documented manual follow-up.
+
+| Promise area | Primary proof | Key markers that must stay covered |
+| --- | --- | --- |
+| Auth/session expiry and logout | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `session_expires_at`, `session_ttl_seconds`, `/auth/logout`, `session_expiry_visible`, `logout_guard` |
+| Staff invites and delivery hygiene | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `/admin/staff-invites`, `/auth/accept-staff-invite`, `staff_invite_delivery_attempted`, `staff_invite_rotated`, `staff_invite_token_hygiene` |
+| MFA enforcement and readiness | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `/admin/security/mfa-readiness`, `staff_mfa_attested`, `staff_mfa_login_verified`, `staff_mfa_challenge_failed`, `mfa_readiness` |
+| Staff sessions and lifecycle controls | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `/admin/staff-sessions`, `staff_session_revoked`, `staff_user_disabled`, `staff_user_reactivated`, `staff_session_control` |
+| Tenant isolation | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_research_docs.py` | `organization_id`, `cross-tenant detail access returns 403`, `tenant_isolation`, `/admin/organizations` |
+| Borrower lifecycle and borrower-safe projection | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `scripts/frontend-workflow-smoke.js`, `tests/test_research_docs.py` | `BorrowerApplicationResponse`, `borrower-safe`, `lifecycle_terminal_guard`, `terminal_locked`, `score_result` |
+| Review action plan and risk detail readiness | `tests/test_api_integration.py`, `scripts/static-demo-smoke.js`, `scripts/frontend-workflow-smoke.js`, `tests/test_web_static.py` | `buildReviewActionPlan`, `score_first`, `review_or_decide`, `finalize_decision`, `action_plan_terminal` |
+| Monte Carlo portfolio simulation | `tests/test_api_integration.py`, `tests/test_api_database.py`, `tests/test_api_simulation.py`, `scripts/static-demo-smoke.js`, `tests/test_research_docs.py` | `portfolio_fingerprint`, `calibration_volatility`, `Monte Carlo standard errors`, `simulation_history`, `portfolio_simulation_run` |
+| Model registry and stale-score governance | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_research_docs.py` | `/admin/model-versions`, `stale_model_version`, `model_registry`, `active_model`, `immutable governance snapshot` |
+| Privacy intake and sensitive-field rejection | `tests/test_api_integration.py`, `tests/test_api_privacy.py`, `scripts/application-intake-smoke.js`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `consent_confirmed`, `borrower_consent`, `find_forbidden_signal_paths`, `privacy_guards`, `Unexpected behavioral field` |
+| Research documentation boundaries | `tests/test_research_docs.py`, `tests/test_reporting.py`, `tests/test_modeling.py`, `docs/RELEASE_CHECKLIST.md` | `synthetic data is not real-world lending`, `Model Card and Data Statement`, `calibration volatility`, `Monte Carlo portfolio simulation`, `research_governance_docs_exist` |
+
+The matrix is enforced by `tests/test_release_gate_matrix.py`, which verifies
+that each matrix row references real test or smoke files and that its key
+markers still exist in the named proof artifacts.
+
 ## Static Demo Smoke Test
 
 The shared borrower intake contract has a focused Node test:

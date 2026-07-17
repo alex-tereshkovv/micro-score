@@ -1021,6 +1021,23 @@ label {
   padding: 14px;
 }
 
+.borrower-history.empty strong,
+.borrower-history.empty span {
+  display: block;
+}
+
+.borrower-history.empty strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.borrower-history.empty span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .borrower-history-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1045,10 +1062,15 @@ label {
   box-shadow: 0 6px 18px rgba(13, 91, 99, 0.1);
 }
 
-.borrower-history-row span:first-child,
-.borrower-history-row > em {
+.borrower-history-row.terminal {
+  border-left: 4px solid var(--green);
+}
+
+.borrower-history-main,
+.borrower-history-meta {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 .borrower-history-row em {
@@ -1057,8 +1079,127 @@ label {
   font-style: normal;
 }
 
-.borrower-history-row > em {
+.borrower-history-meta {
   grid-column: 1 / -1;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+}
+
+.borrower-portal-card {
+  display: grid;
+  gap: 14px;
+}
+
+.borrower-status-banner,
+.borrower-next-step,
+.borrower-application-facts,
+.borrower-privacy-note {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.borrower-status-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border-left: 4px solid var(--blue);
+  background: #f8fbfa;
+}
+
+.borrower-portal-card.terminal .borrower-status-banner {
+  border-left-color: var(--green);
+}
+
+.borrower-status-declined.terminal .borrower-status-banner {
+  border-left-color: var(--red);
+}
+
+.borrower-status-banner span,
+.borrower-next-step span,
+.borrower-application-facts h4 {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.borrower-status-banner strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.borrower-status-banner p,
+.borrower-next-step p,
+.borrower-privacy-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.borrower-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.borrower-summary-grid > div {
+  min-width: 0;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.borrower-summary-grid span,
+.borrower-application-facts dt {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.borrower-summary-grid strong,
+.borrower-application-facts dd {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.borrower-next-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.borrower-application-facts h4 {
+  margin: 0 0 10px;
+}
+
+.borrower-application-facts dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.borrower-application-facts div {
+  display: grid;
+  gap: 3px;
+}
+
+.borrower-privacy-note {
+  background: #f8fbfa;
 }
 
 .lifecycle-progress {
@@ -2110,6 +2251,22 @@ label {
   margin: -3px 0 0;
 }
 
+.borrower-timeline {
+  box-shadow: none;
+}
+
+.borrower-timeline li {
+  border-left-color: var(--blue);
+}
+
+.borrower-portal-card.terminal .borrower-timeline li:last-child {
+  border-left-color: var(--green);
+}
+
+.borrower-status-declined.terminal .borrower-timeline li:last-child {
+  border-left-color: var(--red);
+}
+
 .decision-approve {
   border-left-color: var(--green);
 }
@@ -2618,7 +2775,8 @@ tr.selected {
   }
 
   .portfolio-metrics,
-  .portfolio-grid {
+  .portfolio-grid,
+  .borrower-summary-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 
@@ -2697,6 +2855,8 @@ tr.selected {
   .organization-form,
   .model-version-form,
   .simulation-form,
+  .borrower-status-banner,
+  .borrower-next-step,
   .decision-columns,
   .mfi-decision-form,
   .recorded-decision,
@@ -2722,7 +2882,9 @@ tr.selected {
   .sidebar-summary,
   .portfolio-metrics,
   .portfolio-grid,
-  .policy-grid {
+  .policy-grid,
+  .borrower-summary-grid,
+  .borrower-history-meta {
     grid-template-columns: 1fr;
   }
 

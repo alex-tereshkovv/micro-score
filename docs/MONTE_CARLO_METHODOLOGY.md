@@ -86,6 +86,12 @@ explicit warning. Before interpretation, the analyst should enter a cost in the
 same amount units as the application portfolio; the UI deliberately says
 `units` rather than claiming calibrated KZT.
 
+The monetary interpretation boundary is formalized in
+[KZT_CALIBRATION_ASSUMPTIONS.md](KZT_CALIBRATION_ASSUMPTIONS.md). Until the
+project has consented local repayment outcomes and documented KZT principal,
+income, margin, LGD, cost, and tenor evidence, Monte Carlo amount outputs remain
+prototype amount units.
+
 ## Reported Outputs
 
 For each stress scenario, the API reports:

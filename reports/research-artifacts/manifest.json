@@ -11,6 +11,7 @@
     "manifest.json",
     "model_metrics.csv",
     "ablation_study.csv",
+    "proxy_monitoring.csv",
     "calibration_bins.csv",
     "error_analysis_summary.csv",
     "segment_error_analysis.csv",
@@ -24,5 +25,7 @@
     "calibration_curve.png",
     "ablation_roc_auc.png"
   ],
-  "data_warning": "Synthetic borrower-level data; not validated for real lending."
+  "data_warning": "Synthetic borrower-level data; not validated for real lending.",
+  "monetary_warning": "Prototype amount units; not calibrated KZT.",
+  "proxy_monitoring_warning": "Proxy monitoring is a research guardrail and does not change product decisions."
 }

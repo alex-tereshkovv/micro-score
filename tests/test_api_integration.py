@@ -92,6 +92,17 @@ class ApiIntegrationTests(unittest.TestCase):
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)
         self.assertIn("api-test.sqlite3", health.json()["database"])
+        storage = health.json()["storage"]
+        self.assertEqual(storage["backend"], "sqlite")
+        self.assertEqual(storage["status"], "ready")
+        self.assertFalse(storage["production_ready"])
+        self.assertIn("loan_applications", storage["required_tables"])
+        self.assertIn("audit_events.details_json", storage["json_columns"])
+        self.assertIn(
+            "loan_applications.organization_id",
+            storage["tenant_scoped_tables"],
+        )
+        self.assertEqual(storage["postgresql_migration_status"], "planned")
 
         borrower_token = self._register("borrower@example.com", "borrower")
         application_response = self.client.post(
@@ -483,6 +494,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("AuthResponse", schemas)
         self.assertIn("MeResponse", schemas)
         self.assertIn("LogoutResponse", schemas)
+        self.assertIn("StorageReadinessResponse", schemas)
+        self.assertIn("StorageCapabilityResponse", schemas)
         self.assertIn("MfaAttestationCreate", schemas)
         self.assertIn("MfaAttestationResponse", schemas)
         self.assertIn("MfaReadinessAccount", schemas)
@@ -550,6 +563,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PilotDataClassRow", schemas)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
+        self.assertIn("storage", schemas["HealthResponse"]["properties"])
+        storage_properties = schemas["StorageReadinessResponse"]["properties"]
+        self.assertIn("postgresql_migration_checklist", storage_properties)
+        self.assertIn("tenant_scoped_tables", storage_properties)
         self.assertIn("mfa_code", schemas["LoginRequest"]["properties"])
         self.assertIn("mfa_code", schemas["StaffInviteAccept"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])

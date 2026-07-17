@@ -67,6 +67,9 @@ Current proxy audit:
 - `late_payment_count` single-feature ROC-AUC is about `0.827`.
 - For `late_payment_count >= 4`, the synthetic dataset shows a high-risk rate
   of `1.0`, which is unrealistically sharp.
+- Proxy Monitoring v2 now also tracks adjacent monetary-scale,
+  affordability, debt/formal-credit, and digital-access proxies in
+  `reports/research-artifacts/proxy_monitoring.csv`.
 
 Current ablation study:
 
@@ -129,6 +132,11 @@ binning utilities. The reports command saves `calibration_bins.csv` and
 real-world pilot, because credit-risk probabilities need to be meaningful, not
 only well-ranked.
 
+KZT calibration is documented separately in
+[KZT_CALIBRATION_ASSUMPTIONS.md](KZT_CALIBRATION_ASSUMPTIONS.md). Until that
+evidence checklist is satisfied, monetary fields and Monte Carlo financial
+outputs are prototype amount units, not calibrated KZT.
+
 ## Explainability
 
 Current explanations:
@@ -159,6 +167,11 @@ financial/stress assumptions. It does not change borrower scores or recommend
 an automatic decision. Its loss probabilities and percentile ranges are not
 validated forecasts or regulatory risk measures because the current model has
 no real MFI repayment calibration.
+
+Monetary outputs are prototype amount units, not calibrated KZT. The project
+must satisfy the evidence checklist in
+[KZT_CALIBRATION_ASSUMPTIONS.md](KZT_CALIBRATION_ASSUMPTIONS.md) before making
+KZT-denominated profitability, loss, pricing, or capital claims.
 
 ## Ethical Risks
 
@@ -206,6 +219,8 @@ and opaque third-party data.
 - Calibration drift.
 - Segment-level approval and error rates.
 - Proxy sensitivity to late-payment features.
+- Proxy Monitoring v2 for repayment-history, monetary-scale, affordability,
+  debt/formal-credit, and digital-access features.
 - Manual review override rates.
 - Borrower complaints and appeal outcomes.
 

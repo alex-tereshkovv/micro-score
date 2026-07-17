@@ -876,13 +876,16 @@ function resetApplicationViews() {
   els.borrowerConsent.checked = false;
   renderApplicationValidation([]);
   els.borrowerApplicationHistory.className = "borrower-history empty";
-  els.borrowerApplicationHistory.textContent = "No applications submitted yet.";
+  els.borrowerApplicationHistory.innerHTML = `
+    <strong>No applications yet</strong>
+    <span>Submit a consented application to see borrower-safe status updates here.</span>
+  `;
   setPanelState(
     els.borrowerApplicationCard,
-    "result-block",
+    "result-block borrower-application-card",
     "empty",
     "No application selected",
-    "Submit or load an application to view its status.",
+    "Submit or load an application to view its status timeline.",
   );
 
   setPanelState(
@@ -980,10 +983,72 @@ function resetPrivilegedViews() {
   els.modelStatusPill.textContent = "Model status unavailable";
 }
 
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function borrowerStatusMeta(application = {}) {
+  const status = application.status || "submitted";
+  const defaults = {
+    submitted: {
+      label: "Submitted",
+      eyebrow: "Application received",
+      title: "Your application is in the MFI queue",
+      body: "The MFI has the application and can prepare it for review.",
+      next: "Wait for the MFI to complete the first review step.",
+    },
+    scored: {
+      label: "Review pending",
+      eyebrow: "Assessment complete",
+      title: "Your application is waiting for human review",
+      body: "The MFI has completed its internal assessment and still needs a person to review the application.",
+      next: "Check back for a recorded decision or a manual review update.",
+    },
+    under_review: {
+      label: "In review",
+      eyebrow: "Human review",
+      title: "An MFI reviewer is looking at your application",
+      body: "The MFI has marked the application for manual review. No final outcome has been recorded yet.",
+      next: "Watch this page for a final update from the MFI.",
+    },
+    approved: {
+      label: "Approved",
+      eyebrow: "Final outcome",
+      title: "The MFI recorded an approval",
+      body: "This is the final status shown in the demo portal. Follow the MFI's normal borrower communication channel for next steps.",
+      next: "No more workflow changes are shown here after a final decision.",
+    },
+    declined: {
+      label: "Not approved",
+      eyebrow: "Final outcome",
+      title: "The MFI recorded a decline decision",
+      body: "This is the final status shown in the demo portal. The portal does not expose internal analyst notes, scores, or policy details.",
+      next: "No more workflow changes are shown here after a final decision.",
+    },
+  };
+  return defaults[status] || {
+    label: formatPolicyName(status),
+    eyebrow: "Application status",
+    title: "Application status updated",
+    body: application.status_message || "The MFI workflow status changed.",
+    next: "Refresh this page for the latest borrower-safe status.",
+  };
+}
+
 function renderApplication(application) {
+  if (state.role === "borrower") return renderBorrowerApplication(application);
+
   const score = application.score_result;
   const riskClass = score ? `risk-${score.risk_band}` : "";
-  const borrowerProjection = state.role === "borrower" && Boolean(application.status_message);
   const decision = renderRecordedDecision(application.decision_result);
   const timeline = renderApplicationTimeline(application.timeline_events);
   return `
@@ -991,15 +1056,65 @@ function renderApplication(application) {
       <div class="metric"><span>Status</span><strong>${escapeHtml(application.status)}</strong></div>
       <div class="metric"><span>Amount</span><strong>${formatMoney(application.requested_amount)}</strong></div>
       <div class="metric"><span>District</span><strong>${escapeHtml(application.district || "-")}</strong></div>
-      ${borrowerProjection
-        ? `<div class="metric"><span>MFI</span><strong>${escapeHtml(application.organization_id || "assigned")}</strong></div>`
-        : `<div class="metric"><span>Risk</span><strong class="${riskClass}">${score ? escapeHtml(score.risk_band) : "not scored"}</strong></div>`}
+      <div class="metric"><span>Risk</span><strong class="${riskClass}">${score ? escapeHtml(score.risk_band) : "not scored"}</strong></div>
     </div>
     <p class="record-line"><strong>ID:</strong> ${escapeHtml(application.id)}</p>
     ${renderLifecycleProgress(application)}
     ${decision}
     ${score ? renderScore(score) : ""}
     ${timeline}
+  `;
+}
+
+function renderBorrowerApplication(application) {
+  const meta = borrowerStatusMeta(application);
+  const terminalClass = application.terminal ? " terminal" : "";
+  const purpose = application.purpose
+    ? escapeHtml(application.purpose)
+    : "No purpose provided";
+  const district = application.district || application.settlement_type
+    ? `${application.district || "District not set"}${application.settlement_type ? ` / ${formatPolicyName(application.settlement_type)}` : ""}`
+    : "Location not provided";
+  return `
+    <article class="borrower-portal-card borrower-status-${escapeHtml(application.status || "submitted")}${terminalClass}">
+      <section class="borrower-status-banner">
+        <div>
+          <span>${escapeHtml(meta.eyebrow)}</span>
+          <strong>${escapeHtml(meta.title)}</strong>
+          <p>${escapeHtml(application.status_message || meta.body)}</p>
+        </div>
+        <em class="pill status-${escapeHtml(application.status || "submitted")}">${escapeHtml(meta.label)}</em>
+      </section>
+      <div class="borrower-summary-grid">
+        <div><span>Requested amount</span><strong>${formatMoney(application.requested_amount)}</strong></div>
+        <div><span>Submitted</span><strong>${escapeHtml(formatDisplayDate(application.created_at))}</strong></div>
+        <div><span>MFI organization</span><strong>${escapeHtml(application.organization_id || "assigned")}</strong></div>
+        <div><span>Application ID</span><strong>${escapeHtml(application.id)}</strong></div>
+      </div>
+      ${renderLifecycleProgress(application)}
+      <section class="borrower-next-step">
+        <div>
+          <span>What this means</span>
+          <p>${escapeHtml(meta.body)}</p>
+        </div>
+        <div>
+          <span>Next update</span>
+          <p>${escapeHtml(meta.next)}</p>
+        </div>
+      </section>
+      <section class="borrower-application-facts">
+        <h4>Application details</h4>
+        <dl>
+          <div><dt>Purpose</dt><dd>${purpose}</dd></div>
+          <div><dt>Location</dt><dd>${escapeHtml(district)}</dd></div>
+          <div><dt>Status updated</dt><dd>${escapeHtml(formatDisplayDate(application.scored_at || application.created_at))}</dd></div>
+        </dl>
+      </section>
+      ${renderBorrowerTimeline(application.timeline_events)}
+      <aside class="borrower-privacy-note">
+        This borrower portal shows application status only. It does not show internal scores, analyst notes, policy names, raw behavioral signals, staff identity, or review-plan details.
+      </aside>
+    </article>
   `;
 }
 
@@ -1023,6 +1138,39 @@ function renderLifecycleProgress(application) {
     ? `<p class="lifecycle-message">${escapeHtml(application.status_message)}</p>`
     : "";
   return `<div class="lifecycle-progress"><ol>${steps}</ol>${message}</div>`;
+}
+
+function renderBorrowerTimeline(events) {
+  const safeEvents = Array.isArray(events) ? events : [];
+  if (!safeEvents.length) {
+    return `
+      <div class="timeline-block borrower-timeline">
+        <h4>Status timeline</h4>
+        <p class="tiny-text">Timeline updates will appear after the MFI workflow records a borrower-safe event.</p>
+      </div>
+    `;
+  }
+
+  const rows = safeEvents
+    .map((event) => {
+      const status = event.details?.status ? formatPolicyName(event.details.status) : "";
+      return `
+        <li>
+          <div>
+            <strong>${escapeHtml(event.title || formatPolicyName(event.action))}</strong>
+            <span>${status ? `Status: ${escapeHtml(status)}` : "Borrower-safe update"}</span>
+          </div>
+          <em>${escapeHtml(formatDisplayDate(event.created_at))}</em>
+        </li>
+      `;
+    })
+    .join("");
+  return `
+    <div class="timeline-block borrower-timeline">
+      <h4>Status timeline</h4>
+      <ol>${rows}</ol>
+    </div>
+  `;
 }
 
 function renderApplicationTimeline(events) {
@@ -1255,52 +1403,111 @@ async function submitApplication(event) {
 async function openBorrowerApplication(id) {
   state.selectedApplicationId = id;
   renderBorrowerApplicationHistory(state.borrowerApplications);
-  const cached = state.borrowerApplications.find((application) => application.id === id);
-  const application = cached || await apiFetch(`/applications/${encodeURIComponent(id)}`);
-  const applicationWithTimeline = await attachApplicationTimeline(application);
-  els.borrowerApplicationCard.className = "result-block";
-  els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
-  rememberApplication(id);
-  return applicationWithTimeline;
+  setPanelState(
+    els.borrowerApplicationCard,
+    "result-block borrower-application-card",
+    "loading",
+    "Opening application status",
+    "Loading the borrower-safe status timeline.",
+  );
+  try {
+    const cached = state.borrowerApplications.find((application) => application.id === id);
+    const application = cached || await apiFetch(`/applications/${encodeURIComponent(id)}`);
+    const applicationWithTimeline = await attachApplicationTimeline(application);
+    els.borrowerApplicationCard.className = "result-block borrower-application-card";
+    els.borrowerApplicationCard.innerHTML = renderApplication(applicationWithTimeline);
+    rememberApplication(id);
+    return applicationWithTimeline;
+  } catch (error) {
+    setPanelState(
+      els.borrowerApplicationCard,
+      "result-block borrower-application-card",
+      "error",
+      "Application status unavailable",
+      error.message || "The borrower-safe status view could not be loaded.",
+    );
+    throw error;
+  }
 }
 
 async function refreshBorrowerApplications(preferredId = "") {
-  const applications = await apiFetch("/applications");
-  state.borrowerApplications = applications;
-  renderBorrowerApplicationHistory(applications);
-  if (!applications.length) {
+  setPanelState(
+    els.borrowerApplicationHistory,
+    "borrower-history",
+    "loading",
+    "Loading application history",
+    "Fetching your borrower-safe status list.",
+  );
+  try {
+    const applications = await apiFetch("/applications");
+    state.borrowerApplications = applications;
+    renderBorrowerApplicationHistory(applications);
+    if (!applications.length) {
+      state.selectedApplicationId = "";
+      setPanelState(
+        els.borrowerApplicationCard,
+        "result-block borrower-application-card",
+        "empty",
+        "No application selected",
+        "Submit an application to start its lifecycle.",
+      );
+      return applications;
+    }
+    const rememberedId = preferredId || localStorage.getItem("microscore.lastApplicationId") || "";
+    const selectedId = applications.some((application) => application.id === rememberedId)
+      ? rememberedId
+      : applications[0].id;
+    await openBorrowerApplication(selectedId);
+    return applications;
+  } catch (error) {
+    state.borrowerApplications = [];
     state.selectedApplicationId = "";
     setPanelState(
-      els.borrowerApplicationCard,
-      "result-block",
-      "empty",
-      "No application selected",
-      "Submit an application to start its lifecycle.",
+      els.borrowerApplicationHistory,
+      "borrower-history",
+      "error",
+      "Application history unavailable",
+      error.message || "Your borrower-safe application history could not be loaded.",
     );
-    return applications;
+    setPanelState(
+      els.borrowerApplicationCard,
+      "result-block borrower-application-card",
+      "error",
+      "Status unavailable",
+      "Refresh the history after the connection is restored.",
+    );
+    throw error;
   }
-  const rememberedId = preferredId || localStorage.getItem("microscore.lastApplicationId") || "";
-  const selectedId = applications.some((application) => application.id === rememberedId)
-    ? rememberedId
-    : applications[0].id;
-  await openBorrowerApplication(selectedId);
-  return applications;
 }
 
 function renderBorrowerApplicationHistory(applications) {
   if (!applications.length) {
     els.borrowerApplicationHistory.className = "borrower-history empty";
-    els.borrowerApplicationHistory.textContent = "No applications submitted yet.";
+    els.borrowerApplicationHistory.innerHTML = `
+      <strong>No applications yet</strong>
+      <span>Submit a consented application to see borrower-safe status updates here.</span>
+    `;
     return;
   }
   els.borrowerApplicationHistory.className = "borrower-history";
-  els.borrowerApplicationHistory.innerHTML = applications.map((application) => `
-    <button class="borrower-history-row ${application.id === state.selectedApplicationId ? "selected" : ""}" type="button" aria-pressed="${application.id === state.selectedApplicationId}" data-borrower-application-id="${escapeHtml(application.id)}">
-      <span><strong>${formatAmountUnits(application.requested_amount)}</strong><em>${escapeHtml(application.organization_id || "MFI")}</em></span>
-      <span class="pill status-${escapeHtml(application.status)}">${escapeHtml(formatPolicyName(application.status))}</span>
-      <em>${escapeHtml(application.created_at)}</em>
-    </button>
-  `).join("");
+  els.borrowerApplicationHistory.innerHTML = applications.map((application) => {
+    const selected = application.id === state.selectedApplicationId;
+    const meta = borrowerStatusMeta(application);
+    const purpose = application.purpose || application.district || "Application";
+    return `
+      <button class="borrower-history-row ${selected ? "selected" : ""} ${application.terminal ? "terminal" : ""}" type="button" aria-pressed="${selected}" ${selected ? 'aria-current="true"' : ""} data-borrower-application-id="${escapeHtml(application.id)}">
+        <span class="borrower-history-main">
+          <strong>${formatAmountUnits(application.requested_amount)}</strong>
+          <em>${escapeHtml(purpose)}</em>
+        </span>
+        <span class="pill status-${escapeHtml(application.status)}">${escapeHtml(meta.label)}</span>
+        <span class="borrower-history-meta">
+          <em>${escapeHtml(formatDisplayDate(application.created_at))}</em>
+          <em>${escapeHtml(application.organization_id || "assigned MFI")}</em>
+        </span>
+      </button>
+    `;
+  }).join("");
 }
 
 async function attachApplicationTimeline(application) {

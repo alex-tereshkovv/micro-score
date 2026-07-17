@@ -277,11 +277,28 @@ async function main() {
     {},
     borrowerSession,
   );
+  const borrowerTerminalDetail = await api.request(
+    `/applications/${lifecycleApplication.id}`,
+    {},
+    borrowerSession,
+  );
   if (
     lifecycleTimeline.some((event) => event.actor_email || event.details.risk_band)
     || lifecycleTimeline.at(-1)?.title !== "Application approved"
   ) {
     throw new Error("Expected borrower-safe lifecycle timeline");
+  }
+  if (
+    borrowerTerminalDetail.status !== "approved"
+    || !borrowerTerminalDetail.terminal
+    || !String(borrowerTerminalDetail.status_message || "").includes("final status")
+    || borrowerTerminalDetail.score_result
+    || borrowerTerminalDetail.decision_result
+    || borrowerTerminalDetail.behavioral_signals
+    || borrowerTerminalDetail.actor_email
+    || borrowerTerminalDetail.policy_name
+  ) {
+    throw new Error("Expected borrower terminal detail to remain status-only and borrower-safe");
   }
 
   let privilegedRegistrationRejected = false;
@@ -1216,6 +1233,7 @@ async function main() {
       simulation_iterations: simulation.assumptions.iterations,
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
+      borrower_terminal_status: borrowerTerminalDetail.status,
       action_plan_initial: draftPlan.stage,
       action_plan_review: reviewActionPlan.stage,
       action_plan_terminal: terminalPlan.stage,

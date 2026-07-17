@@ -70,6 +70,8 @@ The current pipeline includes:
 - 5-fold cross-validation;
 - ROC-AUC, accuracy, precision, recall, F1, and Brier score;
 - proxy-feature audit;
+- proxy-feature monitoring across repayment-history, monetary-scale,
+  affordability, debt/formal-credit, and digital-access signals;
 - feature-group ablation study;
 - local additive explanations for individual API scores;
 - false-positive and false-negative error analysis;
@@ -92,6 +94,12 @@ The project drops target-like or unrealistic features:
 The most important remaining concern is `late_payment_count`. In the current
 synthetic dataset, it dominates model behavior and behaves like a strong proxy
 for default.
+
+The project now monitors adjacent monetary-scale, affordability, debt, and
+digital-access features as proxy candidates too. This matters because
+uncalibrated amount units and digital-activity measures can proxy wealth,
+formal financial access, or rural infrastructure instead of borrower
+reliability.
 
 ## 7. Models
 
@@ -211,6 +219,8 @@ comparison. The output is a scenario range for approvals, defaults, exposure,
 and one-period financial result. Because both probabilities and financial
 assumptions remain unvalidated for a local MFI, this is a methodological
 uncertainty demonstration rather than a forecast or regulatory risk measure.
+Monetary outputs remain prototype amount units until the KZT calibration
+evidence checklist is satisfied.
 
 ## 10. Fairness And Segment Audit
 

@@ -1,7 +1,7 @@
 """MicroScore modeling utilities."""
 
 from .ablation import AblationScenario, ablation_scenarios, run_ablation_study
-from .audit import AuditReport, run_audit
+from .audit import AuditReport, proxy_monitoring_table, run_audit
 from .benchmark import (
     BenchmarkArtifactPaths,
     load_uci_default_benchmark,
@@ -40,6 +40,7 @@ __all__ = [
     "logistic_local_explanation",
     "make_model_frame",
     "normalize_uci_default_frame",
+    "proxy_monitoring_table",
     "generate_research_artifacts",
     "regional_summary",
     "resolve_data_path",

@@ -21,6 +21,45 @@ DEFAULT_MODEL_NAME = "Logistic Regression"
 DEFAULT_FEATURE_SCHEMA_VERSION = "behavioral-v1"
 DEFAULT_TRAINING_DATA_LABEL = "synthetic-credit-risk-v1"
 DEFAULT_MODEL_RANDOM_STATE = 42
+DEFAULT_STORAGE_BACKEND = "sqlite"
+SUPPORTED_STORAGE_BACKENDS = {DEFAULT_STORAGE_BACKEND}
+POSTGRESQL_STORAGE_ALIASES = {"postgres", "postgresql"}
+REQUIRED_SCHEMA_TABLES = (
+    "mfi_organizations",
+    "users",
+    "sessions",
+    "staff_invites",
+    "staff_invite_delivery_attempts",
+    "loan_applications",
+    "application_decisions",
+    "audit_events",
+    "model_versions",
+    "portfolio_simulations",
+)
+JSON_TEXT_COLUMNS = (
+    "loan_applications.behavioral_signals_json",
+    "loan_applications.score_result_json",
+    "audit_events.details_json",
+    "model_versions.metrics_json",
+    "model_versions.limitations_json",
+    "portfolio_simulations.request_json",
+    "portfolio_simulations.result_json",
+)
+TENANT_SCOPED_TABLES = (
+    "users.organization_id",
+    "loan_applications.organization_id",
+    "staff_invites.organization_id",
+    "portfolio_simulations.organization_id",
+)
+POSTGRESQL_MIGRATION_CHECKLIST = (
+    "Create managed PostgreSQL schema migrations before enabling a non-SQLite backend.",
+    "Map JSON text columns to jsonb or an explicitly versioned text strategy.",
+    "Preserve organization_id tenant scoping for queues, review packets, "
+    "analytics, and simulations.",
+    "Port session, staff invite, audit, model registry, and simulation "
+    "repositories behind the same API.",
+    "Run SQLite parity tests plus PostgreSQL integration tests against a disposable database.",
+)
 
 
 class DuplicateUserError(ValueError):
@@ -39,11 +78,27 @@ class InvalidApplicationTransitionError(ValueError):
     """Raised when an application lifecycle transition is not allowed."""
 
 
+class UnsupportedStorageBackendError(ValueError):
+    """Raised when configuration requests a repository backend not implemented yet."""
+
+
 def default_database_path() -> Path:
     configured = os.environ.get("MICROSCORE_API_DB_PATH")
     if configured:
         return Path(configured)
     return DEFAULT_API_DB_PATH
+
+
+def configured_storage_backend() -> str:
+    raw_value = os.environ.get("MICROSCORE_STORAGE_BACKEND", DEFAULT_STORAGE_BACKEND)
+    backend = raw_value.strip().lower()
+    if not backend:
+        return DEFAULT_STORAGE_BACKEND
+    if backend in {"sqlite", "sqlite3"}:
+        return DEFAULT_STORAGE_BACKEND
+    if backend in POSTGRESQL_STORAGE_ALIASES:
+        return "postgresql"
+    return backend
 
 
 def _now_iso() -> str:
@@ -193,6 +248,14 @@ class MicroScoreRepository:
     """Small SQLite repository for users, sessions, applications, and audits."""
 
     def __init__(self, db_path: str | Path | None = None) -> None:
+        self.storage_backend = configured_storage_backend()
+        if self.storage_backend not in SUPPORTED_STORAGE_BACKENDS:
+            raise UnsupportedStorageBackendError(
+                "MICROSCORE_STORAGE_BACKEND="
+                f"{self.storage_backend!r} is not implemented yet. "
+                "Use 'sqlite' for the current prototype; PostgreSQL is tracked "
+                "by the readiness metadata but requires a future repository implementation."
+            )
         self.db_path = Path(db_path) if db_path is not None else default_database_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.initialize()
@@ -454,6 +517,62 @@ class MicroScoreRepository:
                     """,
                     (_now_iso(), DEFAULT_MODEL_VERSION),
                 )
+
+    def storage_readiness(self) -> dict[str, Any]:
+        """Return deterministic storage metadata for migration planning."""
+
+        return {
+            "backend": self.storage_backend,
+            "status": "ready",
+            "production_ready": False,
+            "database_path": str(self.db_path),
+            "database_exists": self.db_path.exists(),
+            "required_tables": list(REQUIRED_SCHEMA_TABLES),
+            "json_columns": list(JSON_TEXT_COLUMNS),
+            "tenant_scoped_tables": list(TENANT_SCOPED_TABLES),
+            "capabilities": [
+                {
+                    "id": "sqlite_idempotent_startup_migrations",
+                    "status": "ready",
+                    "detail": (
+                        "Repository startup creates missing tables and adds legacy columns "
+                        "without deleting local development data."
+                    ),
+                },
+                {
+                    "id": "sqlite_foreign_keys_per_connection",
+                    "status": "ready",
+                    "detail": "Every SQLite connection enables PRAGMA foreign_keys = ON.",
+                },
+                {
+                    "id": "deterministic_json_text_serialization",
+                    "status": "ready",
+                    "detail": "Structured values are serialized with sorted ASCII JSON text.",
+                },
+                {
+                    "id": "organization_scoped_repository_queries",
+                    "status": "ready",
+                    "detail": (
+                        "Application queues, analytics, simulations, staff invites, and "
+                        "review access keep organization_id as the tenant boundary."
+                    ),
+                },
+                {
+                    "id": "postgresql_repository_backend",
+                    "status": "planned",
+                    "detail": (
+                        "PostgreSQL is not an active backend in this prototype and needs "
+                        "schema migrations plus integration tests before use."
+                    ),
+                },
+            ],
+            "postgresql_migration_status": "planned",
+            "postgresql_migration_checklist": list(POSTGRESQL_MIGRATION_CHECKLIST),
+            "limitation": (
+                "PostgreSQL Readiness v1 documents the storage contract and startup "
+                "validation while the runtime repository remains SQLite-only."
+            ),
+        }
 
     def create_model_version(
         self,

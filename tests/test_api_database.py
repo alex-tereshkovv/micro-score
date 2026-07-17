@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import hashlib
+import os
 import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,7 @@ from microscore_api.database import (
     DuplicateUserError,
     InvalidApplicationTransitionError,
     MicroScoreRepository,
+    UnsupportedStorageBackendError,
 )
 
 
@@ -103,6 +106,39 @@ class ApiDatabaseTests(unittest.TestCase):
             migrated.get_user("legacy@example.com")["organization_id"],
             "legacy-mfi",
         )
+
+    def test_storage_readiness_describes_sqlite_contract(self) -> None:
+        readiness = self.repository.storage_readiness()
+
+        self.assertEqual(readiness["backend"], "sqlite")
+        self.assertEqual(readiness["status"], "ready")
+        self.assertFalse(readiness["production_ready"])
+        self.assertEqual(readiness["database_path"], str(self.db_path))
+        self.assertTrue(readiness["database_exists"])
+        self.assertIn("sessions", readiness["required_tables"])
+        self.assertIn("staff_invites", readiness["required_tables"])
+        self.assertIn("portfolio_simulations", readiness["required_tables"])
+        self.assertIn("audit_events.details_json", readiness["json_columns"])
+        self.assertIn(
+            "loan_applications.organization_id",
+            readiness["tenant_scoped_tables"],
+        )
+        capability_ids = {item["id"] for item in readiness["capabilities"]}
+        self.assertIn("sqlite_idempotent_startup_migrations", capability_ids)
+        self.assertIn("postgresql_repository_backend", capability_ids)
+        self.assertEqual(readiness["postgresql_migration_status"], "planned")
+        self.assertTrue(
+            any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
+        )
+
+    def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
+        configured = os.environ.copy()
+        configured["MICROSCORE_STORAGE_BACKEND"] = "postgresql"
+        with patch.dict(os.environ, configured, clear=True):
+            with self.assertRaises(UnsupportedStorageBackendError) as raised:
+                MicroScoreRepository(Path(self.tempdir.name) / "postgresql.sqlite3")
+
+        self.assertIn("PostgreSQL is tracked", str(raised.exception))
 
     def test_duplicate_user_is_reported_cleanly(self) -> None:
         self.repository.create_user("borrower@example.com", "password-hash", "borrower")

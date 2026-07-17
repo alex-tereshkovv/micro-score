@@ -103,6 +103,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("scripts\\frontend-workflow-smoke.js", script)
         self.assertIn("scripts\\application-intake-smoke.js", script)
         self.assertIn("scripts\\portfolio-dashboard-smoke.js", script)
+        self.assertIn("scripts\\live-api-workflow-smoke.py", script)
+        self.assertIn("Live API workflow smoke test", script)
         self.assertIn("apps\\web\\risk-detail.js", script)
         self.assertIn("git diff --check", script)
         self.assertIn("Assert-LastExitCode", script)

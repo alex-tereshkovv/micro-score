@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
 from .ablation import run_ablation_study
+from .audit import proxy_monitoring_table
 from .error_analysis import run_error_analysis
 from .explainability import LocalExplanation, logistic_local_explanation
 from .features import DEFAULT_DROP_COLUMNS, TARGET_COLUMN, make_model_frame
@@ -39,6 +40,7 @@ class ResearchArtifactPaths:
     manifest_json: Path
     model_metrics_csv: Path
     ablation_csv: Path
+    proxy_monitoring_csv: Path
     calibration_csv: Path
     error_summary_csv: Path
     segment_error_csv: Path
@@ -58,6 +60,7 @@ class ResearchArtifactPaths:
             self.manifest_json,
             self.model_metrics_csv,
             self.ablation_csv,
+            self.proxy_monitoring_csv,
             self.calibration_csv,
             self.error_summary_csv,
             self.segment_error_csv,
@@ -274,6 +277,7 @@ def _write_summary(
     model_metrics: pd.DataFrame,
     ablation: pd.DataFrame,
     calibration: pd.DataFrame,
+    proxy_monitoring: pd.DataFrame,
     error_summary: pd.DataFrame,
     segment_errors: pd.DataFrame,
     false_positive_examples: pd.DataFrame,
@@ -306,6 +310,14 @@ def _write_summary(
         "feature",
         "value",
         "direction",
+    ]
+    proxy_columns = [
+        "feature",
+        "feature_family",
+        "directional_roc_auc",
+        "risk_rate_spread",
+        "proxy_strength",
+        "monitoring_action",
     ]
     error_columns = [
         "error_type",
@@ -385,6 +397,10 @@ real-world lending validity.
 
 {_markdown_table(calibration.head(12))}
 
+## Proxy Monitoring v2
+
+{_markdown_table(proxy_monitoring[proxy_columns], max_rows=14)}
+
 ## Error Analysis Summary
 
 {_markdown_table(error_summary[error_summary["error_type"].notna()][error_columns])}
@@ -453,6 +469,7 @@ def generate_research_artifacts(
         random_state=random_state,
         test_size=test_size,
     )
+    proxy_monitoring = proxy_monitoring_table(base_frame)
     explanation = logistic_local_explanation(logistic_estimator, X_test.iloc[[0]])
     explanation_summary, explanation_factors = _explanation_tables(explanation)
     error_analysis = run_error_analysis(
@@ -472,6 +489,7 @@ def generate_research_artifacts(
         manifest_json=output_path / "manifest.json",
         model_metrics_csv=output_path / "model_metrics.csv",
         ablation_csv=output_path / "ablation_study.csv",
+        proxy_monitoring_csv=output_path / "proxy_monitoring.csv",
         calibration_csv=output_path / "calibration_bins.csv",
         error_summary_csv=output_path / "error_analysis_summary.csv",
         segment_error_csv=output_path / "segment_error_analysis.csv",
@@ -487,6 +505,7 @@ def generate_research_artifacts(
 
     _round_for_report(model_metrics).to_csv(paths.model_metrics_csv, index=False)
     _round_for_report(ablation).to_csv(paths.ablation_csv, index=False)
+    _round_for_report(proxy_monitoring).to_csv(paths.proxy_monitoring_csv, index=False)
     _round_for_report(calibration).to_csv(paths.calibration_csv, index=False)
     _round_for_report(error_analysis.summary).to_csv(paths.error_summary_csv, index=False)
     _round_for_report(error_analysis.segment_errors).to_csv(
@@ -533,6 +552,7 @@ def generate_research_artifacts(
         manifest_json=paths.manifest_json,
         model_metrics_csv=paths.model_metrics_csv,
         ablation_csv=paths.ablation_csv,
+        proxy_monitoring_csv=paths.proxy_monitoring_csv,
         calibration_csv=paths.calibration_csv,
         error_summary_csv=paths.error_summary_csv,
         segment_error_csv=paths.segment_error_csv,
@@ -556,6 +576,10 @@ def generate_research_artifacts(
         "n_bins": n_bins,
         "files": [path.name for path in paths.files],
         "data_warning": "Synthetic borrower-level data; not validated for real lending.",
+        "monetary_warning": "Prototype amount units; not calibrated KZT.",
+        "proxy_monitoring_warning": (
+            "Proxy monitoring is a research guardrail and does not change product decisions."
+        ),
     }
     paths.manifest_json.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     _write_summary(
@@ -563,6 +587,7 @@ def generate_research_artifacts(
         model_metrics=model_metrics,
         ablation=ablation,
         calibration=calibration,
+        proxy_monitoring=proxy_monitoring,
         error_summary=error_analysis.summary,
         segment_errors=error_analysis.segment_errors,
         false_positive_examples=error_analysis.false_positive_examples,

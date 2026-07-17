@@ -21,6 +21,7 @@ class ResearchDocsTests(unittest.TestCase):
             "MONTE_CARLO_METHODOLOGY.md",
             "IMPACT.md",
             "PILOT_DATA_SCHEMA.md",
+            "PROXY_FEATURE_MONITORING.md",
             "PUBLIC_DEMO_PLAN.md",
             "RELEASE_CHECKLIST.md",
             "RESEARCH_PAPER.md",
@@ -370,6 +371,42 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Methodological prototype only", validation_tracker)
         self.assertIn("Monte Carlo portfolio simulation", research_paper)
         self.assertIn("common random numbers", research_paper)
+
+    def test_kzt_calibration_and_proxy_monitoring_boundaries_are_documented(self) -> None:
+        kzt_pack = (DOCS_ROOT / "KZT_CALIBRATION_ASSUMPTIONS.md").read_text(
+            encoding="utf-8"
+        )
+        proxy_monitoring = (DOCS_ROOT / "PROXY_FEATURE_MONITORING.md").read_text(
+            encoding="utf-8"
+        )
+        model_card = (DOCS_ROOT / "MODEL_CARD.md").read_text(encoding="utf-8")
+        methodology = (DOCS_ROOT / "METHODOLOGY.md").read_text(encoding="utf-8")
+        validation_tracker = (DOCS_ROOT / "VALIDATION_TRACKER.md").read_text(
+            encoding="utf-8"
+        )
+        reports_readme = (PROJECT_ROOT / "reports" / "README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("prototype amount units", kzt_pack)
+        self.assertIn("not calibrated KZT", kzt_pack)
+        self.assertIn("fixed synthetic-to-KZT conversion factor", kzt_pack)
+        self.assertIn("expected KZT profit", kzt_pack)
+        self.assertIn("validated inclusion impact", kzt_pack)
+        self.assertIn("Proxy Monitoring v2", kzt_pack)
+        self.assertIn("no product API, scoring, lifecycle, or frontend behavior changes", kzt_pack)
+
+        self.assertIn("reports/research-artifacts/proxy_monitoring.csv", proxy_monitoring)
+        self.assertIn("directional_roc_auc", proxy_monitoring)
+        self.assertIn("monetary-scale", proxy_monitoring)
+        self.assertIn("must not", proxy_monitoring)
+        self.assertIn("turn prototype amount units into calibrated KZT", proxy_monitoring)
+
+        self.assertIn("KZT_CALIBRATION_ASSUMPTIONS.md", model_card)
+        self.assertIn("proxy_monitoring.csv", model_card)
+        self.assertIn("Proxy Monitoring v2", methodology)
+        self.assertIn("proxy_monitoring.csv", reports_readme)
+        self.assertIn("KZT calibration assumptions", validation_tracker)
 
 
 if __name__ == "__main__":

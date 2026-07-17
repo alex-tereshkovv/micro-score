@@ -1543,6 +1543,7 @@ def health(repository: MicroScoreRepository = Depends(get_repository)) -> Health
         "status": "ok",
         "service": "microscore-api",
         "database": str(repository.db_path),
+        "storage": repository.storage_readiness(),
     }
 
 

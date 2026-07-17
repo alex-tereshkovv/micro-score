@@ -15,6 +15,7 @@ real-world lending validity.
 - `manifest.json`
 - `model_metrics.csv`
 - `ablation_study.csv`
+- `proxy_monitoring.csv`
 - `calibration_bins.csv`
 - `error_analysis_summary.csv`
 - `segment_error_analysis.csv`
@@ -74,6 +75,25 @@ real-world lending validity.
 | Logistic Regression | (0.9, 1.0] | 250 | 0.9557 | 1.0 | -0.0443 |
 | Random Forest | (-0.001, 0.1] | 0 | nan | nan | nan |
 | Random Forest | (0.1, 0.2] | 0 | nan | nan | nan |
+
+## Proxy Monitoring v2
+
+| feature | feature_family | directional_roc_auc | risk_rate_spread | proxy_strength | monitoring_action |
+| --- | --- | --- | --- | --- | --- |
+| late_payment_count | repayment_history | 0.827 | 0.4799 | high | must_review_before_real_data_or_kzt_claims |
+| annual_income | monetary_scale | 0.5134 | 0.066 | low | monitor_for_drift |
+| loan_application_amount | monetary_scale | 0.5119 | 0.074 | low | monitor_for_drift |
+| atm_withdrawal_frequency | digital_access | 0.5117 | 0.0496 | low | monitor_for_drift |
+| loan_to_income_ratio | derived_affordability | 0.5078 | 0.068 | low | monitor_for_drift |
+| total_outstanding_debt | debt_burden | 0.5068 | 0.034 | low | monitor_for_drift |
+| num_open_loans | debt_burden | 0.505 | 0.0405 | low | monitor_for_drift |
+| online_transfer_frequency | digital_access | 0.5047 | 0.074 | low | monitor_for_drift |
+| digital_activity_score | digital_access | 0.5039 | 0.0345 | low | monitor_for_drift |
+| avg_monthly_balance | monetary_scale | 0.5038 | 0.072 | low | monitor_for_drift |
+| mobile_banking_logins | digital_access | 0.5035 | 0.0554 | low | monitor_for_drift |
+| total_credit_pressure | derived_affordability | 0.502 | 0.074 | low | monitor_for_drift |
+| income_to_debt_ratio | derived_affordability | 0.5015 | 0.052 | low | monitor_for_drift |
+| debt_per_open_loan | derived_affordability | 0.5002 | 0.034 | low | monitor_for_drift |
 
 ## Error Analysis Summary
 

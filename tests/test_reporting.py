@@ -71,6 +71,7 @@ class ReportingTests(unittest.TestCase):
 
             model_metrics = pd.read_csv(artifacts.model_metrics_csv)
             ablation = pd.read_csv(artifacts.ablation_csv)
+            proxy_monitoring = pd.read_csv(artifacts.proxy_monitoring_csv)
             calibration = pd.read_csv(artifacts.calibration_csv)
             error_summary = pd.read_csv(artifacts.error_summary_csv)
             segment_errors = pd.read_csv(artifacts.segment_error_csv)
@@ -83,6 +84,8 @@ class ReportingTests(unittest.TestCase):
 
             self.assertIn("test_brier_score", model_metrics.columns)
             self.assertIn("delta_test_roc_auc_vs_no_leakage", ablation.columns)
+            self.assertIn("directional_roc_auc", proxy_monitoring.columns)
+            self.assertIn("monitoring_action", proxy_monitoring.columns)
             self.assertIn("calibration_error", calibration.columns)
             self.assertIn("false_positive_rate", error_summary.columns)
             self.assertIn("false_negative_rate", segment_errors.columns)
@@ -96,6 +99,15 @@ class ReportingTests(unittest.TestCase):
                 "MicroScore Research Artifacts",
                 artifacts.summary_markdown.read_text(encoding="utf-8"),
             )
+            self.assertIn(
+                "Proxy Monitoring v2",
+                artifacts.summary_markdown.read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                manifest["monetary_warning"],
+                "Prototype amount units; not calibrated KZT.",
+            )
+            self.assertIn("proxy_monitoring.csv", manifest["files"])
 
 
 if __name__ == "__main__":

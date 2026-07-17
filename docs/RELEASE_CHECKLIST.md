@@ -54,6 +54,17 @@ node scripts\static-demo-smoke.js
 git diff --check
 ```
 
+## Release Gate Traceability
+
+- `docs/ENGINEERING_QUALITY.md` includes the Release Gate Matrix v1.
+- Every product, security, and research promise in the matrix points to a real
+  test or smoke script plus key markers that must stay covered.
+- Matrix drift is checked by:
+
+```powershell
+.venv\Scripts\python -m unittest tests.test_release_gate_matrix
+```
+
 ## Demo Safety
 
 - Static demo warning is visible.

@@ -88,10 +88,32 @@ class LogoutResponse(BaseModel):
     revoked: bool
 
 
+class StorageCapabilityResponse(BaseModel):
+    id: str
+    status: Literal["ready", "planned", "blocked"]
+    detail: str
+
+
+class StorageReadinessResponse(BaseModel):
+    backend: Literal["sqlite"]
+    status: Literal["ready"]
+    production_ready: bool
+    database_path: str
+    database_exists: bool
+    required_tables: list[str]
+    json_columns: list[str]
+    tenant_scoped_tables: list[str]
+    capabilities: list[StorageCapabilityResponse]
+    postgresql_migration_status: Literal["planned"]
+    postgresql_migration_checklist: list[str]
+    limitation: str
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str
     database: str
+    storage: StorageReadinessResponse
 
 
 class UserPublic(BaseModel):

@@ -27,11 +27,11 @@
   const DEMO_MFA_CODE = "246810";
   const DEMO_INVITE_URL_BASE = "https://alex-tereshkovv.github.io/micro-score";
   const borrowerStatusMessages = {
-    submitted: "Application received. It is waiting for MFI scoring.",
-    scored: "Risk assessment completed. It is waiting for analyst review.",
-    under_review: "An MFI analyst is reviewing the application.",
-    approved: "The MFI recorded an approval decision.",
-    declined: "The MFI recorded a decline decision.",
+    submitted: "Application received. It is waiting for the MFI to begin review.",
+    scored: "The MFI completed its internal assessment. A human review is still required.",
+    under_review: "The MFI marked this application for manual review. A final outcome has not been recorded yet.",
+    approved: "The MFI recorded an approval decision. This is a final status in the demo portal.",
+    declined: "The MFI recorded a decline decision. This is a final status in the demo portal.",
   };
 
   const demoUsers = [
