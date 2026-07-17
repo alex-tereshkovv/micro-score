@@ -176,6 +176,30 @@ class ApiIntegrationTests(unittest.TestCase):
             "behavioral-v1",
         )
 
+        pre_decision_packet_response = self.client.get(
+            f"/mfi/applications/{application_id}/review-packet",
+            headers=self._headers(analyst_token),
+        )
+        self.assertEqual(
+            pre_decision_packet_response.status_code,
+            200,
+            pre_decision_packet_response.text,
+        )
+        pre_decision_packet = pre_decision_packet_response.json()
+        self.assertEqual(pre_decision_packet["lifecycle"]["status"], "scored")
+        self.assertEqual(pre_decision_packet["lifecycle"]["scoring_action"], "rescore")
+        self.assertEqual(
+            pre_decision_packet["lifecycle"]["allowed_decisions"],
+            ["review", "approve", "decline"],
+        )
+        required_check_codes = {
+            row["code"]
+            for row in pre_decision_packet["checklist"]
+            if row["status"] == "required"
+        }
+        self.assertIn("verify_affordability", required_check_codes)
+        self.assertIn("record_human_decision", required_check_codes)
+
         decision_response = self.client.post(
             f"/mfi/applications/{application_id}/decision",
             headers=self._headers(analyst_token),

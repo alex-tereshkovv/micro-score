@@ -4,6 +4,7 @@ const vm = require("vm");
 global.window = {};
 window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js");
 window.MicroScorePortfolioDashboard = require("../apps/web/portfolio-dashboard.js");
+window.MicroScoreRiskDetail = require("../apps/web/risk-detail.js");
 vm.runInThisContext(fs.readFileSync("apps/web/mock-api.js", "utf8"));
 
 async function main() {
@@ -174,6 +175,20 @@ async function main() {
     },
     borrowerSession,
   );
+  const draftPacket = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/review-packet`,
+    {},
+    session,
+  );
+  const draftPlan = window.MicroScoreRiskDetail.buildReviewActionPlan(draftPacket);
+  if (
+    draftPlan.stage !== "score_first"
+    || !draftPlan.score_enabled
+    || draftPlan.decision_enabled
+    || draftPlan.allowed_decisions.length
+  ) {
+    throw new Error("Expected Review Readiness action plan to require scoring first");
+  }
   const lifecycleScored = await api.request(
     `/mfi/applications/${lifecycleApplication.id}/score`,
     { method: "POST" },
@@ -193,6 +208,20 @@ async function main() {
   );
   if (lifecycleScored.status !== "scored" || lifecycleReviewed.status !== "under_review") {
     throw new Error("Expected submitted to scored to under-review lifecycle");
+  }
+  const reviewActionPacket = await api.request(
+    `/mfi/applications/${lifecycleApplication.id}/review-packet`,
+    {},
+    session,
+  );
+  const reviewActionPlan = window.MicroScoreRiskDetail.buildReviewActionPlan(reviewActionPacket);
+  if (
+    reviewActionPlan.stage !== "finalize_decision"
+    || reviewActionPlan.allowed_decisions.includes("review")
+    || !reviewActionPlan.allowed_decisions.includes("approve")
+    || !reviewActionPlan.decision_enabled
+  ) {
+    throw new Error("Expected Review Readiness action plan to expose final decision actions");
   }
   const lifecycleRescored = await api.request(
     `/mfi/applications/${lifecycleApplication.id}/score`,
@@ -222,7 +251,14 @@ async function main() {
     {},
     session,
   );
-  if (!lifecyclePacket.lifecycle.terminal || lifecyclePacket.decision_history.length !== 2) {
+  const terminalPlan = window.MicroScoreRiskDetail.buildReviewActionPlan(lifecyclePacket);
+  if (
+    !lifecyclePacket.lifecycle.terminal
+    || lifecyclePacket.decision_history.length !== 2
+    || terminalPlan.stage !== "terminal_locked"
+    || terminalPlan.score_enabled
+    || terminalPlan.decision_enabled
+  ) {
     throw new Error("Expected terminal risk detail with complete decision history");
   }
   let terminalMutationRejected = false;
@@ -1180,6 +1216,9 @@ async function main() {
       simulation_iterations: simulation.assumptions.iterations,
       simulation_history: simulationHistory.length,
       borrower_history: borrowerHistory.length,
+      action_plan_initial: draftPlan.stage,
+      action_plan_review: reviewActionPlan.stage,
+      action_plan_terminal: terminalPlan.stage,
       lifecycle_terminal_guard: terminalMutationRejected,
       risk_detail_v2: true,
       intake_contract_v2: true,

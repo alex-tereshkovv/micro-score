@@ -2191,11 +2191,92 @@ label {
 
 .lifecycle-actions,
 .affordability-panel,
+.review-action-plan,
 .decision-history-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   padding: 12px;
+}
+
+.review-action-plan {
+  border-left: 4px solid var(--blue);
+}
+
+.review-action-plan h4 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.review-action-plan p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-stage-rescore_required {
+  border-left-color: var(--amber);
+}
+
+.action-stage-terminal_locked {
+  border-left-color: var(--green);
+}
+
+.action-plan-steps {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.action-plan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.72fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.action-plan-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 10px;
+}
+
+.action-plan-grid > div > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.action-plan-blockers {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.action-plan-blockers li {
+  border-left: 3px solid var(--red);
+  padding-left: 8px;
+}
+
+.action-plan-blockers strong,
+.action-plan-blockers span {
+  display: block;
+  font-size: 12px;
+}
+
+.action-plan-blockers span {
+  margin-top: 2px;
+  color: var(--muted);
 }
 
 .lifecycle-actions {
@@ -2621,6 +2702,7 @@ tr.selected {
   .recorded-decision,
   .risk-readiness,
   .lifecycle-actions,
+  .action-plan-grid,
   .packet-columns,
   .explanation-columns,
   .explanation-summary {

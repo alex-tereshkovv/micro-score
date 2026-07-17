@@ -31,6 +31,7 @@ const state = {
   sessionTtlSeconds: Number(localStorage.getItem("microscore.sessionTtlSeconds") || 0),
   demoMode: forceStaticDemo || hostedStaticPage || localStorage.getItem("microscore.demoMode") === "static",
   selectedApplicationId: "",
+  selectedReviewPacket: null,
   borrowerApplications: [],
   applications: [],
   policyAnalytics: null,
@@ -835,9 +836,36 @@ async function withButtonBusy(button, busyText, task) {
   }
 }
 
+function reviewActionPlan(packet) {
+  const riskDetail = window.MicroScoreRiskDetail;
+  if (riskDetail?.buildReviewActionPlan) return riskDetail.buildReviewActionPlan(packet);
+  const lifecycle = packet?.lifecycle || {};
+  const allowedDecisions = Array.isArray(lifecycle.allowed_decisions)
+    ? [...lifecycle.allowed_decisions]
+    : [];
+  return {
+    stage: lifecycle.terminal ? "terminal_locked" : packet?.model_summary ? "review_ready" : "score_first",
+    title: lifecycle.terminal ? "Terminal locked" : packet?.model_summary ? "Ready for decision" : "Score first",
+    body: lifecycle.status_note || "",
+    primary_label: lifecycle.terminal ? "Locked" : lifecycle.scoring_action === "rescore" ? "Rescore" : "Score",
+    steps: [],
+    blockers: [],
+    blocker_count: 0,
+    terminal: Boolean(lifecycle.terminal),
+    scoring_action: lifecycle.scoring_action || null,
+    score_enabled: Boolean(lifecycle.scoring_action) && !lifecycle.terminal,
+    score_label: lifecycle.scoring_action === "rescore" ? "Rescore" : lifecycle.scoring_action === "score" ? "Score" : "Locked",
+    decision_enabled: allowedDecisions.length > 0 && Boolean(packet?.model_summary) && !lifecycle.terminal,
+    allowed_decisions: allowedDecisions,
+    allowed_decision_labels: allowedDecisions,
+    decision_count: Array.isArray(packet?.decision_history) ? packet.decision_history.length : 0,
+  };
+}
+
 function resetApplicationViews() {
   localStorage.removeItem("microscore.lastApplicationId");
   state.selectedApplicationId = "";
+  state.selectedReviewPacket = null;
   state.borrowerApplications = [];
   state.applications = [];
   state.policyAnalytics = null;
@@ -1321,7 +1349,11 @@ function selectApplication(applicationId, options = {}) {
   const { loadDetail = true } = options;
   state.selectedApplicationId = applicationId;
   const application = state.applications.find((item) => item.id === applicationId);
-  syncLifecycleControls(application);
+  const packet = state.selectedReviewPacket?.application_id === applicationId
+    ? state.selectedReviewPacket
+    : null;
+  if (!packet) state.selectedReviewPacket = null;
+  syncLifecycleControls(application, packet);
   renderApplicationsTable(state.applications);
   els.scoreDetail.classList.remove("empty");
   if (application) {
@@ -1343,21 +1375,40 @@ function selectApplication(applicationId, options = {}) {
   }
 }
 
-function syncLifecycleControls(application) {
-  const terminal = ["approved", "declined"].includes(application?.status);
-  const hasScore = Boolean(application?.score_result);
-  els.scoreSelectedApplication.disabled = !application || terminal;
-  els.scoreSelectedApplication.textContent = terminal ? "Finalized" : hasScore ? "Rescore" : "Score";
+function syncLifecycleControls(application, packet = null) {
+  const actionPlan = packet ? reviewActionPlan(packet) : null;
+  const terminal = actionPlan ? actionPlan.terminal : ["approved", "declined"].includes(application?.status);
+  const hasScore = actionPlan ? Boolean(packet?.model_summary) : Boolean(application?.score_result);
+  const allowedDecisions = actionPlan?.allowed_decisions || (
+    application?.status === "scored"
+      ? ["review", "approve", "decline"]
+      : application?.status === "under_review"
+        ? ["approve", "decline"]
+        : []
+  );
+  const scoreEnabled = actionPlan
+    ? actionPlan.score_enabled
+    : Boolean(application) && !terminal;
+
+  els.scoreSelectedApplication.disabled = !scoreEnabled;
+  els.scoreSelectedApplication.textContent = actionPlan?.score_label || (terminal ? "Finalized" : hasScore ? "Rescore" : "Score");
   const decisionSelect = els.decisionForm.elements.decision;
-  const reviewOption = decisionSelect.querySelector('option[value="review"]');
-  if (reviewOption) reviewOption.disabled = application?.status === "under_review";
-  if (application?.status === "under_review" && decisionSelect.value === "review") {
-    decisionSelect.value = "approve";
+  Array.from(decisionSelect.options).forEach((option) => {
+    option.disabled = !allowedDecisions.includes(option.value);
+  });
+  if (allowedDecisions.length && !allowedDecisions.includes(decisionSelect.value)) {
+    decisionSelect.value = allowedDecisions[0];
   }
-  const decisionDisabled = !application || !hasScore || terminal;
+  const decisionDisabled = actionPlan
+    ? !actionPlan.decision_enabled
+    : !application || !hasScore || terminal;
   Array.from(els.decisionForm.elements).forEach((field) => {
     field.disabled = decisionDisabled;
   });
+  const submitButton = els.decisionForm.querySelector("button[type='submit']");
+  if (submitButton) {
+    submitButton.textContent = terminal ? "Locked" : decisionDisabled ? "Open review packet" : "Save decision";
+  }
 }
 
 function scoredApplications(applications) {
@@ -1718,7 +1769,8 @@ async function scoreSelectedApplication() {
         method: "POST",
       });
       state.applications = state.applications.map((item) => (item.id === scored.id ? scored : item));
-      selectApplication(scored.id);
+      selectApplication(scored.id, { loadDetail: false });
+      await loadReviewPacket(scored.id);
       await refreshAnalytics();
       await refreshPolicyAnalytics();
       showMessage("Application scored", "ok");
@@ -1733,6 +1785,8 @@ async function scoreSelectedApplication() {
       throw error;
     }
   });
+  const selected = state.applications.find((item) => item.id === state.selectedApplicationId);
+  syncLifecycleControls(selected, state.selectedReviewPacket);
 }
 
 async function loadReviewPacket(applicationId = state.selectedApplicationId) {
@@ -1741,7 +1795,7 @@ async function loadReviewPacket(applicationId = state.selectedApplicationId) {
     return;
   }
 
-  await withButtonBusy(els.loadReviewPacket, "Opening...", async () => {
+  return await withButtonBusy(els.loadReviewPacket, "Opening...", async () => {
     setPanelState(
       els.reviewPacket,
       "result-block",
@@ -1754,11 +1808,17 @@ async function loadReviewPacket(applicationId = state.selectedApplicationId) {
         `/mfi/applications/${encodeURIComponent(applicationId)}/review-packet`,
       );
       if (state.selectedApplicationId !== applicationId) return packet;
+      state.selectedReviewPacket = packet;
+      const application = state.applications.find((item) => item.id === applicationId);
+      syncLifecycleControls(application, packet);
       els.reviewPacket.className = "result-block";
       els.reviewPacket.innerHTML = renderReviewPacket(packet);
       return packet;
     } catch (error) {
       if (state.selectedApplicationId !== applicationId) return null;
+      state.selectedReviewPacket = null;
+      const application = state.applications.find((item) => item.id === applicationId);
+      syncLifecycleControls(application);
       setPanelState(
         els.reviewPacket,
         "result-block",
@@ -1782,6 +1842,7 @@ function renderReviewPacket(packet) {
     completed_checks: 0,
     decision_count: (packet.decision_history || []).length,
   };
+  const actionPlan = detailSummary.action_plan || reviewActionPlan(packet);
   const flags = (packet.governance_flags || [])
     .map((flag) => `<span>${escapeHtml(formatPolicyName(flag))}</span>`)
     .join("");
@@ -1826,6 +1887,7 @@ function renderReviewPacket(packet) {
         <div><span>Required / complete</span><strong>${detailSummary.required_checks} / ${detailSummary.completed_checks}</strong></div>
         <div><span>Decision history</span><strong>${detailSummary.decision_count}</strong></div>
       </div>
+      ${renderReviewActionPlan(actionPlan)}
       <div class="metric-grid">
         <div class="metric"><span>Risk</span><strong class="${model ? `risk-${escapeHtml(model.risk_band)}` : ""}">${model ? escapeHtml(model.risk_band) : "not scored"}</strong></div>
         <div class="metric"><span>Probability</span><strong>${model ? formatPercent(model.high_risk_probability) : "-"}</strong></div>
@@ -1868,6 +1930,44 @@ function renderReviewPacket(packet) {
   `;
 }
 
+function renderReviewActionPlan(actionPlan) {
+  const steps = actionPlan.steps?.length
+    ? actionPlan.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")
+    : "<li>Refresh the selected review packet before changing workflow state.</li>";
+  const blockers = actionPlan.blockers?.length
+    ? `<ul class="action-plan-blockers">${actionPlan.blockers.map((item) => `
+        <li>
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.evidence || item.code || "required")}</span>
+        </li>
+      `).join("")}</ul>`
+    : "<p class=\"tiny-text\">No required checklist blockers.</p>";
+  const allowedDecisions = actionPlan.allowed_decisions?.length
+    ? actionPlan.allowed_decisions.map((decision) => `<span>${escapeHtml(formatPolicyName(decision))}</span>`).join("")
+    : "<span>No decision actions allowed</span>";
+  return `
+    <section class="review-action-plan action-stage-${escapeHtml(actionPlan.stage)}">
+      <div class="section-heading">
+        <span>Action plan</span>
+        <em>${escapeHtml(actionPlan.primary_label)}</em>
+      </div>
+      <h4>${escapeHtml(actionPlan.title)}</h4>
+      <p>${escapeHtml(actionPlan.body)}</p>
+      <ol class="action-plan-steps">${steps}</ol>
+      <div class="action-plan-grid">
+        <div>
+          <strong>Checklist blockers</strong>
+          ${blockers}
+        </div>
+        <div>
+          <strong>Allowed decisions</strong>
+          <div class="packet-flags">${allowedDecisions}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderPacketFactors(factors, title) {
   if (!factors?.length) {
     return `<div class="packet-factor-group"><strong>${escapeHtml(title)}</strong><p class="tiny-text">No factors available.</p></div>`;
@@ -1904,9 +2004,17 @@ async function saveApplicationDecision() {
     showMessage("Select an application first", "error");
     return;
   }
-  const selected = state.applications.find((item) => item.id === state.selectedApplicationId);
-  if (!selected?.score_result) {
-    showMessage("Score the application before saving a decision", "error");
+  const packet = state.selectedReviewPacket?.application_id === state.selectedApplicationId
+    ? state.selectedReviewPacket
+    : await loadReviewPacket(state.selectedApplicationId);
+  const actionPlan = packet ? reviewActionPlan(packet) : null;
+  const selectedDecision = els.decisionForm.elements.decision.value;
+  if (!actionPlan?.decision_enabled) {
+    showMessage(actionPlan?.terminal ? "Application is locked after a terminal decision" : "Open the review packet before saving a decision", "error");
+    return;
+  }
+  if (!actionPlan.allowed_decisions.includes(selectedDecision)) {
+    showMessage("Selected decision is not available for this lifecycle state", "error");
     return;
   }
 

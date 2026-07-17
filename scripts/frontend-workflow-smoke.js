@@ -1,7 +1,7 @@
 const fs = require("fs");
 const vm = require("vm");
 
-const { summarizeReviewPacket } = require("../apps/web/risk-detail.js");
+const { buildReviewActionPlan, summarizeReviewPacket } = require("../apps/web/risk-detail.js");
 
 global.window = {};
 window.MicroScoreApplicationIntake = require("../apps/web/application-intake.js");
@@ -40,12 +40,15 @@ async function main() {
     analyst,
   );
   const initialView = summarizeReviewPacket(initialPacket);
+  const initialPlan = buildReviewActionPlan(initialPacket);
   if (
     initialPacket.lifecycle.status !== "scored"
     || initialPacket.lifecycle.scoring_action !== "rescore"
     || initialPacket.affordability.completeness !== 1
     || initialView.decision_count !== 0
     || !initialView.allowed_decisions.includes("review")
+    || initialPlan.stage !== "review_or_decide"
+    || !initialPlan.decision_enabled
   ) {
     throw new Error("Risk Detail v2 did not expose the initial review contract");
   }
@@ -68,11 +71,15 @@ async function main() {
     analyst,
   );
   const reviewView = summarizeReviewPacket(reviewPacket);
+  const reviewPlan = buildReviewActionPlan(reviewPacket);
   if (
     reviewPacket.lifecycle.status !== "under_review"
     || reviewView.decision_count !== 1
     || reviewView.allowed_decisions.includes("review")
     || reviewPacket.decision_history[0].note !== "Verify seasonal income."
+    || reviewPlan.stage !== "finalize_decision"
+    || !reviewPlan.allowed_decisions.includes("approve")
+    || reviewPlan.allowed_decisions.includes("review")
   ) {
     throw new Error("Risk Detail v2 did not preserve manual-review history");
   }
@@ -95,12 +102,16 @@ async function main() {
     analyst,
   );
   const finalView = summarizeReviewPacket(finalPacket);
+  const finalPlan = buildReviewActionPlan(finalPacket);
   if (
     !finalView.terminal
     || finalView.scoring_action !== null
     || finalView.decision_count !== 2
     || finalView.allowed_decisions.length
     || !finalView.readiness_label.startsWith("Finalized")
+    || finalPlan.stage !== "terminal_locked"
+    || finalPlan.score_enabled
+    || finalPlan.decision_enabled
   ) {
     throw new Error("Risk Detail v2 did not lock the terminal decision state");
   }
@@ -110,8 +121,10 @@ async function main() {
     borrower_history: borrowerHistory.length,
     affordability_complete: initialView.affordability_complete,
     review_decisions: reviewView.decision_count,
+    review_action_stage: reviewPlan.stage,
     terminal_decisions: finalView.decision_count,
     terminal: finalView.terminal,
+    terminal_action_stage: finalPlan.stage,
   }));
 }
 

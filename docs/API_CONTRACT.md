@@ -768,6 +768,14 @@ Response schema:
   `stale_model_version`
 - review checklist items for human oversight
 
+Review Readiness / Action Plan v1 is a browser-facing interpretation of the
+review packet. It does not add a separate persisted workflow field: the web UI
+derives the selected application's score/rescore state, readiness summary,
+checklist blockers, allowed decision actions, and terminal locked state from
+`lifecycle`, `checklist`, `model_summary`, and `decision_history`. The backend
+state machine remains the authority for mutations, and borrower-safe
+application responses still exclude this internal review packet.
+
 The review packet is designed as an internal MFI review aid. It summarizes what
 the model and analyst workflow currently know, but it is not a legal credit
 decision record and does not include validated repayment outcomes.
