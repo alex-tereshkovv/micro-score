@@ -229,6 +229,27 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
     readiness = client.request("GET", "/admin/security/readiness", token=admin_token)
     check_security_ready(readiness)
 
+    delivery_readiness = client.request(
+        "GET",
+        "/admin/staff-invites/delivery-readiness",
+        token=admin_token,
+    )
+    assert_true(
+        delivery_readiness["status"] == "blocked",
+        "Local invite delivery provider should block production delivery readiness",
+    )
+    assert_true(
+        delivery_readiness["configured_provider"] == "local_outbox",
+        "Expected local_outbox as default invite delivery provider",
+    )
+    assert_true(
+        any(
+            row["key"] == "delivery_provider_not_production_ready"
+            for row in delivery_readiness["production_blockers"]
+        ),
+        "Invite delivery readiness should expose provider production blocker",
+    )
+
     mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
     assert_true(mfa_readiness["status"] == "ready", "Seeded staff MFA readiness should be ready")
     assert_true(mfa_readiness["missing_mfa_count"] == 0, "Seeded staff should have MFA attestation")
@@ -284,6 +305,19 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
 
     invite_health = client.request("GET", "/admin/staff-invites/health", token=admin_token)
     assert_true(invite_health["active_pending_count"] >= 1, "Invite health should include pending invite")
+    delivered_readiness = client.request(
+        "GET",
+        "/admin/staff-invites/delivery-readiness",
+        token=admin_token,
+    )
+    assert_true(
+        delivered_readiness["active_pending_invite_count"] >= 1,
+        "Invite delivery readiness should include active pending invite count",
+    )
+    assert_true(
+        delivered_readiness["undelivered_active_invite_count"] == 0,
+        "Queued local_outbox invite should already have audited delivery metadata",
+    )
 
     accepted = client.request(
         "POST",
@@ -415,6 +449,8 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "revoked_session_email": revoked["email"],
         "borrower_application_id": borrower_application["id"],
         "mfa_failure_warning": failure_check["status"],
+        "delivery_readiness_status": delivery_readiness["status"],
+        "delivery_provider": delivery_readiness["configured_provider"],
         "final_security_status": final_readiness["status"],
         "audit_actions_checked": 7,
     }

@@ -363,6 +363,31 @@ summary for invite hygiene: `active_pending_count`, `expiring_soon_count`,
 status is `attention` when pending invites are expired or expiring inside that
 window.
 
+Summarize invite delivery provider readiness:
+
+```http
+GET /admin/staff-invites/delivery-readiness
+```
+
+The delivery-readiness endpoint requires an `admin` bearer token and returns a
+typed provider contract summary: `configured_provider`, `default_provider`,
+`invite_url_base`, `invite_url_https`, `invite_url_local`,
+`active_pending_invite_count`, `undelivered_active_invite_count`,
+`failed_latest_attempt_count`, `providers`, `production_blockers`, `warnings`,
+`next_required_controls`, and `limitation`.
+
+Provider profiles expose `provider`, `attempt_status`, `mode`, `configured`,
+`production_ready`, `sends_message`, `audit_only`,
+`requires_https_invite_url`, `requires_external_secret`, `summary`, `action`,
+and optional `error`. The current local providers (`local_outbox`,
+`manual_receipt`, `local_queue`, `local_fail`) are audited prototype modes, not
+transactional delivery. `transactional_email` is a contract placeholder only;
+the API does not send email, SMS, or secure messages through an external
+provider yet. The default production blocker is
+`delivery_provider_not_production_ready`; readiness remains `blocked` until the
+configured provider is production-ready, invite URLs use a verified HTTPS
+non-local origin, and active pending invites have audited delivery evidence.
+
 Create an expiring MFI analyst invite:
 
 ```http

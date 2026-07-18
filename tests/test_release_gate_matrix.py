@@ -216,10 +216,10 @@ SECURITY_MATRIX_ROWS = [
             "docs/RELEASE_CHECKLIST.md",
         ],
         "markers": [
+            "/admin/staff-invites/delivery-readiness",
+            "delivery_provider_not_production_ready",
+            "transactional_email_contract",
             "local_outbox",
-            "local_queue",
-            "local_fail",
-            "manual_receipt",
             "staff_invite_delivery_retry",
         ],
     },

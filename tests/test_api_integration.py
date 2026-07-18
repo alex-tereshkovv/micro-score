@@ -575,6 +575,14 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("auth_provider_mode", identity_properties)
         self.assertIn("production_blockers", identity_properties)
         self.assertIn("next_required_controls", identity_properties)
+        delivery_readiness_properties = schemas["StaffInviteDeliveryReadinessResponse"][
+            "properties"
+        ]
+        self.assertIn("configured_provider", delivery_readiness_properties)
+        self.assertIn("invite_url_https", delivery_readiness_properties)
+        self.assertIn("production_blockers", delivery_readiness_properties)
+        self.assertIn("providers", delivery_readiness_properties)
+        self.assertIn("StaffInviteDeliveryProviderProfile", schemas)
         self.assertIn("mfa_code", schemas["LoginRequest"]["properties"])
         self.assertIn("mfa_code", schemas["StaffInviteAccept"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
@@ -632,6 +640,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-sessions/{session_id}", paths)
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
+        self.assertIn("/admin/staff-invites/delivery-readiness", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts/retry", paths)
@@ -912,13 +921,14 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(components["auth_provider"]["status"], "blocker")
         self.assertEqual(components["mfa_posture"]["status"], "blocker")
-        self.assertEqual(components["invite_delivery"]["status"], "warning")
+        self.assertEqual(components["invite_delivery"]["status"], "blocker")
         self.assertEqual(components["session_control"]["status"], "pass")
         self.assertEqual(components["tenant_isolation"]["status"], "pass")
 
         blocker_keys = {row["key"] for row in payload["production_blockers"]}
         self.assertIn("auth_provider", blocker_keys)
         self.assertIn("mfa_posture", blocker_keys)
+        self.assertIn("invite_delivery", blocker_keys)
         self.assertIn("rate_limit", blocker_keys)
         self.assertIn("storage_backend", blocker_keys)
         self.assertTrue(
@@ -933,6 +943,79 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertNotIn("session_preview", serialized)
         self.assertNotIn("access_token", serialized)
         self.assertNotIn(TEST_MFA_CODE, serialized)
+
+    def test_staff_invite_delivery_readiness_tracks_provider_contract(self) -> None:
+        borrower_token = self._register("delivery-readiness-borrower@example.com", "borrower")
+        forbidden = self.client.get(
+            "/admin/staff-invites/delivery-readiness",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("delivery-readiness-admin@example.com", "admin")
+        response = self.client.get(
+            "/admin/staff-invites/delivery-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["configured_provider"], "local_outbox")
+        self.assertEqual(payload["default_provider"], "local_outbox")
+        self.assertEqual(payload["invite_url_base"], "http://127.0.0.1:5173")
+        self.assertFalse(payload["invite_url_https"])
+        self.assertTrue(payload["invite_url_local"])
+        self.assertEqual(payload["active_pending_invite_count"], 0)
+        self.assertEqual(payload["undelivered_active_invite_count"], 0)
+        self.assertEqual(payload["failed_latest_attempt_count"], 0)
+
+        providers = {row["provider"]: row for row in payload["providers"]}
+        self.assertIn("local_outbox", providers)
+        self.assertIn("transactional_email", providers)
+        self.assertTrue(providers["local_outbox"]["configured"])
+        self.assertFalse(providers["local_outbox"]["production_ready"])
+        self.assertFalse(providers["local_outbox"]["sends_message"])
+        self.assertEqual(providers["local_outbox"]["attempt_status"], "sent")
+        self.assertEqual(
+            providers["transactional_email"]["mode"],
+            "transactional_email_contract",
+        )
+        self.assertTrue(providers["transactional_email"]["requires_external_secret"])
+
+        blocker_keys = {row["key"] for row in payload["production_blockers"]}
+        self.assertIn("delivery_provider_not_production_ready", blocker_keys)
+        self.assertIn("invite_url_not_https", blocker_keys)
+        self.assertIn("invite_url_local_origin", blocker_keys)
+        self.assertEqual(
+            {row["key"] for row in payload["next_required_controls"]},
+            blocker_keys,
+        )
+        self.assertIn("does not send email", payload["limitation"])
+
+        invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "delivery-readiness-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+            },
+        )
+        self.assertEqual(invite.status_code, 201, invite.text)
+
+        with_invite = self.client.get(
+            "/admin/staff-invites/delivery-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(with_invite.status_code, 200, with_invite.text)
+        with_invite_payload = with_invite.json()
+        self.assertEqual(with_invite_payload["active_pending_invite_count"], 1)
+        self.assertEqual(with_invite_payload["undelivered_active_invite_count"], 1)
+        self.assertIn(
+            "undelivered_active_invites",
+            {row["key"] for row in with_invite_payload["production_blockers"]},
+        )
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:
         borrower_token = self._register("regular@example.com", "borrower")

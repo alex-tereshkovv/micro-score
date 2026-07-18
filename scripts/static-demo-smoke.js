@@ -408,6 +408,17 @@ async function main() {
   ) {
     throw new Error("Expected identity readiness evidence room to show local prototype limitations");
   }
+  const inviteDeliveryReadinessInitial = await api.request("/admin/staff-invites/delivery-readiness", {}, adminSession);
+  if (
+    inviteDeliveryReadinessInitial.status !== "blocked"
+    || inviteDeliveryReadinessInitial.configured_provider !== "local_outbox"
+    || !inviteDeliveryReadinessInitial.invite_url_https
+    || inviteDeliveryReadinessInitial.invite_url_local
+    || !inviteDeliveryReadinessInitial.production_blockers?.some((row) => row.key === "delivery_provider_not_production_ready")
+    || !inviteDeliveryReadinessInitial.providers?.some((row) => row.provider === "transactional_email" && row.requires_external_secret)
+  ) {
+    throw new Error("Expected invite delivery readiness to expose local provider contract blockers");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -633,6 +644,13 @@ async function main() {
     || !identityReadinessBeforeDelivery.components?.some((row) => row.key === "invite_delivery" && row.status === "blocker")
   ) {
     throw new Error("Expected identity readiness room to surface undelivered invite blocker");
+  }
+  const inviteDeliveryReadinessBeforeDelivery = await api.request("/admin/staff-invites/delivery-readiness", {}, adminSession);
+  if (
+    inviteDeliveryReadinessBeforeDelivery.undelivered_active_invite_count < 1
+    || !inviteDeliveryReadinessBeforeDelivery.production_blockers?.some((row) => row.key === "undelivered_active_invites")
+  ) {
+    throw new Error("Expected invite delivery readiness to surface undelivered invite blocker");
   }
   const deliveredInvite = await api.request(
     `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/delivery`,
@@ -1270,7 +1288,9 @@ async function main() {
       staff_invite_revocation: true,
       staff_invite_token_hygiene: true,
       staff_invite_delivery: true,
+      staff_invite_delivery_readiness: true,
       staff_invite_delivery_outbox: true,
+      staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       staff_invite_delivery_retry: true,
       staff_invite_rotation: true,
       staff_invite_health: true,

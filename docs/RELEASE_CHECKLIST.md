@@ -116,6 +116,11 @@ git diff --check
   (`local_outbox`, `local_queue`, `local_fail`, `manual_receipt`), failed-attempt
   Security Readiness warnings, and a retry endpoint that appends attempts
   without re-exposing raw invite tokens.
+- Invite Delivery Readiness v1 exposes
+  `/admin/staff-invites/delivery-readiness`, provider profile modes,
+  HTTPS/non-local invite URL checks, active undelivered invite blockers, and a
+  clear limitation that the prototype does not send email, SMS, or secure
+  messages through an external transactional provider.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

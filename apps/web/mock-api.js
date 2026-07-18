@@ -380,24 +380,89 @@
   }
 
   function staffInviteDeliveryProviderResult(provider) {
+    const profile = staffInviteDeliveryProviderProfile(provider);
+    return {
+      provider: profile.provider,
+      status: profile.attempt_status,
+      error: profile.error,
+    };
+  }
+
+  function staffInviteDeliveryProviderProfile(provider) {
     const providerName = String(provider || "local_outbox").trim() || "local_outbox";
-    if (providerName === "local_outbox" || providerName === "manual_receipt") {
-      return { provider: providerName, status: "sent", error: null };
-    }
-    if (providerName === "local_queue") {
-      return { provider: providerName, status: "queued", error: null };
-    }
-    if (providerName === "local_fail") {
-      return {
-        provider: providerName,
-        status: "failed",
+    const profiles = {
+      local_outbox: {
+        attempt_status: "sent",
+        mode: "local_audit_outbox",
+        production_ready: false,
+        sends_message: false,
+        audit_only: true,
+        requires_external_secret: false,
+        summary: "Records a local audited outbox receipt and marks delivery sent inside the static demo.",
+        action: "Replace with a transactional email or secure-message provider before pilot onboarding.",
+        error: null,
+      },
+      manual_receipt: {
+        attempt_status: "sent",
+        mode: "manual_receipt",
+        production_ready: false,
+        sends_message: false,
+        audit_only: true,
+        requires_external_secret: false,
+        summary: "Records that an operator manually copied or sent the invite link.",
+        action: "Use only for demos; require transactional delivery before real staff onboarding.",
+        error: null,
+      },
+      local_queue: {
+        attempt_status: "queued",
+        mode: "local_queue",
+        production_ready: false,
+        sends_message: false,
+        audit_only: true,
+        requires_external_secret: false,
+        summary: "Queues a local delivery attempt without marking the invite delivered.",
+        action: "Retry through a working provider, rotate stale links, or revoke the invite.",
+        error: null,
+      },
+      local_fail: {
+        attempt_status: "failed",
+        mode: "local_failure_simulator",
+        production_ready: false,
+        sends_message: false,
+        audit_only: true,
+        requires_external_secret: false,
+        summary: "Simulates a failed local delivery provider for release-gate coverage.",
+        action: "Retry with a working provider and keep the failure visible in audit events.",
         error: "Local delivery provider simulated failure.",
-      };
-    }
+      },
+      transactional_email: {
+        attempt_status: "queued",
+        mode: "transactional_email_contract",
+        production_ready: false,
+        sends_message: false,
+        audit_only: false,
+        requires_external_secret: true,
+        summary: "Names the future transactional email contract, but the static demo does not integrate an external sender.",
+        action: "Wire provider SDK/API, secret rotation, bounce handling, and delivery webhooks before production sends.",
+        error: "Transactional email provider is not integrated in this prototype.",
+      },
+    };
+    const profile = profiles[providerName] || {
+      attempt_status: "queued",
+      mode: "unknown_contract",
+      production_ready: false,
+      sends_message: false,
+      audit_only: true,
+      requires_external_secret: true,
+      summary: "Delivery provider has no local sender implementation yet.",
+      action: "Register provider contract, secret handling, webhook/audit mapping, and failure semantics before use.",
+      error: "Delivery provider has no local sender implementation yet.",
+    };
     return {
       provider: providerName,
-      status: "queued",
-      error: "Delivery provider has no local sender implementation yet.",
+      configured: providerName === "local_outbox",
+      requires_https_invite_url: true,
+      ...profile,
     };
   }
 
@@ -562,6 +627,100 @@
       health.recommended_action = "Review expired or soon-expiring staff invites; revoke stale links and create fresh invites only when onboarding is still needed.";
     }
     return health;
+  }
+
+  function inviteDeliveryReadiness() {
+    const configuredProvider = "local_outbox";
+    const providers = [
+      "local_outbox",
+      "manual_receipt",
+      "local_queue",
+      "local_fail",
+      "transactional_email",
+    ].map((provider) => ({
+      ...staffInviteDeliveryProviderProfile(provider),
+      configured: provider === configuredProvider,
+    }));
+    const configuredProfile = providers.find((row) => row.configured) || {};
+    const activePendingInvites = Object.values(demo.staffInvites).filter((invite) => (
+      !invite.accepted_at
+      && !invite.revoked_at
+      && Date.parse(invite.expires_at) > Date.now()
+    ));
+    const undeliveredInvites = activePendingInvites.filter((invite) => !invite.delivered_at);
+    const failedDeliveryInvites = activePendingInvites.filter((invite) => {
+      const attempts = staffInviteDeliveryAttempts(invite.token_id);
+      return attempts[0]?.status === "failed";
+    });
+    let inviteUrlHttps = false;
+    let inviteUrlLocal = false;
+    try {
+      const parsed = new URL(DEMO_INVITE_URL_BASE);
+      inviteUrlHttps = parsed.protocol === "https:";
+      inviteUrlLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname);
+    } catch (_error) {
+      inviteUrlHttps = false;
+      inviteUrlLocal = false;
+    }
+    const blockers = [];
+    const warnings = [];
+    if (!configuredProfile.production_ready) {
+      blockers.push({
+        key: "delivery_provider_not_production_ready",
+        severity: "blocker",
+        summary: `Configured provider '${configuredProvider}' is ${configuredProfile.mode} and is not production-ready.`,
+        action: configuredProfile.action,
+      });
+    }
+    if (!inviteUrlHttps) {
+      blockers.push({
+        key: "invite_url_not_https",
+        severity: "blocker",
+        summary: `Invite URL base '${DEMO_INVITE_URL_BASE}' is not HTTPS.`,
+        action: "Use a verified HTTPS invite origin before real staff onboarding.",
+      });
+    }
+    if (inviteUrlLocal) {
+      blockers.push({
+        key: "invite_url_local_origin",
+        severity: "blocker",
+        summary: `Invite URL base '${DEMO_INVITE_URL_BASE}' points to a local host.`,
+        action: "Move invite links to the deployed HTTPS application origin.",
+      });
+    }
+    if (undeliveredInvites.length) {
+      blockers.push({
+        key: "undelivered_active_invites",
+        severity: "blocker",
+        summary: `${undeliveredInvites.length} active pending staff invite(s) do not have audited delivery metadata.`,
+        action: "Record delivery, retry through a working provider, rotate, or revoke each invite.",
+      });
+    }
+    if (failedDeliveryInvites.length) {
+      warnings.push({
+        key: "failed_latest_delivery_attempts",
+        severity: "warning",
+        summary: `${failedDeliveryInvites.length} active pending staff invite(s) have a failed latest delivery attempt.`,
+        action: "Retry through a working provider or rotate/revoke the invite.",
+      });
+    }
+    return {
+      status: blockers.length ? "blocked" : warnings.length ? "review" : "ready",
+      generated_at: nowIso(),
+      configured_provider: configuredProvider,
+      default_provider: "local_outbox",
+      invite_url_base: DEMO_INVITE_URL_BASE,
+      invite_url_https: inviteUrlHttps,
+      invite_url_local: inviteUrlLocal,
+      active_pending_invite_count: activePendingInvites.length,
+      undelivered_active_invite_count: undeliveredInvites.length,
+      failed_latest_attempt_count: failedDeliveryInvites.length,
+      providers,
+      production_blockers: blockers,
+      warnings,
+      next_required_controls: blockers.concat(warnings),
+      limitation: "Staff Invite Delivery Readiness v1 validates provider contract, HTTPS origin, and audited delivery evidence. It does not send email, SMS, or secure messages through an external transactional provider.",
+    };
   }
 
   function mfaReadiness(users) {
@@ -794,25 +953,10 @@
   }
 
   function identityReadiness(session = {}) {
-    const security = securityReadiness();
     const mfa = mfaReadiness(demo.users);
-    const inviteHealth = staffInviteHealth(Object.values(demo.staffInvites));
-    const activePendingInvites = Object.values(demo.staffInvites).filter((invite) => (
-      !invite.accepted_at
-      && !invite.revoked_at
-      && Date.parse(invite.expires_at) > Date.now()
-    ));
-    const undeliveredInvites = activePendingInvites.filter((invite) => !invite.delivered_at);
-    const failedDeliveryInvites = activePendingInvites.filter((invite) => {
-      const attempts = staffInviteDeliveryAttempts(invite.token_id);
-      return !invite.delivered_at && attempts[0]?.status === "failed";
-    });
+    const deliveryReadiness = inviteDeliveryReadiness();
     const activeSessions = activeStaffSessions(session.token);
-    const inviteDeliveryStatus = undeliveredInvites.length
-      ? "blocker"
-      : failedDeliveryInvites.length
-        ? "warning"
-        : "pass";
+    const inviteDeliveryStatus = deliveryReadiness.status === "blocked" ? "blocker" : "warning";
     const mfaStatus = mfa.missing_mfa_count ? "blocker" : "warning";
     const sessionStatus = activeSessions.some((row) => !row.session_id || row.token)
       ? "blocker"
@@ -832,12 +976,9 @@
         label: "Invite delivery evidence",
         severity: readinessSeverity(inviteDeliveryStatus),
         status: inviteDeliveryStatus,
-        summary: activePendingInvites.length
-          ? `${activePendingInvites.length} active pending invite(s), ${undeliveredInvites.length} undelivered, ${failedDeliveryInvites.length} failed latest delivery attempt(s).`
-          : "No active pending staff invite requires delivery evidence.",
-        action: inviteDeliveryStatus === "pass"
-          ? "Keep recording delivery attempts without storing raw invite tokens."
-          : "Record audited delivery or rotate/revoke stale invite links before pilot onboarding.",
+        summary: `Invite delivery provider is '${deliveryReadiness.configured_provider}' with URL base '${deliveryReadiness.invite_url_base}'; delivery readiness is ${deliveryReadiness.status}.`,
+        action: deliveryReadiness.next_required_controls[0]?.action
+          || "Move staff invite delivery to transactional email or approved secure messaging.",
       },
       {
         key: "mfa_posture",
@@ -902,7 +1043,7 @@
       tenant_isolation_mode: "organization_id_scoped_mfi_access",
       active_staff_count: mfa.active_staff_count,
       active_staff_session_count: activeSessions.length,
-      active_pending_invite_count: activePendingInvites.length,
+      active_pending_invite_count: deliveryReadiness.active_pending_invite_count,
       components,
       production_blockers: blockers.map((row) => ({
         key: row.key,
@@ -2661,6 +2802,11 @@
     if (cleanPath === "/admin/staff-invites/health" && method === "GET") {
       requireAdmin(session);
       return clone(staffInviteHealth(Object.values(demo.staffInvites)));
+    }
+
+    if (cleanPath === "/admin/staff-invites/delivery-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(inviteDeliveryReadiness());
     }
 
     if (cleanPath === "/admin/staff-invites" && method === "POST") {

@@ -340,6 +340,39 @@ class StaffInviteDeliveryAttemptResponse(BaseModel):
     error: str | None = None
 
 
+class StaffInviteDeliveryProviderProfile(BaseModel):
+    provider: str
+    attempt_status: InviteDeliveryAttemptStatus
+    mode: str
+    configured: bool = False
+    production_ready: bool = False
+    sends_message: bool = False
+    audit_only: bool = True
+    requires_https_invite_url: bool = True
+    requires_external_secret: bool = False
+    summary: str
+    action: str
+    error: str | None = None
+
+
+class StaffInviteDeliveryReadinessResponse(BaseModel):
+    status: Literal["ready", "review", "blocked"]
+    generated_at: str
+    configured_provider: str
+    default_provider: str
+    invite_url_base: str
+    invite_url_https: bool
+    invite_url_local: bool
+    active_pending_invite_count: int = Field(ge=0)
+    undelivered_active_invite_count: int = Field(ge=0)
+    failed_latest_attempt_count: int = Field(ge=0)
+    providers: list[StaffInviteDeliveryProviderProfile] = Field(default_factory=list)
+    production_blockers: list[IdentityReadinessControl] = Field(default_factory=list)
+    warnings: list[IdentityReadinessControl] = Field(default_factory=list)
+    next_required_controls: list[IdentityReadinessControl] = Field(default_factory=list)
+    limitation: str
+
+
 class StaffInviteCreatedResponse(StaffInviteResponse):
     token: str
     invite_url: str

@@ -81,6 +81,7 @@ from .schemas import (
     StaffInviteCreatedResponse,
     StaffInviteDeliveryAttemptResponse,
     StaffInviteDeliveryCreate,
+    StaffInviteDeliveryReadinessResponse,
     StaffInviteDeliveryRetryCreate,
     StaffInviteDeliveryResponse,
     StaffInviteHealthResponse,
@@ -108,11 +109,71 @@ DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
 DEFAULT_INVITE_DELIVERY_PROVIDER = "local_outbox"
 MFA_CHALLENGE_FAILURE_WINDOW_HOURS = 24
-INVITE_DELIVERY_PROVIDER_RESULTS: dict[str, tuple[str, str | None]] = {
-    "local_outbox": ("sent", None),
-    "manual_receipt": ("sent", None),
-    "local_queue": ("queued", None),
-    "local_fail": ("failed", "Local delivery provider simulated failure."),
+INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
+    "local_outbox": {
+        "attempt_status": "sent",
+        "mode": "local_audit_outbox",
+        "production_ready": False,
+        "sends_message": False,
+        "audit_only": True,
+        "requires_external_secret": False,
+        "summary": (
+            "Records a local audited outbox receipt and marks delivery sent "
+            "inside the prototype."
+        ),
+        "action": "Replace with a transactional email or secure-message provider before pilot onboarding.",
+        "error": None,
+    },
+    "manual_receipt": {
+        "attempt_status": "sent",
+        "mode": "manual_receipt",
+        "production_ready": False,
+        "sends_message": False,
+        "audit_only": True,
+        "requires_external_secret": False,
+        "summary": "Records that an operator manually copied or sent the invite link.",
+        "action": "Use only for demos; require transactional delivery before real staff onboarding.",
+        "error": None,
+    },
+    "local_queue": {
+        "attempt_status": "queued",
+        "mode": "local_queue",
+        "production_ready": False,
+        "sends_message": False,
+        "audit_only": True,
+        "requires_external_secret": False,
+        "summary": "Queues a local delivery attempt without marking the invite delivered.",
+        "action": "Retry through a working provider, rotate stale links, or revoke the invite.",
+        "error": None,
+    },
+    "local_fail": {
+        "attempt_status": "failed",
+        "mode": "local_failure_simulator",
+        "production_ready": False,
+        "sends_message": False,
+        "audit_only": True,
+        "requires_external_secret": False,
+        "summary": "Simulates a failed local delivery provider for release-gate coverage.",
+        "action": "Retry with a working provider and keep the failure visible in audit events.",
+        "error": "Local delivery provider simulated failure.",
+    },
+    "transactional_email": {
+        "attempt_status": "queued",
+        "mode": "transactional_email_contract",
+        "production_ready": False,
+        "sends_message": False,
+        "audit_only": False,
+        "requires_external_secret": True,
+        "summary": (
+            "Names the future transactional email contract, but this prototype "
+            "does not integrate an external sender."
+        ),
+        "action": (
+            "Wire a provider SDK/API, secret rotation, bounce handling, and "
+            "delivery webhooks before enabling production sends."
+        ),
+        "error": "Transactional email provider is not integrated in this prototype.",
+    },
 }
 LOCAL_INVITE_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
 MFA_READINESS_LIMITATION = (
@@ -144,17 +205,45 @@ def configured_invite_delivery_provider() -> str:
     ).strip() or DEFAULT_INVITE_DELIVERY_PROVIDER
 
 
-def _invite_delivery_provider_result(provider: str | None) -> tuple[str, str, str | None]:
+def _invite_delivery_provider_profile(provider: str | None) -> dict[str, Any]:
     provider_name = (provider or configured_invite_delivery_provider()).strip()
     provider_name = provider_name or DEFAULT_INVITE_DELIVERY_PROVIDER
-    status_value, error = INVITE_DELIVERY_PROVIDER_RESULTS.get(
-        provider_name,
-        (
-            "queued",
-            "Delivery provider has no local sender implementation yet.",
-        ),
-    )
-    return provider_name, status_value, error
+    profile = INVITE_DELIVERY_PROVIDER_PROFILES.get(provider_name)
+    if profile is None:
+        return {
+            "provider": provider_name,
+            "attempt_status": "queued",
+            "mode": "unknown_contract",
+            "production_ready": False,
+            "sends_message": False,
+            "audit_only": True,
+            "requires_https_invite_url": True,
+            "requires_external_secret": True,
+            "summary": "Delivery provider has no local sender implementation yet.",
+            "action": (
+                "Register the provider contract, secret handling, webhook/audit "
+                "mapping, and failure semantics before use."
+            ),
+            "error": "Delivery provider has no local sender implementation yet.",
+        }
+    return {
+        "provider": provider_name,
+        "attempt_status": profile["attempt_status"],
+        "mode": profile["mode"],
+        "production_ready": profile["production_ready"],
+        "sends_message": profile["sends_message"],
+        "audit_only": profile["audit_only"],
+        "requires_https_invite_url": True,
+        "requires_external_secret": profile["requires_external_secret"],
+        "summary": profile["summary"],
+        "action": profile["action"],
+        "error": profile["error"],
+    }
+
+
+def _invite_delivery_provider_result(provider: str | None) -> tuple[str, str, str | None]:
+    profile = _invite_delivery_provider_profile(provider)
+    return profile["provider"], profile["attempt_status"], profile["error"]
 
 
 app = FastAPI(
@@ -934,12 +1023,128 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
     }
 
 
+def _staff_invite_delivery_readiness_response(
+    repository: MicroScoreRepository,
+) -> dict[str, Any]:
+    invites = repository.list_staff_invites()
+    configured_provider = configured_invite_delivery_provider()
+    configured_profile = _invite_delivery_provider_profile(configured_provider)
+    invite_url_base = configured_invite_web_base_url()
+    parsed_base = urlparse(invite_url_base)
+    invite_url_https = parsed_base.scheme == "https"
+    invite_url_host = (parsed_base.hostname or "").lower()
+    invite_url_local = invite_url_host in LOCAL_INVITE_HOSTS
+    now = datetime.now(timezone.utc)
+    active_pending_invites = [
+        invite for invite in invites if _staff_invite_is_active_pending(invite, now=now)
+    ]
+    undelivered_active_invites = [
+        invite for invite in active_pending_invites if not invite.get("delivered_at")
+    ]
+    failed_latest_attempts = [
+        invite
+        for invite in active_pending_invites
+        if invite.get("last_delivery_status") == "failed"
+    ]
+
+    provider_names = list(INVITE_DELIVERY_PROVIDER_PROFILES)
+    if configured_provider not in provider_names:
+        provider_names.insert(0, configured_provider)
+    providers = [
+        {
+            **_invite_delivery_provider_profile(provider),
+            "configured": provider == configured_provider,
+        }
+        for provider in provider_names
+    ]
+
+    blockers: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+    if not configured_profile["production_ready"]:
+        blockers.append(
+            {
+                "key": "delivery_provider_not_production_ready",
+                "severity": "blocker",
+                "summary": (
+                    f"Configured provider {configured_provider!r} is "
+                    f"{configured_profile['mode']} and is not production-ready."
+                ),
+                "action": configured_profile["action"],
+            }
+        )
+    if not invite_url_https:
+        blockers.append(
+            {
+                "key": "invite_url_not_https",
+                "severity": "blocker",
+                "summary": f"Invite URL base {invite_url_base!r} is not HTTPS.",
+                "action": "Use a verified HTTPS invite origin before real staff onboarding.",
+            }
+        )
+    if invite_url_local:
+        blockers.append(
+            {
+                "key": "invite_url_local_origin",
+                "severity": "blocker",
+                "summary": f"Invite URL base {invite_url_base!r} points to a local host.",
+                "action": "Move invite links to the deployed HTTPS application origin.",
+            }
+        )
+    if undelivered_active_invites:
+        blockers.append(
+            {
+                "key": "undelivered_active_invites",
+                "severity": "blocker",
+                "summary": (
+                    f"{len(undelivered_active_invites)} active pending staff "
+                    "invite(s) do not have audited delivery metadata."
+                ),
+                "action": "Record delivery, retry through a working provider, rotate, or revoke each invite.",
+            }
+        )
+    if failed_latest_attempts:
+        warnings.append(
+            {
+                "key": "failed_latest_delivery_attempts",
+                "severity": "warning",
+                "summary": (
+                    f"{len(failed_latest_attempts)} active pending staff invite(s) "
+                    "have a failed latest delivery attempt."
+                ),
+                "action": "Retry through a working provider or rotate/revoke the invite.",
+            }
+        )
+
+    status_value = "blocked" if blockers else "review" if warnings else "ready"
+    return {
+        "status": status_value,
+        "generated_at": _utc_now_iso(),
+        "configured_provider": configured_provider,
+        "default_provider": DEFAULT_INVITE_DELIVERY_PROVIDER,
+        "invite_url_base": invite_url_base,
+        "invite_url_https": invite_url_https,
+        "invite_url_local": invite_url_local,
+        "active_pending_invite_count": len(active_pending_invites),
+        "undelivered_active_invite_count": len(undelivered_active_invites),
+        "failed_latest_attempt_count": len(failed_latest_attempts),
+        "providers": providers,
+        "production_blockers": blockers,
+        "warnings": warnings,
+        "next_required_controls": blockers + warnings,
+        "limitation": (
+            "Staff Invite Delivery Readiness v1 validates provider contract, "
+            "HTTPS origin, and audited delivery evidence. It does not send email, "
+            "SMS, or secure messages through an external transactional provider."
+        ),
+    }
+
+
 def _identity_readiness_response(repository: MicroScoreRepository) -> dict[str, Any]:
     users = repository.list_users()
     invites = repository.list_staff_invites()
     staff_sessions = repository.list_active_sessions(staff_only=True)
     mfa_readiness = _mfa_readiness_response(users)
-    invite_health = _staff_invite_health_response(invites)
+    delivery_readiness = _staff_invite_delivery_readiness_response(repository)
     storage = repository.storage_readiness()
     session_ttl_hours = configured_session_ttl_hours()
     session_ttl_seconds = int(round(session_ttl_hours * 3600))
@@ -988,18 +1193,16 @@ def _identity_readiness_response(repository: MicroScoreRepository) -> dict[str, 
         {
             "key": "invite_delivery",
             "label": "Invite delivery mode",
-            "status": "blocker" if invite_health["action_required_count"] else "warning",
-            "severity": "blocker" if invite_health["action_required_count"] else "warning",
+            "status": "blocker" if delivery_readiness["status"] == "blocked" else "warning",
+            "severity": "blocker" if delivery_readiness["status"] == "blocked" else "warning",
             "summary": (
-                f"Invite delivery provider is {provider!r} with URL base {invite_base_url!r}."
+                f"Invite delivery provider is {provider!r} with URL base {invite_base_url!r}; "
+                f"delivery readiness is {delivery_readiness['status']}."
             ),
             "action": (
-                "Clear expired or soon-expiring invites before onboarding continues."
-                if invite_health["action_required_count"]
-                else (
-                    "Move staff invite delivery to transactional email or "
-                    "approved secure messaging."
-                )
+                delivery_readiness["next_required_controls"][0]["action"]
+                if delivery_readiness["next_required_controls"]
+                else "Move staff invite delivery to transactional email or approved secure messaging."
             ),
         },
         {
@@ -2587,6 +2790,17 @@ def staff_invite_health(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return _staff_invite_health_response(repository.list_staff_invites())
+
+
+@app.get(
+    "/admin/staff-invites/delivery-readiness",
+    response_model=StaffInviteDeliveryReadinessResponse,
+)
+def staff_invite_delivery_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _staff_invite_delivery_readiness_response(repository)
 
 
 @app.post(

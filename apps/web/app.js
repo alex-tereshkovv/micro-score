@@ -103,6 +103,7 @@ const els = {
   mfaReadiness: document.querySelector("#mfaReadiness"),
   staffUsers: document.querySelector("#staffUsers"),
   staffSessions: document.querySelector("#staffSessions"),
+  staffInviteDeliveryReadiness: document.querySelector("#staffInviteDeliveryReadiness"),
   staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
   refreshUsers: document.querySelector("#refreshUsers"),
@@ -982,6 +983,8 @@ function resetPrivilegedViews() {
   els.mfaReadiness.textContent = "MFA readiness not loaded.";
   els.staffInviteHealth.className = "metric-grid invite-health empty";
   els.staffInviteHealth.textContent = "Invite health not loaded.";
+  els.staffInviteDeliveryReadiness.className = "metric-grid invite-delivery-readiness empty";
+  els.staffInviteDeliveryReadiness.textContent = "Invite delivery readiness not loaded.";
   els.modelStatusPill.className = "pill muted";
   els.modelStatusPill.textContent = "Model status unavailable";
 }
@@ -2983,6 +2986,50 @@ function staffInviteStatus(invite) {
   return "pending";
 }
 
+function renderStaffInviteDeliveryReadiness(readiness) {
+  if (!els.staffInviteDeliveryReadiness) return;
+  const statusClass = readiness.status === "blocked"
+    ? "risk-high"
+    : readiness.status === "review"
+      ? "risk-medium"
+      : "risk-low";
+  const configuredProvider = (readiness.providers || []).find((row) => row.configured) || {};
+  const blockerCount = (readiness.production_blockers || []).length;
+  const warningCount = (readiness.warnings || []).length;
+  els.staffInviteDeliveryReadiness.className = "metric-grid invite-delivery-readiness";
+  els.staffInviteDeliveryReadiness.innerHTML = `
+    <div class="metric">
+      <span>Delivery readiness</span>
+      <strong class="${statusClass}">${escapeHtml(formatPolicyName(readiness.status))}</strong>
+    </div>
+    <div class="metric">
+      <span>Configured provider</span>
+      <strong>${escapeHtml(formatPolicyName(readiness.configured_provider || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>Provider mode</span>
+      <strong>${escapeHtml(formatPolicyName(configuredProvider.mode || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>HTTPS invite URL</span>
+      <strong>${readiness.invite_url_https ? "Yes" : "No"}</strong>
+    </div>
+    <div class="metric">
+      <span>Undelivered active</span>
+      <strong>${Number(readiness.undelivered_active_invite_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Failed latest attempts</span>
+      <strong>${Number(readiness.failed_latest_attempt_count || 0)}</strong>
+    </div>
+    <p class="tiny-text full-width">
+      ${escapeHtml(configuredProvider.summary || readiness.limitation || "Delivery readiness contract not reported.")}
+      Blockers: ${Number(blockerCount)}; warnings: ${Number(warningCount)}.
+      ${escapeHtml(readiness.limitation || "")}
+    </p>
+  `;
+}
+
 function renderStaffInviteHealth(health) {
   if (!els.staffInviteHealth) return;
   const statusClass = health.status === "attention" ? "risk-high" : "risk-low";
@@ -3093,11 +3140,13 @@ function renderStaffInvites(rows) {
 }
 
 async function refreshStaffInvites() {
-  const [health, rows] = await Promise.all([
+  const [health, deliveryReadiness, rows] = await Promise.all([
     apiFetch("/admin/staff-invites/health"),
+    apiFetch("/admin/staff-invites/delivery-readiness"),
     apiFetch("/admin/staff-invites"),
   ]);
   renderStaffInviteHealth(health);
+  renderStaffInviteDeliveryReadiness(deliveryReadiness);
   renderStaffInvites(rows);
 }
 
