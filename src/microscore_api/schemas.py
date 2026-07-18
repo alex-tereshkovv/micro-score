@@ -261,6 +261,7 @@ class IdentityReadinessResponse(BaseModel):
 
 InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
 InviteDeliveryAttemptStatus = Literal["queued", "sent", "failed"]
+InviteDeliveryConfigurationStatus = Literal["not_required", "missing", "invalid", "ready"]
 
 
 class StaffInviteDeliveryOptions(BaseModel):
@@ -346,10 +347,16 @@ class StaffInviteDeliveryProviderProfile(BaseModel):
     mode: str
     configured: bool = False
     production_ready: bool = False
+    configuration_status: InviteDeliveryConfigurationStatus = "not_required"
+    configuration_ready: bool = False
     sends_message: bool = False
     audit_only: bool = True
     requires_https_invite_url: bool = True
     requires_external_secret: bool = False
+    required_environment: list[str] = Field(default_factory=list)
+    configured_environment: list[str] = Field(default_factory=list)
+    missing_environment: list[str] = Field(default_factory=list)
+    configuration_warnings: list[str] = Field(default_factory=list)
     summary: str
     action: str
     error: str | None = None

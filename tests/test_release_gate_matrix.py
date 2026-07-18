@@ -218,6 +218,8 @@ SECURITY_MATRIX_ROWS = [
         "markers": [
             "/admin/staff-invites/delivery-readiness",
             "delivery_provider_not_production_ready",
+            "delivery_provider_configuration_missing",
+            "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
             "transactional_email_contract",
             "local_outbox",
             "staff_invite_delivery_retry",

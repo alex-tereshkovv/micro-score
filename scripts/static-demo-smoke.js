@@ -409,13 +409,16 @@ async function main() {
     throw new Error("Expected identity readiness evidence room to show local prototype limitations");
   }
   const inviteDeliveryReadinessInitial = await api.request("/admin/staff-invites/delivery-readiness", {}, adminSession);
+  const transactionalDeliveryProfile = inviteDeliveryReadinessInitial.providers?.find((row) => row.provider === "transactional_email");
   if (
     inviteDeliveryReadinessInitial.status !== "blocked"
     || inviteDeliveryReadinessInitial.configured_provider !== "local_outbox"
     || !inviteDeliveryReadinessInitial.invite_url_https
     || inviteDeliveryReadinessInitial.invite_url_local
     || !inviteDeliveryReadinessInitial.production_blockers?.some((row) => row.key === "delivery_provider_not_production_ready")
-    || !inviteDeliveryReadinessInitial.providers?.some((row) => row.provider === "transactional_email" && row.requires_external_secret)
+    || !transactionalDeliveryProfile?.requires_external_secret
+    || transactionalDeliveryProfile?.configuration_status !== "missing"
+    || !transactionalDeliveryProfile?.missing_environment?.includes("MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY")
   ) {
     throw new Error("Expected invite delivery readiness to expose local provider contract blockers");
   }
@@ -1291,6 +1294,7 @@ async function main() {
       staff_invite_delivery_readiness: true,
       staff_invite_delivery_outbox: true,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
+      transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
       staff_invite_delivery_retry: true,
       staff_invite_rotation: true,
       staff_invite_health: true,

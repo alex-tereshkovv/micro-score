@@ -249,6 +249,20 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         ),
         "Invite delivery readiness should expose provider production blocker",
     )
+    transactional_profile = next(
+        row
+        for row in delivery_readiness["providers"]
+        if row["provider"] == "transactional_email"
+    )
+    assert_true(
+        transactional_profile["configuration_status"] == "missing",
+        "Transactional email profile should report missing configuration by default",
+    )
+    assert_true(
+        "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY"
+        in transactional_profile["missing_environment"],
+        "Transactional email profile should list missing API key environment name",
+    )
 
     mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
     assert_true(mfa_readiness["status"] == "ready", "Seeded staff MFA readiness should be ready")
@@ -451,6 +465,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "mfa_failure_warning": failure_check["status"],
         "delivery_readiness_status": delivery_readiness["status"],
         "delivery_provider": delivery_readiness["configured_provider"],
+        "transactional_email_contract_config": transactional_profile["configuration_status"],
         "final_security_status": final_readiness["status"],
         "audit_actions_checked": 7,
     }

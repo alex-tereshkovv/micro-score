@@ -26,6 +26,15 @@
   const DEMO_SESSION_TTL_SECONDS = 8 * 60 * 60;
   const DEMO_MFA_CODE = "246810";
   const DEMO_INVITE_URL_BASE = "https://alex-tereshkovv.github.io/micro-score";
+  const TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT = [
+    "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_FROM",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET",
+  ];
+  const TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = [
+    "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
+  ];
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -388,6 +397,28 @@
     };
   }
 
+  function providerConfigurationDefaults() {
+    return {
+      configuration_status: "not_required",
+      configuration_ready: true,
+      required_environment: [],
+      configured_environment: [],
+      missing_environment: [],
+      configuration_warnings: [],
+    };
+  }
+
+  function transactionalEmailConfigurationProfile() {
+    return {
+      configuration_status: "missing",
+      configuration_ready: false,
+      required_environment: TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT.slice(),
+      configured_environment: [],
+      missing_environment: TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT.slice(),
+      configuration_warnings: [],
+    };
+  }
+
   function staffInviteDeliveryProviderProfile(provider) {
     const providerName = String(provider || "local_outbox").trim() || "local_outbox";
     const profiles = {
@@ -442,18 +473,27 @@
         sends_message: false,
         audit_only: false,
         requires_external_secret: true,
-        summary: "Names the future transactional email contract, but the static demo does not integrate an external sender.",
-        action: "Wire provider SDK/API, secret rotation, bounce handling, and delivery webhooks before production sends.",
-        error: "Transactional email provider is not integrated in this prototype.",
+        summary: "Validates the future transactional email adapter configuration and records safe audited delivery attempts.",
+        action: "Set API key, sender, template, webhook secret, secret rotation, bounce handling, and delivery webhooks before production sends.",
+        error: "Transactional email provider is missing required configuration.",
       },
     };
+    const configuration = providerName === "transactional_email"
+      ? transactionalEmailConfigurationProfile()
+      : providerConfigurationDefaults();
     const profile = profiles[providerName] || {
       attempt_status: "queued",
       mode: "unknown_contract",
       production_ready: false,
+      configuration_status: "missing",
+      configuration_ready: false,
       sends_message: false,
       audit_only: true,
       requires_external_secret: true,
+      required_environment: [],
+      configured_environment: [],
+      missing_environment: [],
+      configuration_warnings: [`Provider '${providerName}' is not registered in the invite delivery contract.`],
       summary: "Delivery provider has no local sender implementation yet.",
       action: "Register provider contract, secret handling, webhook/audit mapping, and failure semantics before use.",
       error: "Delivery provider has no local sender implementation yet.",
@@ -462,6 +502,7 @@
       provider: providerName,
       configured: providerName === "local_outbox",
       requires_https_invite_url: true,
+      ...configuration,
       ...profile,
     };
   }
@@ -672,6 +713,22 @@
         action: configuredProfile.action,
       });
     }
+    if (configuredProfile.missing_environment?.length) {
+      blockers.push({
+        key: "delivery_provider_configuration_missing",
+        severity: "blocker",
+        summary: `Configured provider '${configuredProvider}' is missing ${configuredProfile.missing_environment.length} required environment variable(s).`,
+        action: "Set the required transactional email environment variables without exposing secret values in logs or API responses.",
+      });
+    }
+    if (configuredProfile.configuration_warnings?.length) {
+      blockers.push({
+        key: "delivery_provider_configuration_invalid",
+        severity: "blocker",
+        summary: `Configured provider '${configuredProvider}' has invalid delivery configuration.`,
+        action: "Fix provider sender/API URL configuration before enabling delivery attempts.",
+      });
+    }
     if (!inviteUrlHttps) {
       blockers.push({
         key: "invite_url_not_https",
@@ -719,7 +776,7 @@
       production_blockers: blockers,
       warnings,
       next_required_controls: blockers.concat(warnings),
-      limitation: "Staff Invite Delivery Readiness v1 validates provider contract, HTTPS origin, and audited delivery evidence. It does not send email, SMS, or secure messages through an external transactional provider.",
+      limitation: "Staff Invite Delivery Readiness v2 validates provider contract, HTTPS origin, secret/configuration presence, and audited delivery evidence. It does not expose secret values and the static transactional email adapter records attempts without sending external email.",
     };
   }
 

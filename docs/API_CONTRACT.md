@@ -377,16 +377,33 @@ typed provider contract summary: `configured_provider`, `default_provider`,
 `next_required_controls`, and `limitation`.
 
 Provider profiles expose `provider`, `attempt_status`, `mode`, `configured`,
-`production_ready`, `sends_message`, `audit_only`,
-`requires_https_invite_url`, `requires_external_secret`, `summary`, `action`,
-and optional `error`. The current local providers (`local_outbox`,
-`manual_receipt`, `local_queue`, `local_fail`) are audited prototype modes, not
-transactional delivery. `transactional_email` is a contract placeholder only;
-the API does not send email, SMS, or secure messages through an external
-provider yet. The default production blocker is
-`delivery_provider_not_production_ready`; readiness remains `blocked` until the
-configured provider is production-ready, invite URLs use a verified HTTPS
-non-local origin, and active pending invites have audited delivery evidence.
+`production_ready`, `configuration_status`, `configuration_ready`,
+`sends_message`, `audit_only`, `requires_https_invite_url`,
+`requires_external_secret`, `required_environment`, `configured_environment`,
+`missing_environment`, `configuration_warnings`, `summary`, `action`, and
+optional `error`. The API reports environment variable names only; it never
+echoes secret values.
+
+The current local providers (`local_outbox`, `manual_receipt`, `local_queue`,
+`local_fail`) are audited prototype modes, not transactional delivery.
+`transactional_email` is the production adapter contract. When selected through
+`MICROSCORE_INVITE_DELIVERY_PROVIDER=transactional_email`, readiness validates:
+
+- `MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY`
+- `MICROSCORE_TRANSACTIONAL_EMAIL_FROM`
+- `MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID`
+- `MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET`
+- optional HTTPS `MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL`
+
+Missing configuration raises
+`delivery_provider_configuration_missing`; malformed sender/API URL
+configuration raises `delivery_provider_configuration_invalid`. The default
+production blocker is still `delivery_provider_not_production_ready`; readiness
+remains `blocked` until the configured provider is production-ready, invite URLs
+use a verified HTTPS non-local origin, active pending invites have audited
+delivery evidence, and transactional email secrets/configuration are present.
+The prototype transactional adapter records safe audited attempts without
+sending external email.
 
 Create an expiring MFI analyst invite:
 
@@ -428,11 +445,12 @@ object with `attempt_id`, `provider`, `status`, `channel`, `recipient`,
 `local_outbox`; override it per request with `delivery_provider`, or globally
 with `MICROSCORE_INVITE_DELIVERY_PROVIDER` for deployment experiments. Local
 provider semantics are explicit: `local_outbox` and `manual_receipt` record
-`sent` and mark the invite delivered; `local_queue` records `queued` and leaves
-the invite undelivered; `local_fail` records `failed` with an error and leaves
-the invite undelivered. Unknown provider names are recorded as `queued` with a
-local implementation warning. Delivery attempts never store the raw token or
-full invite URL.
+`sent` and mark the invite delivered; `local_queue` and `transactional_email`
+record `queued` and leave the invite undelivered; `local_fail` records `failed`
+with an error and leaves the invite undelivered. Unknown provider names are
+recorded as `queued` with a local implementation warning. Delivery attempts
+never store the raw token, full invite URL, or transactional email secret
+values.
 
 Record audited delivery for an active pending invite:
 

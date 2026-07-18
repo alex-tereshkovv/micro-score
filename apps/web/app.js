@@ -2996,6 +2996,14 @@ function renderStaffInviteDeliveryReadiness(readiness) {
   const configuredProvider = (readiness.providers || []).find((row) => row.configured) || {};
   const blockerCount = (readiness.production_blockers || []).length;
   const warningCount = (readiness.warnings || []).length;
+  const configurationStatus = configuredProvider.configuration_status || "unknown";
+  const missingEnvironment = configuredProvider.missing_environment || [];
+  const configurationWarnings = configuredProvider.configuration_warnings || [];
+  const configurationClass = configuredProvider.configuration_ready
+    ? "risk-low"
+    : configurationStatus === "not_required"
+      ? ""
+      : "risk-high";
   els.staffInviteDeliveryReadiness.className = "metric-grid invite-delivery-readiness";
   els.staffInviteDeliveryReadiness.innerHTML = `
     <div class="metric">
@@ -3009,6 +3017,10 @@ function renderStaffInviteDeliveryReadiness(readiness) {
     <div class="metric">
       <span>Provider mode</span>
       <strong>${escapeHtml(formatPolicyName(configuredProvider.mode || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>Adapter config</span>
+      <strong class="${configurationClass}">${escapeHtml(formatPolicyName(configurationStatus))}</strong>
     </div>
     <div class="metric">
       <span>HTTPS invite URL</span>
@@ -3025,6 +3037,8 @@ function renderStaffInviteDeliveryReadiness(readiness) {
     <p class="tiny-text full-width">
       ${escapeHtml(configuredProvider.summary || readiness.limitation || "Delivery readiness contract not reported.")}
       Blockers: ${Number(blockerCount)}; warnings: ${Number(warningCount)}.
+      Missing env: ${missingEnvironment.length ? escapeHtml(missingEnvironment.join(", ")) : "none"}.
+      Config warnings: ${configurationWarnings.length ? escapeHtml(configurationWarnings.join(" ")) : "none"}.
       ${escapeHtml(readiness.limitation || "")}
     </p>
   `;

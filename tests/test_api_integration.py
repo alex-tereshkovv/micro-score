@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 import warnings
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -583,6 +585,15 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("production_blockers", delivery_readiness_properties)
         self.assertIn("providers", delivery_readiness_properties)
         self.assertIn("StaffInviteDeliveryProviderProfile", schemas)
+        provider_profile_properties = schemas["StaffInviteDeliveryProviderProfile"][
+            "properties"
+        ]
+        self.assertIn("configuration_status", provider_profile_properties)
+        self.assertIn("configuration_ready", provider_profile_properties)
+        self.assertIn("required_environment", provider_profile_properties)
+        self.assertIn("configured_environment", provider_profile_properties)
+        self.assertIn("missing_environment", provider_profile_properties)
+        self.assertIn("configuration_warnings", provider_profile_properties)
         self.assertIn("mfa_code", schemas["LoginRequest"]["properties"])
         self.assertIn("mfa_code", schemas["StaffInviteAccept"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
@@ -977,11 +988,23 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertFalse(providers["local_outbox"]["production_ready"])
         self.assertFalse(providers["local_outbox"]["sends_message"])
         self.assertEqual(providers["local_outbox"]["attempt_status"], "sent")
+        self.assertEqual(providers["local_outbox"]["configuration_status"], "not_required")
+        self.assertTrue(providers["local_outbox"]["configuration_ready"])
         self.assertEqual(
             providers["transactional_email"]["mode"],
             "transactional_email_contract",
         )
         self.assertTrue(providers["transactional_email"]["requires_external_secret"])
+        self.assertEqual(providers["transactional_email"]["configuration_status"], "missing")
+        self.assertFalse(providers["transactional_email"]["configuration_ready"])
+        self.assertIn(
+            "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
+            providers["transactional_email"]["missing_environment"],
+        )
+        self.assertIn(
+            "MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET",
+            providers["transactional_email"]["required_environment"],
+        )
 
         blocker_keys = {row["key"] for row in payload["production_blockers"]}
         self.assertIn("delivery_provider_not_production_ready", blocker_keys)
@@ -991,7 +1014,7 @@ class ApiIntegrationTests(unittest.TestCase):
             {row["key"] for row in payload["next_required_controls"]},
             blocker_keys,
         )
-        self.assertIn("does not send email", payload["limitation"])
+        self.assertIn("does not expose secret values", payload["limitation"])
 
         invite = self.client.post(
             "/admin/staff-invites",
@@ -1015,6 +1038,91 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn(
             "undelivered_active_invites",
             {row["key"] for row in with_invite_payload["production_blockers"]},
+        )
+
+    def test_transactional_email_readiness_validates_secret_contract(self) -> None:
+        admin_token = self._register("delivery-config-admin@example.com", "admin")
+
+        with patch.dict(
+            os.environ,
+            {
+                "MICROSCORE_INVITE_DELIVERY_PROVIDER": "transactional_email",
+                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/micro-score",
+            },
+            clear=False,
+        ):
+            response = self.client.get(
+                "/admin/staff-invites/delivery-readiness",
+                headers=self._headers(admin_token),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        missing_payload = response.json()
+        missing_profile = next(
+            row
+            for row in missing_payload["providers"]
+            if row["provider"] == "transactional_email"
+        )
+        self.assertTrue(missing_profile["configured"])
+        self.assertEqual(missing_profile["configuration_status"], "missing")
+        self.assertFalse(missing_profile["configuration_ready"])
+        self.assertEqual(missing_payload["configured_provider"], "transactional_email")
+        self.assertTrue(missing_payload["invite_url_https"])
+        self.assertFalse(missing_payload["invite_url_local"])
+        missing_blocker_keys = {
+            row["key"] for row in missing_payload["production_blockers"]
+        }
+        self.assertIn(
+            "delivery_provider_configuration_missing",
+            missing_blocker_keys,
+        )
+        self.assertIn(
+            "delivery_provider_not_production_ready",
+            missing_blocker_keys,
+        )
+
+        secret_value = "test-secret-value-should-not-leak"
+        with patch.dict(
+            os.environ,
+            {
+                "MICROSCORE_INVITE_DELIVERY_PROVIDER": "transactional_email",
+                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/micro-score",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY": secret_value,
+                "MICROSCORE_TRANSACTIONAL_EMAIL_FROM": "security@example.com",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID": "staff-invite-v1",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET": "webhook-secret",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL": "https://email.example.com/api",
+            },
+            clear=False,
+        ):
+            configured_response = self.client.get(
+                "/admin/staff-invites/delivery-readiness",
+                headers=self._headers(admin_token),
+            )
+        self.assertEqual(configured_response.status_code, 200, configured_response.text)
+        configured_payload = configured_response.json()
+        configured_profile = next(
+            row
+            for row in configured_payload["providers"]
+            if row["provider"] == "transactional_email"
+        )
+        self.assertEqual(configured_profile["configuration_status"], "ready")
+        self.assertTrue(configured_profile["configuration_ready"])
+        self.assertEqual(configured_profile["missing_environment"], [])
+        self.assertIn(
+            "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
+            configured_profile["configured_environment"],
+        )
+        self.assertNotIn(secret_value, json.dumps(configured_payload))
+        configured_blocker_keys = {
+            row["key"] for row in configured_payload["production_blockers"]
+        }
+        self.assertNotIn(
+            "delivery_provider_configuration_missing",
+            configured_blocker_keys,
+        )
+        self.assertIn(
+            "delivery_provider_not_production_ready",
+            configured_blocker_keys,
         )
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:

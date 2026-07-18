@@ -109,6 +109,15 @@ DEFAULT_PROTOTYPE_MFA_CODE = "246810"
 DEFAULT_INVITE_WEB_BASE_URL = "http://127.0.0.1:5173"
 DEFAULT_INVITE_DELIVERY_PROVIDER = "local_outbox"
 MFA_CHALLENGE_FAILURE_WINDOW_HOURS = 24
+TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT = (
+    "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_FROM",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET",
+)
+TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = (
+    "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
+)
 INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
     "local_outbox": {
         "attempt_status": "sent",
@@ -165,12 +174,12 @@ INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
         "audit_only": False,
         "requires_external_secret": True,
         "summary": (
-            "Names the future transactional email contract, but this prototype "
-            "does not integrate an external sender."
+            "Validates the future transactional email adapter configuration "
+            "and records safe audited delivery attempts."
         ),
         "action": (
-            "Wire a provider SDK/API, secret rotation, bounce handling, and "
-            "delivery webhooks before enabling production sends."
+            "Set API key, sender, template, webhook secret, secret rotation, "
+            "bounce handling, and delivery webhooks before enabling production sends."
         ),
         "error": "Transactional email provider is not integrated in this prototype.",
     },
@@ -205,6 +214,70 @@ def configured_invite_delivery_provider() -> str:
     ).strip() or DEFAULT_INVITE_DELIVERY_PROVIDER
 
 
+def _configured_environment_names(names: tuple[str, ...]) -> list[str]:
+    return [name for name in names if os.environ.get(name, "").strip()]
+
+
+def _missing_environment_names(names: tuple[str, ...]) -> list[str]:
+    return [name for name in names if not os.environ.get(name, "").strip()]
+
+
+def _looks_like_email_address(value: str) -> bool:
+    normalized = value.strip()
+    if "@" not in normalized:
+        return False
+    local_part, domain = normalized.rsplit("@", 1)
+    return bool(local_part and "." in domain and not domain.startswith("."))
+
+
+def _transactional_email_configuration_profile() -> dict[str, Any]:
+    required_environment = list(TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT)
+    optional_environment = list(TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT)
+    configured_environment = _configured_environment_names(
+        TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT + TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT
+    )
+    missing_environment = _missing_environment_names(TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT)
+    warnings: list[str] = []
+
+    sender = os.environ.get("MICROSCORE_TRANSACTIONAL_EMAIL_FROM", "").strip()
+    if sender and not _looks_like_email_address(sender):
+        warnings.append("MICROSCORE_TRANSACTIONAL_EMAIL_FROM must look like a sender email address.")
+
+    api_base_url = os.environ.get("MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL", "").strip()
+    if api_base_url:
+        parsed_api_base = urlparse(api_base_url)
+        if parsed_api_base.scheme != "https" or not parsed_api_base.netloc:
+            warnings.append("MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL must be a valid HTTPS URL.")
+
+    if missing_environment:
+        status_value = "missing"
+    elif warnings:
+        status_value = "invalid"
+    else:
+        status_value = "ready"
+
+    return {
+        "configuration_status": status_value,
+        "configuration_ready": status_value == "ready",
+        "required_environment": required_environment,
+        "optional_environment": optional_environment,
+        "configured_environment": configured_environment,
+        "missing_environment": missing_environment,
+        "configuration_warnings": warnings,
+    }
+
+
+def _provider_configuration_defaults() -> dict[str, Any]:
+    return {
+        "configuration_status": "not_required",
+        "configuration_ready": True,
+        "required_environment": [],
+        "configured_environment": [],
+        "missing_environment": [],
+        "configuration_warnings": [],
+    }
+
+
 def _invite_delivery_provider_profile(provider: str | None) -> dict[str, Any]:
     provider_name = (provider or configured_invite_delivery_provider()).strip()
     provider_name = provider_name or DEFAULT_INVITE_DELIVERY_PROVIDER
@@ -215,10 +288,18 @@ def _invite_delivery_provider_profile(provider: str | None) -> dict[str, Any]:
             "attempt_status": "queued",
             "mode": "unknown_contract",
             "production_ready": False,
+            "configuration_status": "missing",
+            "configuration_ready": False,
             "sends_message": False,
             "audit_only": True,
             "requires_https_invite_url": True,
             "requires_external_secret": True,
+            "required_environment": [],
+            "configured_environment": [],
+            "missing_environment": [],
+            "configuration_warnings": [
+                f"Provider {provider_name!r} is not registered in the invite delivery contract."
+            ],
             "summary": "Delivery provider has no local sender implementation yet.",
             "action": (
                 "Register the provider contract, secret handling, webhook/audit "
@@ -226,18 +307,37 @@ def _invite_delivery_provider_profile(provider: str | None) -> dict[str, Any]:
             ),
             "error": "Delivery provider has no local sender implementation yet.",
         }
+    configuration = _provider_configuration_defaults()
+    provider_error = profile["error"]
+    if provider_name == "transactional_email":
+        configuration = _transactional_email_configuration_profile()
+        if configuration["missing_environment"]:
+            provider_error = "Transactional email provider is missing required configuration."
+        elif configuration["configuration_warnings"]:
+            provider_error = "Transactional email provider configuration is invalid."
+        else:
+            provider_error = (
+                "Transactional email configuration is present, but external "
+                "sends are disabled in this prototype adapter."
+            )
     return {
         "provider": provider_name,
         "attempt_status": profile["attempt_status"],
         "mode": profile["mode"],
         "production_ready": profile["production_ready"],
+        "configuration_status": configuration["configuration_status"],
+        "configuration_ready": configuration["configuration_ready"],
         "sends_message": profile["sends_message"],
         "audit_only": profile["audit_only"],
         "requires_https_invite_url": True,
         "requires_external_secret": profile["requires_external_secret"],
+        "required_environment": configuration["required_environment"],
+        "configured_environment": configuration["configured_environment"],
+        "missing_environment": configuration["missing_environment"],
+        "configuration_warnings": configuration["configuration_warnings"],
         "summary": profile["summary"],
         "action": profile["action"],
-        "error": profile["error"],
+        "error": provider_error,
     }
 
 
@@ -1072,6 +1172,34 @@ def _staff_invite_delivery_readiness_response(
                 "action": configured_profile["action"],
             }
         )
+    if configured_profile.get("missing_environment"):
+        blockers.append(
+            {
+                "key": "delivery_provider_configuration_missing",
+                "severity": "blocker",
+                "summary": (
+                    f"Configured provider {configured_provider!r} is missing "
+                    f"{len(configured_profile['missing_environment'])} required "
+                    "environment variable(s)."
+                ),
+                "action": (
+                    "Set the required transactional email environment variables "
+                    "without exposing secret values in logs or API responses."
+                ),
+            }
+        )
+    if configured_profile.get("configuration_warnings"):
+        blockers.append(
+            {
+                "key": "delivery_provider_configuration_invalid",
+                "severity": "blocker",
+                "summary": (
+                    f"Configured provider {configured_provider!r} has invalid "
+                    "delivery configuration."
+                ),
+                "action": "Fix provider sender/API URL configuration before enabling delivery attempts.",
+            }
+        )
     if not invite_url_https:
         blockers.append(
             {
@@ -1132,9 +1260,11 @@ def _staff_invite_delivery_readiness_response(
         "warnings": warnings,
         "next_required_controls": blockers + warnings,
         "limitation": (
-            "Staff Invite Delivery Readiness v1 validates provider contract, "
-            "HTTPS origin, and audited delivery evidence. It does not send email, "
-            "SMS, or secure messages through an external transactional provider."
+            "Staff Invite Delivery Readiness v2 validates provider contract, "
+            "HTTPS origin, secret/configuration presence, and audited delivery "
+            "evidence. It does not expose secret values and the prototype "
+            "transactional email adapter records attempts without sending "
+            "external email."
         ),
     }
 
