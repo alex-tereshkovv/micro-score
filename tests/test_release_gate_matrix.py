@@ -190,6 +190,107 @@ MATRIX_ROWS = [
 ]
 
 
+SECURITY_MATRIX_ROWS = [
+    {
+        "area": "Production identity readiness is explicit, not complete",
+        "artifacts": [
+            "tests/test_api_integration.py",
+            "tests/test_research_docs.py",
+            "scripts/static-demo-smoke.js",
+            "docs/RELEASE_CHECKLIST.md",
+        ],
+        "markers": [
+            "not a completed production security review",
+            "production IdP/TOTP/WebAuthn remains future work",
+            "/admin/security/readiness",
+            "security_readiness",
+        ],
+    },
+    {
+        "area": "Invite delivery mode is audited and local-only by default",
+        "artifacts": [
+            "tests/test_api_integration.py",
+            "tests/test_api_database.py",
+            "scripts/static-demo-smoke.js",
+            "tests/test_web_static.py",
+            "docs/RELEASE_CHECKLIST.md",
+        ],
+        "markers": [
+            "local_outbox",
+            "local_queue",
+            "local_fail",
+            "manual_receipt",
+            "staff_invite_delivery_retry",
+        ],
+    },
+    {
+        "area": "MFA and staff-session lifecycle are proven end to end",
+        "artifacts": [
+            "tests/test_api_integration.py",
+            "tests/test_api_database.py",
+            "scripts/static-demo-smoke.js",
+            "tests/test_web_static.py",
+        ],
+        "markers": [
+            "staff_mfa_login_verified",
+            "staff_mfa_challenge_failed",
+            "/admin/staff-sessions",
+            "staff_session_revoked",
+            "staff_user_disabled",
+        ],
+    },
+    {
+        "area": "Storage assumptions remain visible before pilot use",
+        "artifacts": [
+            "tests/test_api_integration.py",
+            "tests/test_api_database.py",
+            "scripts/live-api-workflow-smoke.py",
+            "docs/RELEASE_CHECKLIST.md",
+        ],
+        "markers": [
+            "storage_readiness",
+            "MICROSCORE_STORAGE_BACKEND",
+            "production_ready",
+            "temporary-sqlite",
+            "PostgreSQL",
+        ],
+    },
+    {
+        "area": "Live security workflow stays inside the release gate",
+        "artifacts": [
+            "scripts/check.ps1",
+            "scripts/live-api-workflow-smoke.py",
+            "scripts/live-security-workflow-smoke.py",
+            "tests/test_github_workflows.py",
+            "docs/RELEASE_CHECKLIST.md",
+        ],
+        "markers": [
+            "Live API workflow smoke test",
+            "Live security workflow smoke test",
+            "scripts\\live-security-workflow-smoke.py",
+            "temporary-sqlite",
+            "session_preview",
+            "token_preview",
+        ],
+    },
+    {
+        "area": "No-overclaim limitations remain release blockers",
+        "artifacts": [
+            "tests/test_research_docs.py",
+            "docs/RELEASE_CHECKLIST.md",
+            "docs/ENGINEERING_QUALITY.md",
+        ],
+        "markers": [
+            "synthetic data is not real-world lending",
+            "No real borrower",
+            "production IdP/TOTP/WebAuthn remains future work",
+            "SQLite",
+            "not ready for real loan approval",
+        ],
+    },
+]
+
+
 class ReleaseGateMatrixTests(unittest.TestCase):
     def test_release_gate_matrix_references_real_artifacts_and_markers(self) -> None:
         matrix = (DOCS_ROOT / "ENGINEERING_QUALITY.md").read_text(encoding="utf-8")
@@ -211,12 +312,72 @@ class ReleaseGateMatrixTests(unittest.TestCase):
                     self.assertIn(marker, matrix)
                     self.assertIn(marker, artifact_text)
 
+    def test_security_readiness_gate_matrix_references_real_security_proofs(self) -> None:
+        matrix = (DOCS_ROOT / "ENGINEERING_QUALITY.md").read_text(encoding="utf-8")
+        self.assertIn("Security Readiness Gate Matrix v1", matrix)
+
+        for row in SECURITY_MATRIX_ROWS:
+            with self.subTest(area=row["area"]):
+                self.assertIn(row["area"], matrix)
+
+                artifact_text = ""
+                for relative_path in row["artifacts"]:
+                    path = PROJECT_ROOT / relative_path
+                    self.assertTrue(path.exists(), relative_path)
+                    self.assertIn(relative_path, matrix)
+                    artifact_text += path.read_text(encoding="utf-8") + "\n"
+
+                for marker in row["markers"]:
+                    self.assertIn(marker, matrix)
+                    self.assertIn(marker, artifact_text)
+
     def test_release_checklist_points_to_matrix_drift_test(self) -> None:
         checklist = (DOCS_ROOT / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
 
         self.assertIn("Release Gate Traceability", checklist)
         self.assertIn("Release Gate Matrix v1", checklist)
+        self.assertIn("Security Readiness Gate Matrix v1", checklist)
         self.assertIn("tests.test_release_gate_matrix", checklist)
+
+    def test_release_checklist_tracks_security_smokes_from_check_script(self) -> None:
+        checklist = (DOCS_ROOT / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+        check_script = (PROJECT_ROOT / "scripts" / "check.ps1").read_text(encoding="utf-8")
+
+        required_smokes = [
+            "scripts\\static-demo-smoke.js",
+            "scripts\\frontend-workflow-smoke.js",
+            "scripts\\live-api-workflow-smoke.py",
+            "scripts\\live-security-workflow-smoke.py",
+        ]
+        for smoke in required_smokes:
+            with self.subTest(smoke=smoke):
+                self.assertIn(smoke, check_script)
+                self.assertIn(smoke, checklist)
+
+        for marker in [
+            "Live API workflow smoke test",
+            "Live security workflow smoke test",
+            "Security Readiness Gate Matrix v1",
+            "production IdP/TOTP/WebAuthn remains future work",
+            "SQLite is the prototype backend",
+        ]:
+            self.assertIn(marker, checklist)
+
+    def test_github_workflow_test_pins_live_security_smoke_markers(self) -> None:
+        workflow_test = (PROJECT_ROOT / "tests" / "test_github_workflows.py").read_text(
+            encoding="utf-8",
+        )
+
+        for marker in [
+            "live-api-workflow-smoke.py",
+            "live-security-workflow-smoke.py",
+            "Live API workflow smoke test",
+            "Live security workflow smoke test",
+            "security_readiness",
+            "mfa_challenge_monitoring",
+            "staff_invite_delivery_retry",
+        ]:
+            self.assertIn(marker, workflow_test)
 
     def test_windows_release_gate_still_runs_matrix_proofs(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "check.ps1").read_text(encoding="utf-8")
@@ -227,6 +388,10 @@ class ReleaseGateMatrixTests(unittest.TestCase):
             "scripts\\portfolio-dashboard-smoke.js",
             "scripts\\static-demo-smoke.js",
             "scripts\\frontend-workflow-smoke.js",
+            "scripts\\live-api-workflow-smoke.py",
+            "Live API workflow smoke test",
+            "scripts\\live-security-workflow-smoke.py",
+            "Live security workflow smoke test",
             "git diff --check",
         ]:
             self.assertIn(marker, script)

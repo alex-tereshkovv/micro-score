@@ -224,6 +224,41 @@ class SecurityReadinessResponse(BaseModel):
     limitation: str
 
 
+class IdentityReadinessComponent(BaseModel):
+    key: str
+    label: str
+    status: Literal["pass", "warning", "blocker"]
+    severity: Literal["info", "warning", "blocker"]
+    summary: str
+    action: str
+
+
+class IdentityReadinessControl(BaseModel):
+    key: str
+    severity: Literal["blocker", "warning"]
+    summary: str
+    action: str
+
+
+class IdentityReadinessResponse(BaseModel):
+    status: Literal["ready", "review", "blocked"]
+    generated_at: str
+    auth_provider_mode: str
+    invite_delivery_mode: str
+    mfa_mode: str
+    session_control_mode: str
+    rate_limit_mode: str
+    storage_backend: str
+    tenant_isolation_mode: str
+    active_staff_count: int = Field(ge=0)
+    active_staff_session_count: int = Field(ge=0)
+    active_pending_invite_count: int = Field(ge=0)
+    components: list[IdentityReadinessComponent] = Field(default_factory=list)
+    production_blockers: list[IdentityReadinessControl] = Field(default_factory=list)
+    next_required_controls: list[IdentityReadinessControl] = Field(default_factory=list)
+    limitation: str
+
+
 InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
 InviteDeliveryAttemptStatus = Literal["queued", "sent", "failed"]
 

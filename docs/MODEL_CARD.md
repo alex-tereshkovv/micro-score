@@ -95,6 +95,10 @@ Current public benchmark:
 This benchmark validates the pipeline on public credit-risk data, not on
 Kazakhstan MFI borrowers.
 
+See [PILOT_EVIDENCE_CLAIMS.md](PILOT_EVIDENCE_CLAIMS.md) for the current
+claim boundary between implemented prototype evidence, synthetic-only evidence,
+public benchmark evidence, assumptions, and blocked real-world validation.
+
 Current error analysis at threshold `0.50`:
 
 | Error Type | Count | Interpretation |
@@ -207,6 +211,8 @@ and opaque third-party data.
 - Public benchmark is from Taiwan credit-card data, not Kazakhstan microfinance
   data.
 - No real MFI repayment validation yet.
+- No pilot evidence claim should exceed the boundary in
+  [PILOT_EVIDENCE_CLAIMS.md](PILOT_EVIDENCE_CLAIMS.md).
 - Regional access indices are hypotheses.
 - No deployed public demo yet.
 - No production-grade authentication or security review.

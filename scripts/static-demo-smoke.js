@@ -394,6 +394,20 @@ async function main() {
   ) {
     throw new Error("Expected security readiness to be ready with MFA enforcement and no pending invites");
   }
+  const identityReadinessInitial = await api.request("/admin/security/identity-readiness", {}, adminSession);
+  if (
+    identityReadinessInitial.status !== "blocked"
+    || identityReadinessInitial.auth_provider_mode !== "local_password_prototype"
+    || identityReadinessInitial.storage_backend !== "sqlite_static_demo"
+    || identityReadinessInitial.mfa_mode !== "prototype_shared_code_with_admin_attestation"
+    || identityReadinessInitial.session_control_mode !== "local_bearer_sessions_with_admin_revoke"
+    || identityReadinessInitial.tenant_isolation_mode !== "organization_id_scoped_mfi_access"
+    || !identityReadinessInitial.components?.some((row) => row.key === "auth_provider" && row.status === "blocker")
+    || !identityReadinessInitial.components?.some((row) => row.key === "mfa_posture" && row.status === "warning")
+    || !String(identityReadinessInitial.limitation || "").includes("not a completed production security review")
+  ) {
+    throw new Error("Expected identity readiness evidence room to show local prototype limitations");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -611,6 +625,14 @@ async function main() {
   const securityReadinessBeforeDelivery = await api.request("/admin/security/readiness", {}, adminSession);
   if (!securityReadinessBeforeDelivery.checks.some((check) => check.key === "invite_delivery" && check.status === "blocker")) {
     throw new Error("Expected undelivered pending invite to block delivery readiness");
+  }
+  const identityReadinessBeforeDelivery = await api.request("/admin/security/identity-readiness", {}, adminSession);
+  if (
+    identityReadinessBeforeDelivery.status !== "blocked"
+    || !identityReadinessBeforeDelivery.production_blockers?.some((row) => row.key === "invite_delivery")
+    || !identityReadinessBeforeDelivery.components?.some((row) => row.key === "invite_delivery" && row.status === "blocker")
+  ) {
+    throw new Error("Expected identity readiness room to surface undelivered invite blocker");
   }
   const deliveredInvite = await api.request(
     `/admin/staff-invites/${encodeURIComponent(staffInvite.token_id)}/delivery`,
@@ -1255,6 +1277,8 @@ async function main() {
       mfa_readiness: true,
       mfa_challenge_monitoring: true,
       security_readiness: true,
+      identity_readiness: true,
+      identity_provider_mode: identityReadinessInitial.auth_provider_mode,
       staff_session_control: true,
       staff_user_disable: true,
       staff_user_reactivation: true,

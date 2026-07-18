@@ -142,6 +142,11 @@ try {
         Assert-LastExitCode "Live API workflow smoke test"
     }
 
+    Invoke-Step "Run live security workflow smoke test" {
+        & $python scripts\live-security-workflow-smoke.py
+        Assert-LastExitCode "Live security workflow smoke test"
+    }
+
     Invoke-Step "Check whitespace in git diff" {
         & git diff --check
         Assert-LastExitCode "Git whitespace check"

@@ -787,6 +787,134 @@
     };
   }
 
+  function readinessSeverity(status) {
+    if (status === "blocker") return "blocker";
+    if (status === "warning") return "warning";
+    return "pass";
+  }
+
+  function identityReadiness(session = {}) {
+    const security = securityReadiness();
+    const mfa = mfaReadiness(demo.users);
+    const inviteHealth = staffInviteHealth(Object.values(demo.staffInvites));
+    const activePendingInvites = Object.values(demo.staffInvites).filter((invite) => (
+      !invite.accepted_at
+      && !invite.revoked_at
+      && Date.parse(invite.expires_at) > Date.now()
+    ));
+    const undeliveredInvites = activePendingInvites.filter((invite) => !invite.delivered_at);
+    const failedDeliveryInvites = activePendingInvites.filter((invite) => {
+      const attempts = staffInviteDeliveryAttempts(invite.token_id);
+      return !invite.delivered_at && attempts[0]?.status === "failed";
+    });
+    const activeSessions = activeStaffSessions(session.token);
+    const inviteDeliveryStatus = undeliveredInvites.length
+      ? "blocker"
+      : failedDeliveryInvites.length
+        ? "warning"
+        : "pass";
+    const mfaStatus = mfa.missing_mfa_count ? "blocker" : "warning";
+    const sessionStatus = activeSessions.some((row) => !row.session_id || row.token)
+      ? "blocker"
+      : "pass";
+    const tenantCount = Object.keys(demo.organizations).length;
+    const components = [
+      {
+        key: "auth_provider",
+        label: "Authentication provider",
+        severity: "blocker",
+        status: "blocker",
+        summary: "Static demo staff authentication uses local password accounts managed inside the prototype API.",
+        action: "Replace with a production IdP, TOTP/WebAuthn enrollment, recovery, and audit-backed admin policies before real borrower data.",
+      },
+      {
+        key: "invite_delivery",
+        label: "Invite delivery evidence",
+        severity: readinessSeverity(inviteDeliveryStatus),
+        status: inviteDeliveryStatus,
+        summary: activePendingInvites.length
+          ? `${activePendingInvites.length} active pending invite(s), ${undeliveredInvites.length} undelivered, ${failedDeliveryInvites.length} failed latest delivery attempt(s).`
+          : "No active pending staff invite requires delivery evidence.",
+        action: inviteDeliveryStatus === "pass"
+          ? "Keep recording delivery attempts without storing raw invite tokens."
+          : "Record audited delivery or rotate/revoke stale invite links before pilot onboarding.",
+      },
+      {
+        key: "mfa_posture",
+        label: "MFA posture",
+        severity: readinessSeverity(mfaStatus),
+        status: mfaStatus,
+        summary: `${mfa.mfa_attested_count} attested active staff account(s); ${mfa.missing_mfa_count} active staff account(s) missing attestation.`,
+        action: mfaStatus === "blocker"
+          ? "Record MFA attestation for every active staff account."
+          : "Replace prototype-code MFA with IdP-backed TOTP/WebAuthn before real staff onboarding.",
+      },
+      {
+        key: "session_control",
+        label: "Session inventory and revoke",
+        severity: sessionStatus === "pass" ? "info" : "blocker",
+        status: sessionStatus,
+        summary: `${activeSessions.length} active staff session(s); session previews and hashed ids are exposed without raw bearer tokens.`,
+        action: "Continue using targeted revocation and the current-admin self-revoke guard.",
+      },
+      {
+        key: "rate_limit",
+        label: "Login rate limiting",
+        severity: "blocker",
+        status: "blocker",
+        summary: "Static demo login throttling is local/in-process and does not protect a distributed deployment.",
+        action: "Move rate limiting to the external IdP, Redis, or managed edge controls before production.",
+      },
+      {
+        key: "tenant_isolation",
+        label: "Tenant isolation evidence",
+        severity: "info",
+        status: "pass",
+        summary: `${tenantCount} organization record(s); MFI queues, analytics, exports, review packets, and simulations are scoped by organization_id in the static contract.`,
+        action: "Keep organization_id scoped when adding new reviewer surfaces.",
+      },
+      {
+        key: "storage_backend",
+        label: "Storage readiness",
+        severity: "blocker",
+        status: "blocker",
+        summary: "Static demo mirrors SQLite development persistence and does not claim encrypted production storage, backups, or managed database controls.",
+        action: "Move real pilot data to managed PostgreSQL with backups, retention, access logging, and secret management.",
+      },
+    ];
+    const blockers = components.filter((row) => row.status === "blocker");
+    const warnings = components.filter((row) => row.status === "warning");
+    const nextRequiredControls = blockers.concat(warnings).map((row) => ({
+      key: row.key,
+      severity: row.status === "blocker" ? "blocker" : "warning",
+      summary: row.summary,
+      action: row.action,
+    }));
+    return {
+      status: blockers.length ? "blocked" : warnings.length ? "review" : "ready",
+      generated_at: nowIso(),
+      auth_provider_mode: "local_password_prototype",
+      invite_delivery_mode: "static_demo_local_delivery",
+      mfa_mode: "prototype_shared_code_with_admin_attestation",
+      session_control_mode: "local_bearer_sessions_with_admin_revoke",
+      rate_limit_mode: "in_memory_single_process",
+      storage_backend: "sqlite_static_demo",
+      tenant_isolation_mode: "organization_id_scoped_mfi_access",
+      active_staff_count: mfa.active_staff_count,
+      active_staff_session_count: activeSessions.length,
+      active_pending_invite_count: activePendingInvites.length,
+      components,
+      production_blockers: blockers.map((row) => ({
+        key: row.key,
+        severity: "blocker",
+        summary: row.summary,
+        action: row.action,
+      })),
+      next_required_controls: nextRequiredControls,
+      limitation: "Identity Readiness v1 is reviewer-facing prototype evidence. It is not a completed production security review and does not certify production readiness, identity provider maturity, encrypted storage, or permission to collect real borrower data.",
+    };
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -2352,6 +2480,11 @@
     if (cleanPath === "/admin/security/readiness" && method === "GET") {
       requireAdmin(session);
       return clone(securityReadiness());
+    }
+
+    if (cleanPath === "/admin/security/identity-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(identityReadiness(session));
     }
 
     if (cleanPath === "/admin/security/mfa-readiness" && method === "GET") {

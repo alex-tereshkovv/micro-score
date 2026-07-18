@@ -96,6 +96,7 @@ const els = {
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
   auditTrail: document.querySelector("#auditTrail"),
+  identityReadiness: document.querySelector("#identityReadiness"),
   securityReadiness: document.querySelector("#securityReadiness"),
   staffForm: document.querySelector("#staffForm"),
   staffInviteForm: document.querySelector("#staffInviteForm"),
@@ -975,6 +976,8 @@ function resetPrivilegedViews() {
     container.className = "table-shell empty";
     container.textContent = label;
   }
+  els.identityReadiness.className = "identity-readiness empty";
+  els.identityReadiness.textContent = "Identity readiness evidence not loaded.";
   els.mfaReadiness.className = "metric-grid mfa-readiness empty";
   els.mfaReadiness.textContent = "MFA readiness not loaded.";
   els.staffInviteHealth.className = "metric-grid invite-health empty";
@@ -2674,10 +2677,154 @@ function renderSecurityReadiness(readiness) {
   `;
 }
 
+function severityClass(status) {
+  if (["blocker", "blocked", "fail"].includes(status)) return "severity-blocker";
+  if (["warning", "review", "attention"].includes(status)) return "severity-warning";
+  if (["info", "prototype", "manual"].includes(status)) return "severity-info";
+  return "severity-pass";
+}
+
+function severityLabel(status) {
+  if (status === "pass") return "Ready";
+  if (status === "blocker") return "Blocker";
+  if (status === "warning") return "Warning";
+  if (status === "info") return "Info";
+  return formatPolicyName(status || "unknown");
+}
+
+function renderIdentityEvidenceRow(row) {
+  return `
+    <article class="evidence-row ${severityClass(row.severity || row.status)}">
+      <div>
+        <span>${escapeHtml(severityLabel(row.severity || row.status))}</span>
+        <strong>${escapeHtml(row.label || formatPolicyName(row.key))}</strong>
+      </div>
+      <p>${escapeHtml(row.summary || "No summary provided.")}</p>
+      <em>${escapeHtml(row.action || "Keep this control under review before pilot use.")}</em>
+    </article>
+  `;
+}
+
+function renderIdentityReadiness(payload) {
+  if (!els.identityReadiness) return;
+  if (!payload) {
+    setPanelState(
+      els.identityReadiness,
+      "identity-readiness",
+      "empty",
+      "No identity evidence loaded",
+      "Refresh the admin workspace to load the Security Evidence Room.",
+    );
+    return;
+  }
+
+  const statusClass = payload.status === "blocked"
+    ? "risk-high"
+    : payload.status === "review"
+      ? "risk-medium"
+      : "risk-low";
+  const components = payload.components || [];
+  const blockers = payload.production_blockers || [];
+  const warnings = components.filter((row) => row.status === "warning");
+  const controls = payload.next_required_controls || [];
+  const componentByKey = new Map(components.map((row) => [row.key, row]));
+  const rows = components.map(renderIdentityEvidenceRow).join("");
+  const nextControls = controls.length
+    ? controls
+      .map((item) => `<li><strong>${escapeHtml(formatPolicyName(item.key))}:</strong> ${escapeHtml(item.action || item.summary || "Keep this control under review.")}</li>`)
+      .join("")
+    : "<li>Continue monitoring identity, invite delivery, sessions, tenant isolation, and storage controls.</li>";
+  const provider = componentByKey.get("auth_provider") || {};
+  const invite = componentByKey.get("invite_delivery") || {};
+  const mfa = componentByKey.get("mfa_posture") || {};
+  const sessions = componentByKey.get("session_control") || {};
+  const tenant = componentByKey.get("tenant_isolation") || {};
+  const storage = componentByKey.get("storage_backend") || {};
+
+  els.identityReadiness.className = "identity-readiness";
+  els.identityReadiness.innerHTML = `
+    <section class="evidence-hero">
+      <div>
+        <span>Evidence room status</span>
+        <strong class="${statusClass}">${escapeHtml(formatPolicyName(payload.status || "review"))}</strong>
+        <p>${escapeHtml(payload.limitation || "This is a prototype evidence summary, not a production security certification.")}</p>
+      </div>
+      <dl>
+        <div><dt>Generated</dt><dd>${escapeHtml(payload.generated_at || "-")}</dd></div>
+        <div><dt>Blockers</dt><dd>${Number(blockers.length)}</dd></div>
+        <div><dt>Warnings</dt><dd>${Number(warnings.length)}</dd></div>
+      </dl>
+    </section>
+    <section class="evidence-summary-grid">
+      <div><span>Auth provider</span><strong>${escapeHtml(formatPolicyName(payload.auth_provider_mode || "unknown"))}</strong><em>${escapeHtml(provider.summary || "Provider mode not reported.")}</em></div>
+      <div><span>Invite delivery</span><strong>${escapeHtml(formatPolicyName(payload.invite_delivery_mode || "unknown"))}</strong><em>${escapeHtml(invite.summary || "Invite delivery evidence not reported.")}</em></div>
+      <div><span>MFA posture</span><strong>${escapeHtml(formatPolicyName(payload.mfa_mode || "unknown"))}</strong><em>${escapeHtml(mfa.summary || "MFA evidence not reported.")}</em></div>
+      <div><span>Session controls</span><strong>${escapeHtml(formatPolicyName(payload.session_control_mode || "unknown"))}</strong><em>${escapeHtml(sessions.summary || "Session controls not reported.")}</em></div>
+      <div><span>Tenant isolation</span><strong>${escapeHtml(formatPolicyName(payload.tenant_isolation_mode || "unknown"))}</strong><em>${escapeHtml(tenant.summary || "Tenant isolation evidence not reported.")}</em></div>
+      <div><span>Storage backend</span><strong>${escapeHtml(formatPolicyName(payload.storage_backend || "unknown"))}</strong><em>${escapeHtml(storage.summary || "Storage evidence not reported.")}</em></div>
+    </section>
+    <section class="evidence-section">
+      <h4>Status evidence</h4>
+      <div class="evidence-row-list">${rows || "<p class=\"tiny-text\">No evidence rows returned.</p>"}</div>
+    </section>
+    <section class="evidence-section">
+      <h4>Next controls before real user data</h4>
+      <ul class="evidence-next-controls">${nextControls}</ul>
+    </section>
+  `;
+}
+
 async function refreshSecurityReadiness() {
-  const readiness = await apiFetch("/admin/security/readiness");
-  renderSecurityReadiness(readiness);
-  return readiness;
+  setPanelState(
+    els.identityReadiness,
+    "identity-readiness",
+    "loading",
+    "Loading Security Evidence Room",
+    "Collecting identity, invite, MFA, session, tenant, and storage evidence.",
+  );
+  setPanelState(
+    els.securityReadiness,
+    "table-shell",
+    "loading",
+    "Loading security readiness",
+    "Checking current pre-pilot security controls.",
+  );
+  const [readinessResult, identityResult] = await Promise.allSettled([
+    apiFetch("/admin/security/readiness"),
+    apiFetch("/admin/security/identity-readiness"),
+  ]);
+
+  if (readinessResult.status === "fulfilled") {
+    renderSecurityReadiness(readinessResult.value);
+  } else {
+    setPanelState(
+      els.securityReadiness,
+      "table-shell",
+      "error",
+      "Security readiness unavailable",
+      readinessResult.reason?.message || "The readiness gate could not be loaded.",
+    );
+  }
+
+  if (identityResult.status === "fulfilled") {
+    renderIdentityReadiness(identityResult.value);
+  } else {
+    setPanelState(
+      els.identityReadiness,
+      "identity-readiness",
+      "error",
+      "Security Evidence Room unavailable",
+      identityResult.reason?.message || "The identity readiness evidence endpoint could not be loaded.",
+    );
+  }
+
+  if (readinessResult.status === "rejected" && identityResult.status === "rejected") {
+    throw readinessResult.reason;
+  }
+  return {
+    readiness: readinessResult.status === "fulfilled" ? readinessResult.value : null,
+    identity_readiness: identityResult.status === "fulfilled" ? identityResult.value : null,
+  };
 }
 
 async function refreshStaffUsers() {

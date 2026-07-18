@@ -18,6 +18,7 @@ needs local evidence, expert feedback, or real pilot data.
 | Policy Lab can help show inclusion-vs-risk trade-offs | Working product prototype | Prototype evidence | Ask reviewers whether approve/review/decline analytics are understandable. |
 | Monte Carlo ranges help analysts reason about portfolio uncertainty | Seeded baseline/adverse/severe prototype with explicit assumptions | Methodological prototype only | Validate margin, LGD, review conversion, operating cost, calibration volatility, and stress shifts with an MFI before pilot use. |
 | Monetary outputs can be interpreted as KZT | KZT assumptions pack documents prototype amount units | Not validated | Collect consented local principal, income, debt, tenor, margin, LGD, cost, and repayment outcomes before KZT-denominated claims. |
+| Pilot evidence claims are easy to overstate | `docs/PILOT_EVIDENCE_CLAIMS.md` claim matrix | Implemented evidence guardrail | Keep reviewer language within implemented, synthetic-only, benchmark, assumption, or blocked-validation categories. |
 | The model is not ready for operational lending | Data statement, model card, synthetic-data limitation | Validated by project constraints | Keep this limitation visible in README, paper, and demo. |
 
 ## Validation Milestones
@@ -80,6 +81,7 @@ Output:
 
 - pilot appendix in the research paper;
 - updated model card;
+- evidence-claims audit review;
 - decision not to use real data until governance is clear.
 
 ## Interview Evidence Acceptance Criteria

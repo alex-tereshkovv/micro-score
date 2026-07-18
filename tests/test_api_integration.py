@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -496,6 +497,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("LogoutResponse", schemas)
         self.assertIn("StorageReadinessResponse", schemas)
         self.assertIn("StorageCapabilityResponse", schemas)
+        self.assertIn("IdentityReadinessComponent", schemas)
+        self.assertIn("IdentityReadinessControl", schemas)
+        self.assertIn("IdentityReadinessResponse", schemas)
         self.assertIn("MfaAttestationCreate", schemas)
         self.assertIn("MfaAttestationResponse", schemas)
         self.assertIn("MfaReadinessAccount", schemas)
@@ -567,6 +571,10 @@ class ApiIntegrationTests(unittest.TestCase):
         storage_properties = schemas["StorageReadinessResponse"]["properties"]
         self.assertIn("postgresql_migration_checklist", storage_properties)
         self.assertIn("tenant_scoped_tables", storage_properties)
+        identity_properties = schemas["IdentityReadinessResponse"]["properties"]
+        self.assertIn("auth_provider_mode", identity_properties)
+        self.assertIn("production_blockers", identity_properties)
+        self.assertIn("next_required_controls", identity_properties)
         self.assertIn("mfa_code", schemas["LoginRequest"]["properties"])
         self.assertIn("mfa_code", schemas["StaffInviteAccept"]["properties"])
         self.assertIn("session_expires_at", schemas["MeResponse"]["properties"])
@@ -617,6 +625,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("recommended_action", schemas["StaffInviteHealthResponse"]["properties"])
         paths = response.json()["paths"]
         self.assertIn("/admin/security/readiness", paths)
+        self.assertIn("/admin/security/identity-readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
         self.assertIn("/admin/staff-sessions", paths)
@@ -843,6 +852,87 @@ class ApiIntegrationTests(unittest.TestCase):
             json={"email": "limited@example.com", "password": TEST_PASSWORD},
         )
         self.assertEqual(still_blocked.status_code, 429, still_blocked.text)
+
+    def test_identity_readiness_summarizes_production_identity_gaps(self) -> None:
+        borrower_token = self._register("identity-borrower@example.com", "borrower")
+        forbidden = self.client.get(
+            "/admin/security/identity-readiness",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("identity-admin@example.com", "admin")
+        self.repository.create_user(
+            "identity-analyst@example.com",
+            hash_password(TEST_PASSWORD),
+            "mfi_analyst",
+            TEST_ORGANIZATION_ID,
+        )
+
+        response = self.client.get(
+            "/admin/security/identity-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["auth_provider_mode"], "local_password_prototype")
+        self.assertEqual(payload["invite_delivery_mode"], "local_outbox")
+        self.assertEqual(
+            payload["mfa_mode"],
+            "prototype_shared_code_with_admin_attestation",
+        )
+        self.assertEqual(
+            payload["session_control_mode"],
+            "local_bearer_sessions_with_admin_revoke",
+        )
+        self.assertEqual(payload["rate_limit_mode"], "in_memory_single_process")
+        self.assertEqual(payload["storage_backend"], "sqlite")
+        self.assertEqual(
+            payload["tenant_isolation_mode"],
+            "organization_id_scoped_mfi_access",
+        )
+        self.assertEqual(payload["active_staff_count"], 2)
+        self.assertEqual(payload["active_staff_session_count"], 1)
+        self.assertEqual(payload["active_pending_invite_count"], 0)
+
+        components = {row["key"]: row for row in payload["components"]}
+        self.assertEqual(
+            set(components),
+            {
+                "auth_provider",
+                "mfa_posture",
+                "invite_delivery",
+                "session_control",
+                "rate_limit",
+                "storage_backend",
+                "tenant_isolation",
+            },
+        )
+        self.assertEqual(components["auth_provider"]["status"], "blocker")
+        self.assertEqual(components["mfa_posture"]["status"], "blocker")
+        self.assertEqual(components["invite_delivery"]["status"], "warning")
+        self.assertEqual(components["session_control"]["status"], "pass")
+        self.assertEqual(components["tenant_isolation"]["status"], "pass")
+
+        blocker_keys = {row["key"] for row in payload["production_blockers"]}
+        self.assertIn("auth_provider", blocker_keys)
+        self.assertIn("mfa_posture", blocker_keys)
+        self.assertIn("rate_limit", blocker_keys)
+        self.assertIn("storage_backend", blocker_keys)
+        self.assertTrue(
+            all(row["severity"] == "blocker" for row in payload["production_blockers"])
+        )
+        next_control_keys = {row["key"] for row in payload["next_required_controls"]}
+        self.assertIn("invite_delivery", next_control_keys)
+        self.assertIn("external IdP", payload["limitation"])
+
+        serialized = json.dumps(payload)
+        self.assertNotIn("session_id", serialized)
+        self.assertNotIn("session_preview", serialized)
+        self.assertNotIn("access_token", serialized)
+        self.assertNotIn(TEST_MFA_CODE, serialized)
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:
         borrower_token = self._register("regular@example.com", "borrower")

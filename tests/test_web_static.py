@@ -37,7 +37,7 @@ class WebStaticTests(unittest.TestCase):
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
 
-        self.assertIn('href="./styles.css?v=20260717-pilot-readiness-v1"', html)
+        self.assertIn('href="./styles.css?v=20260718-security-evidence-room-v1"', html)
         self.assertIn('href="./assets/favicon.svg"', html)
         self.assertIn('href="./assets/favicon-32.png"', html)
         self.assertIn('href="./assets/apple-touch-icon.png"', html)
@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260717-pilot-readiness-v1"', html)
-        self.assertIn('src="./mock-api.js?v=20260717-pilot-readiness-v1"', html)
+        self.assertIn('src="./mock-api.js?v=20260718-security-evidence-room-v1"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260717-pilot-readiness-v1"', html)
+        self.assertIn('src="./app.js?v=20260718-security-evidence-room-v1"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -88,6 +88,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertNotIn('id="borrowerApplicationId"', html)
         self.assertIn('id="mfiView"', html)
         self.assertIn('id="adminView"', html)
+        self.assertIn('id="identityReadiness"', html)
+        self.assertIn("Security Evidence Room v1", html)
+        self.assertIn("Identity and access evidence", html)
         self.assertIn('id="staffForm"', html)
         self.assertIn('id="securityReadiness"', html)
         self.assertIn('id="mfaReadiness"', html)
@@ -149,6 +152,7 @@ class WebStaticTests(unittest.TestCase):
             "/admin/audit-events",
             "/admin/users",
             "/admin/security/readiness",
+            "/admin/security/identity-readiness",
             "/admin/security/mfa-readiness",
             "/mfa/attest",
             "/disable",
@@ -311,8 +315,15 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
         self.assertIn('"/admin/security/readiness"', mock_script)
+        self.assertIn('"/admin/security/identity-readiness"', mock_script)
         self.assertIn('"/admin/security/mfa-readiness"', mock_script)
         self.assertIn("securityReadiness", mock_script)
+        self.assertIn("identityReadiness", mock_script)
+        self.assertIn("auth_provider_mode", mock_script)
+        self.assertIn("components", mock_script)
+        self.assertIn("production_blockers", mock_script)
+        self.assertIn("sqlite_static_demo", mock_script)
+        self.assertIn("not a completed production security review", mock_script)
         self.assertIn("mfa_enforcement", mock_script)
         self.assertIn("mfa_challenge_failures", mock_script)
         self.assertIn("Staff login requires an MFA-attested account", mock_script)
@@ -365,6 +376,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("refreshStaffUsers", script)
         self.assertIn("refreshSecurityReadiness", script)
         self.assertIn("renderSecurityReadiness", script)
+        self.assertIn("renderIdentityReadiness", script)
+        self.assertIn("renderIdentityEvidenceRow", script)
+        self.assertIn("Loading Security Evidence Room", script)
+        self.assertIn("Next controls before real user data", script)
+        self.assertIn("Evidence room status", script)
         self.assertIn("renderMfaReadiness", script)
         self.assertIn("attestStaffMfa", script)
         self.assertIn("createStaffUser", script)
@@ -428,6 +444,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn(".simulation-warnings", styles)
         self.assertIn(".simulation-history-row", styles)
         self.assertIn(".risk-readiness", styles)
+        self.assertIn(".identity-readiness", styles)
+        self.assertIn(".evidence-hero", styles)
+        self.assertIn(".evidence-summary-grid", styles)
+        self.assertIn(".evidence-row", styles)
+        self.assertIn(".severity-blocker", styles)
         self.assertIn(".review-action-plan", styles)
         self.assertIn(".action-plan-grid", styles)
         self.assertIn(".action-plan-blockers", styles)

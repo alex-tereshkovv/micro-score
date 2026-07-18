@@ -48,6 +48,24 @@ node scripts\portfolio-dashboard-smoke.js
 node scripts\static-demo-smoke.js
 ```
 
+- Frontend workflow smoke test passes:
+
+```powershell
+node scripts\frontend-workflow-smoke.js
+```
+
+- Live API workflow smoke test passes against a temporary SQLite database:
+
+```powershell
+.venv\Scripts\python scripts\live-api-workflow-smoke.py
+```
+
+- Live security workflow smoke test passes against a temporary SQLite database:
+
+```powershell
+.venv\Scripts\python scripts\live-security-workflow-smoke.py
+```
+
 - Git diff has no whitespace errors:
 
 ```powershell
@@ -57,6 +75,7 @@ git diff --check
 ## Release Gate Traceability
 
 - `docs/ENGINEERING_QUALITY.md` includes the Release Gate Matrix v1.
+- `docs/ENGINEERING_QUALITY.md` includes the Security Readiness Gate Matrix v1.
 - Every product, security, and research promise in the matrix points to a real
   test or smoke script plus key markers that must stay covered.
 - Matrix drift is checked by:
@@ -75,6 +94,9 @@ git diff --check
   errors instead of entering the scoring pipeline.
 - Auth responses and `/me` expose `session_expires_at` and
   `session_ttl_seconds`; the session pill makes token expiry visible.
+- Production identity readiness is explicit: the checklist and gate must keep
+  saying that production IdP/TOTP/WebAuthn remains future work before real
+  borrower data.
 - Staff Invite v3 creates expiring analyst invites, supports admin revocation,
   returns the raw invite token only once at creation time, enforces password
   setup at acceptance time, and records invite creation/acceptance/revocation
@@ -103,6 +125,9 @@ git diff --check
 - Security Readiness v1 aggregates MFA posture, invite hygiene, audited invite
   delivery, session TTL, and remaining production caveats into a pre-pilot
   admin gate.
+- Storage readiness remains explicit: SQLite is the prototype backend,
+  PostgreSQL migration remains planned, and no release should imply production
+  storage readiness until that gate changes.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

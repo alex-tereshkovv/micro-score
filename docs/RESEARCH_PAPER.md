@@ -58,6 +58,11 @@ of Credit Card Clients. This benchmark is not local to Kazakhstan, but it allows
 the same modeling, calibration, feature-importance, and error-analysis workflow
 to be tested on a real public credit-risk dataset.
 
+The claim boundary for pilot-facing communication is documented in
+`docs/PILOT_EVIDENCE_CLAIMS.md`. It separates implemented prototype evidence,
+synthetic-only findings, public benchmark evidence, assumption scaffolds, and
+blocked real-world validation.
+
 ## 5. Methodology
 
 The current pipeline includes:
@@ -259,6 +264,7 @@ The project includes:
 - Public benchmark metrics come from Taiwan credit-card data, not Kazakhstan
   microfinance data.
 - No real MFI validation yet.
+- Pilot evidence claims are bounded by `docs/PILOT_EVIDENCE_CLAIMS.md`.
 - The public demo is synthetic and browser-local; it does not validate backend
   deployment or real lending use.
 - No SHAP explanations yet for nonlinear/tree model variants.

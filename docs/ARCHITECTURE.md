@@ -89,8 +89,9 @@ Main local components:
   one-time raw tokens, analyst-side password setup, public user listings,
   invite status listings, invite rotation health, audited invite delivery,
   persistent delivery attempts, safe invite rotation for resend without
-  re-exposing old secrets, staff MFA readiness attestation, aggregated security readiness, analyst
-  disable/reactivation, session revocation, and audit events;
+  re-exposing old secrets, staff MFA readiness attestation, production identity
+  readiness reporting, aggregated security readiness, analyst disable/reactivation,
+  session revocation, and audit events;
 - organization-scoped applications, queues, review packets, exports, and
   analytics, with global visibility reserved for admins;
 - dynamic organization discovery for borrower routing and admin staff

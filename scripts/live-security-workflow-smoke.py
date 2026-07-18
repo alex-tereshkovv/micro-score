@@ -1,0 +1,451 @@
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+DEMO_PASSWORD = "password123"
+DEMO_MFA_CODE = "246810"
+DEMO_ORGANIZATION_ID = "pavlodar-demo-mfi"
+
+
+class SmokeFailure(AssertionError):
+    pass
+
+
+def assert_true(condition: bool, message: str) -> None:
+    if not condition:
+        raise SmokeFailure(message)
+
+
+def free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def decode_response(body: bytes) -> Any:
+    if not body:
+        return None
+    text = body.decode("utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+
+class ApiClient:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url.rstrip("/")
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        payload: dict[str, Any] | None = None,
+        expected_status: int = 200,
+    ) -> Any:
+        data = None
+        headers = {"Accept": "application/json"}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=data,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                body = response.read()
+                status = int(response.status)
+        except urllib.error.HTTPError as exc:
+            body = exc.read()
+            status = int(exc.code)
+
+        decoded = decode_response(body)
+        if status != expected_status:
+            raise SmokeFailure(
+                f"{method} {path} returned {status}, expected {expected_status}: {decoded}"
+            )
+        return decoded
+
+
+def wait_for_api(client: ApiClient, process: subprocess.Popen[str]) -> None:
+    deadline = time.time() + 30
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        if process.poll() is not None:
+            output = process.stdout.read() if process.stdout else ""
+            raise SmokeFailure(f"uvicorn exited early with {process.returncode}:\n{output}")
+        try:
+            health = client.request("GET", "/health")
+            assert_true(health.get("status") == "ok", "Health endpoint did not return ok")
+            return
+        except Exception as exc:  # noqa: BLE001 - retry startup failures.
+            last_error = exc
+            time.sleep(0.35)
+    raise SmokeFailure(f"Timed out waiting for live API: {last_error}")
+
+
+def terminate_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=8)
+
+
+def seed_database(db_path: Path) -> dict[str, Any]:
+    os.environ["MICROSCORE_API_DB_PATH"] = str(db_path)
+    from microscore_api.database import MicroScoreRepository
+    from microscore_api.seed import seed_demo_data
+
+    repository = MicroScoreRepository(db_path)
+    return seed_demo_data(repository)
+
+
+def start_api(db_path: Path, port: int) -> subprocess.Popen[str]:
+    env = os.environ.copy()
+    env["MICROSCORE_API_DB_PATH"] = str(db_path)
+    env["PYTHONPATH"] = (
+        str(SRC_ROOT)
+        if not env.get("PYTHONPATH")
+        else f"{SRC_ROOT}{os.pathsep}{env['PYTHONPATH']}"
+    )
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "microscore_api.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=PROJECT_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+
+def login(
+    client: ApiClient,
+    email: str,
+    password: str,
+    *,
+    mfa_code: str | None = None,
+    expected_status: int = 200,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"email": email, "password": password}
+    if mfa_code is not None:
+        payload["mfa_code"] = mfa_code
+    return client.request("POST", "/auth/login", payload=payload, expected_status=expected_status)
+
+
+def check_security_ready(payload: dict[str, Any]) -> None:
+    checks = {check["key"]: check for check in payload["checks"]}
+    assert_true(payload["status"] == "ready", f"Expected ready security status: {payload}")
+    assert_true(checks["mfa_attestation"]["status"] == "pass", "MFA attestation should pass")
+    assert_true(checks["mfa_enforcement"]["status"] == "pass", "MFA enforcement should pass")
+    assert_true(checks["invite_delivery"]["status"] == "pass", "Invite delivery should pass")
+    assert_true(
+        "not a completed production security review" in payload["limitation"],
+        "Security readiness must keep prototype limitation visible",
+    )
+
+
+def assert_safe_staff_sessions(sessions: list[dict[str, Any]]) -> None:
+    assert_true(sessions, "Expected at least one staff session")
+    for session in sessions:
+        assert_true("token" not in session, "Staff session list leaked raw token")
+        assert_true("access_token" not in session, "Staff session list leaked access token")
+        assert_true(session.get("session_id"), "Staff session should expose safe session id")
+        assert_true(session.get("session_preview"), "Staff session should expose safe preview")
+
+
+def assert_borrower_surface_is_separate(application: dict[str, Any]) -> None:
+    forbidden_fields = {
+        "borrower_email",
+        "behavioral_signals",
+        "score_result",
+        "decision_result",
+        "model_summary",
+        "analyst_decision",
+        "decision_history",
+        "lifecycle",
+        "checklist",
+        "governance_flags",
+        "session_id",
+        "session_preview",
+        "mfa_attested_at",
+        "token_id",
+        "token_preview",
+    }
+    leaked = sorted(forbidden_fields.intersection(application))
+    assert_true(not leaked, f"Borrower surface leaked staff/internal fields: {leaked}")
+
+
+def run_workflow(client: ApiClient) -> dict[str, Any]:
+    unique = uuid4().hex[:10]
+    invite_email = f"live-security-{unique}@example.com"
+    invite_password = "StrongPass1!"
+    borrower_email = f"borrower-security-{unique}@example.com"
+
+    admin_auth = login(client, "admin@test.com", DEMO_PASSWORD, mfa_code=DEMO_MFA_CODE)
+    admin_token = admin_auth["access_token"]
+    assert_true(admin_auth["role"] == "admin", "Expected admin login")
+
+    readiness = client.request("GET", "/admin/security/readiness", token=admin_token)
+    check_security_ready(readiness)
+
+    mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
+    assert_true(mfa_readiness["status"] == "ready", "Seeded staff MFA readiness should be ready")
+    assert_true(mfa_readiness["missing_mfa_count"] == 0, "Seeded staff should have MFA attestation")
+
+    missing_mfa = login(client, "analyst@test.com", DEMO_PASSWORD, expected_status=401)
+    assert_true("MFA code required" in missing_mfa["detail"], "Staff login should require MFA code")
+    invalid_mfa = login(
+        client,
+        "analyst@test.com",
+        DEMO_PASSWORD,
+        mfa_code="000000",
+        expected_status=401,
+    )
+    assert_true("Invalid MFA code" in invalid_mfa["detail"], "Staff login should reject invalid MFA")
+
+    readiness_after_failures = client.request("GET", "/admin/security/readiness", token=admin_token)
+    failure_check = next(
+        check for check in readiness_after_failures["checks"]
+        if check["key"] == "mfa_challenge_failures"
+    )
+    assert_true(
+        failure_check["status"] == "warning",
+        "Failed live MFA challenges should surface as security readiness warning",
+    )
+
+    invite = client.request(
+        "POST",
+        "/admin/staff-invites",
+        token=admin_token,
+        payload={
+            "email": invite_email,
+            "role": "mfi_analyst",
+            "organization_id": DEMO_ORGANIZATION_ID,
+            "expires_in_hours": 24,
+            "queue_delivery": True,
+            "delivery_channel": "email",
+            "delivery_recipient": invite_email,
+            "delivery_provider": "local_outbox",
+        },
+        expected_status=201,
+    )
+    assert_true(invite["email"] == invite_email, "Invite email mismatch")
+    assert_true(invite["organization_id"] == DEMO_ORGANIZATION_ID, "Invite organization mismatch")
+    assert_true(invite.get("token"), "Invite creation should return one-time raw token")
+    assert_true(invite.get("token_preview"), "Invite creation should return safe token preview")
+    assert_true(invite.get("delivery_attempt", {}).get("status") == "sent", "Invite should record local delivery")
+
+    listed_invites = client.request("GET", "/admin/staff-invites", token=admin_token)
+    listed = next(row for row in listed_invites if row["token_id"] == invite["token_id"])
+    assert_true("token" not in listed, "Invite list leaked raw token")
+    assert_true("invite_url" not in listed, "Invite list leaked one-time URL")
+    assert_true(listed["token_preview"] == invite["token_preview"], "Invite list should expose preview only")
+
+    invite_health = client.request("GET", "/admin/staff-invites/health", token=admin_token)
+    assert_true(invite_health["active_pending_count"] >= 1, "Invite health should include pending invite")
+
+    accepted = client.request(
+        "POST",
+        "/auth/accept-staff-invite",
+        payload={"token": invite["token"], "password": invite_password, "mfa_code": DEMO_MFA_CODE},
+    )
+    analyst_token = accepted["access_token"]
+    assert_true(accepted["role"] == "mfi_analyst", "Accepted invite should create analyst session")
+    assert_true(accepted["organization_id"] == DEMO_ORGANIZATION_ID, "Accepted analyst should keep org scope")
+
+    reused = client.request(
+        "POST",
+        "/auth/accept-staff-invite",
+        payload={"token": invite["token"], "password": invite_password, "mfa_code": DEMO_MFA_CODE},
+        expected_status=409,
+    )
+    assert_true(
+        "accepted" in str(reused.get("detail", "")).lower(),
+        "Accepted invite token should be one-time",
+    )
+
+    accepted_mfa = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
+    accepted_row = next(row for row in accepted_mfa["accounts"] if row["email"] == invite_email)
+    assert_true(accepted_row["status"] == "ready", "Accepted analyst should be MFA ready")
+    assert_true(accepted_row["mfa_attested"], "Invite acceptance should record MFA attestation")
+
+    sessions = client.request("GET", "/admin/staff-sessions", token=admin_token)
+    assert_safe_staff_sessions(sessions)
+    admin_session = next(row for row in sessions if row["email"] == "admin@test.com" and row["is_current_session"])
+    new_analyst_session = next(row for row in sessions if row["email"] == invite_email)
+
+    self_revoke = client.request(
+        "DELETE",
+        f"/admin/staff-sessions/{urllib.parse.quote(admin_session['session_id'], safe='')}",
+        token=admin_token,
+        expected_status=409,
+    )
+    assert_true("Current admin session" in self_revoke["detail"], "Current admin session should be protected")
+
+    revoked = client.request(
+        "DELETE",
+        f"/admin/staff-sessions/{urllib.parse.quote(new_analyst_session['session_id'], safe='')}",
+        token=admin_token,
+    )
+    assert_true(revoked["revoked"], "Target staff session should be revoked")
+    assert_true(revoked["email"] == invite_email, "Revoked session email mismatch")
+
+    client.request("GET", "/mfi/applications", token=analyst_token, expected_status=401)
+
+    relogin = login(client, invite_email, invite_password, mfa_code=DEMO_MFA_CODE)
+    relogin_token = relogin["access_token"]
+    assert_true(relogin["role"] == "mfi_analyst", "Revoked analyst should be able to re-login")
+
+    disabled = client.request(
+        "POST",
+        f"/admin/users/{urllib.parse.quote(invite_email, safe='')}/disable",
+        token=admin_token,
+    )
+    assert_true(disabled["disabled_at"], "Disable should set disabled_at")
+    assert_true(disabled["revoked_session_count"] >= 1, "Disable should revoke active analyst sessions")
+    client.request("GET", "/mfi/applications", token=relogin_token, expected_status=401)
+    disabled_login = login(
+        client,
+        invite_email,
+        invite_password,
+        mfa_code=DEMO_MFA_CODE,
+        expected_status=403,
+    )
+    assert_true("Account disabled" in disabled_login["detail"], "Disabled staff login should fail")
+
+    reactivated = client.request(
+        "POST",
+        f"/admin/users/{urllib.parse.quote(invite_email, safe='')}/reactivate",
+        token=admin_token,
+    )
+    assert_true(not reactivated["disabled_at"], "Reactivation should clear disabled_at")
+    reactivated_auth = login(client, invite_email, invite_password, mfa_code=DEMO_MFA_CODE)
+    assert_true(reactivated_auth["role"] == "mfi_analyst", "Reactivated staff login should succeed")
+
+    borrower_registered = client.request(
+        "POST",
+        "/auth/register",
+        payload={"email": borrower_email, "password": "StrongPass1!", "role": "borrower"},
+    )
+    borrower_token = borrower_registered["access_token"]
+    borrower_application = client.request(
+        "POST",
+        "/applications",
+        token=borrower_token,
+        payload={
+            "requested_amount": 250000,
+            "purpose": "security separation check",
+            "district": "Pavlodar city",
+            "settlement_type": "urban",
+            "organization_id": DEMO_ORGANIZATION_ID,
+            "consent_confirmed": True,
+            "consent_version": "synthetic-demo-v1",
+            "behavioral_signals": {},
+        },
+    )
+    assert_borrower_surface_is_separate(borrower_application)
+    borrower_history = client.request("GET", "/applications", token=borrower_token)
+    assert_true(len(borrower_history) == 1, "Borrower should only see own application")
+    assert_borrower_surface_is_separate(borrower_history[0])
+
+    final_readiness = client.request("GET", "/admin/security/readiness", token=admin_token)
+    final_checks = {check["key"]: check["status"] for check in final_readiness["checks"]}
+    assert_true(final_checks["mfa_attestation"] == "pass", "Final MFA attestation should pass")
+    assert_true(final_checks["mfa_enforcement"] == "pass", "Final MFA enforcement should pass")
+
+    audit = client.request("GET", "/admin/audit-events", token=admin_token)
+    actions = {event["action"] for event in audit}
+    for expected_action in {
+        "staff_invite_created",
+        "staff_invite_delivery_attempted",
+        "staff_invite_accepted",
+        "staff_session_revoked",
+        "staff_user_disabled",
+        "staff_user_reactivated",
+        "staff_mfa_challenge_failed",
+    }:
+        assert_true(expected_action in actions, f"Missing audit action {expected_action}")
+
+    return {
+        "invite_token_id": invite["token_id"],
+        "invite_preview": invite["token_preview"],
+        "staff_email": invite_email,
+        "staff_sessions_seen": len(sessions),
+        "revoked_session_email": revoked["email"],
+        "borrower_application_id": borrower_application["id"],
+        "mfa_failure_warning": failure_check["status"],
+        "final_security_status": final_readiness["status"],
+        "audit_actions_checked": 7,
+    }
+
+
+def main() -> None:
+    started_at = time.time()
+    with tempfile.TemporaryDirectory(prefix="microscore-live-security-") as tempdir:
+        db_path = Path(tempdir) / "live-security-workflow.sqlite3"
+        seed_result = seed_database(db_path)
+        port = free_port()
+        client = ApiClient(f"http://127.0.0.1:{port}")
+        process = start_api(db_path, port)
+        try:
+            wait_for_api(client, process)
+            workflow = run_workflow(client)
+        finally:
+            terminate_process(process)
+
+    print(json.dumps({
+        "mode": "live-security-workflow-smoke",
+        "database": "temporary-sqlite",
+        "seeded_applications": len(seed_result["demo_application_ids"]),
+        "runtime_seconds": round(time.time() - started_at, 2),
+        **workflow,
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SmokeFailure as exc:
+        print(f"live-security-workflow-smoke failed: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

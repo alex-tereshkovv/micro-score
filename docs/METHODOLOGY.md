@@ -132,6 +132,11 @@ The project intentionally treats ROC-AUC as necessary but insufficient. A credit
 model must also be evaluated as a decision system with threshold, access, and
 loss trade-offs.
 
+Pilot-facing evidence claims are classified separately in
+[PILOT_EVIDENCE_CLAIMS.md](PILOT_EVIDENCE_CLAIMS.md). That audit distinguishes
+implemented prototype evidence, synthetic-only evidence, public benchmark
+evidence, assumption scaffolds, and blocked real-world validation.
+
 ## Error Analysis
 
 The project now reports false-positive and false-negative behavior on the
@@ -285,6 +290,10 @@ The generated `reports/research-artifacts/` folder includes:
 
 This keeps notebook output from becoming the only source of truth and makes the
 research easier to review from GitHub.
+
+The evidence-claims audit is intentionally a documentation artifact rather than
+a scoring rule. It does not change API responses, Review Readiness semantics,
+policy thresholds, or borrower lifecycle behavior.
 
 ## Fairness And Segment Audits
 

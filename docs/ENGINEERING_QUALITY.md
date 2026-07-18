@@ -43,6 +43,26 @@ The matrix is enforced by `tests/test_release_gate_matrix.py`, which verifies
 that each matrix row references real test or smoke files and that its key
 markers still exist in the named proof artifacts.
 
+## Security Readiness Gate Matrix v1
+
+This security-specific matrix keeps pilot-readiness claims separate from
+production-readiness claims. A release can be called demo-ready only when these
+checks pass, and it must continue to say what remains blocked before real
+borrower data or production onboarding.
+
+| Security promise | Primary proof | Required security markers |
+| --- | --- | --- |
+| Production identity readiness is explicit, not complete | `tests/test_api_integration.py`, `tests/test_research_docs.py`, `scripts/static-demo-smoke.js`, `docs/RELEASE_CHECKLIST.md` | `not a completed production security review`, `production IdP/TOTP/WebAuthn remains future work`, `/admin/security/readiness`, `security_readiness` |
+| Invite delivery mode is audited and local-only by default | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py`, `docs/RELEASE_CHECKLIST.md` | `local_outbox`, `local_queue`, `local_fail`, `manual_receipt`, `staff_invite_delivery_retry` |
+| MFA and staff-session lifecycle are proven end to end | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `staff_mfa_login_verified`, `staff_mfa_challenge_failed`, `/admin/staff-sessions`, `staff_session_revoked`, `staff_user_disabled` |
+| Storage assumptions remain visible before pilot use | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/live-api-workflow-smoke.py`, `docs/RELEASE_CHECKLIST.md` | `storage_readiness`, `MICROSCORE_STORAGE_BACKEND`, `production_ready`, `temporary-sqlite`, `PostgreSQL` |
+| Live security workflow stays inside the release gate | `scripts/check.ps1`, `scripts/live-api-workflow-smoke.py`, `scripts/live-security-workflow-smoke.py`, `tests/test_github_workflows.py`, `docs/RELEASE_CHECKLIST.md` | `Live API workflow smoke test`, `Live security workflow smoke test`, `scripts\live-security-workflow-smoke.py`, `temporary-sqlite`, `session_preview`, `token_preview` |
+| No-overclaim limitations remain release blockers | `tests/test_research_docs.py`, `docs/RELEASE_CHECKLIST.md`, `docs/ENGINEERING_QUALITY.md` | `synthetic data is not real-world lending`, `No real borrower`, `production IdP/TOTP/WebAuthn remains future work`, `SQLite`, `not ready for real loan approval` |
+
+The same drift test verifies this matrix. If a marker or proof artifact is
+removed, the security-readiness gate should fail before a reviewer has to infer
+whether the release is still pilot-safe.
+
 ## Static Demo Smoke Test
 
 The shared borrower intake contract has a focused Node test:

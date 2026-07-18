@@ -21,6 +21,7 @@ class ResearchDocsTests(unittest.TestCase):
             "MONTE_CARLO_METHODOLOGY.md",
             "IMPACT.md",
             "PILOT_DATA_SCHEMA.md",
+            "PILOT_EVIDENCE_CLAIMS.md",
             "PROXY_FEATURE_MONITORING.md",
             "PUBLIC_DEMO_PLAN.md",
             "RELEASE_CHECKLIST.md",
@@ -407,6 +408,40 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Proxy Monitoring v2", methodology)
         self.assertIn("proxy_monitoring.csv", reports_readme)
         self.assertIn("KZT calibration assumptions", validation_tracker)
+
+    def test_pilot_evidence_claims_audit_separates_claim_classes(self) -> None:
+        claims = (DOCS_ROOT / "PILOT_EVIDENCE_CLAIMS.md").read_text(
+            encoding="utf-8"
+        )
+        model_card = (DOCS_ROOT / "MODEL_CARD.md").read_text(encoding="utf-8")
+        methodology = (DOCS_ROOT / "METHODOLOGY.md").read_text(encoding="utf-8")
+        validation_tracker = (DOCS_ROOT / "VALIDATION_TRACKER.md").read_text(
+            encoding="utf-8"
+        )
+        research_paper = (DOCS_ROOT / "RESEARCH_PAPER.md").read_text(
+            encoding="utf-8"
+        )
+
+        for claim_class in [
+            "Implemented evidence",
+            "Synthetic-only evidence",
+            "Public benchmark evidence",
+            "Assumption scaffold",
+            "Blocked real-world validation",
+        ]:
+            self.assertIn(claim_class, claims)
+
+        self.assertIn("Review Readiness / Action Plan", claims)
+        self.assertIn("not a legal credit decision", claims)
+        self.assertIn("real KZT profit", claims)
+        self.assertIn("ready for real borrower decisions", claims)
+        self.assertIn("blocked pending consented local validation data", claims)
+        self.assertIn("does not change scoring, API responses", claims)
+
+        self.assertIn("PILOT_EVIDENCE_CLAIMS.md", model_card)
+        self.assertIn("PILOT_EVIDENCE_CLAIMS.md", methodology)
+        self.assertIn("Pilot evidence claims", validation_tracker)
+        self.assertIn("PILOT_EVIDENCE_CLAIMS.md", research_paper)
 
 
 if __name__ == "__main__":

@@ -277,6 +277,7 @@ MFA readiness and attestation:
 
 ```http
 GET /admin/security/readiness
+GET /admin/security/identity-readiness
 GET /admin/security/mfa-readiness
 POST /admin/users/{email}/mfa/attest
 ```
@@ -285,7 +286,27 @@ These endpoints require an `admin` bearer token. Security Readiness v1 combines
 MFA posture, invite hygiene, audited invite delivery, session lifetime, and
 remaining production caveats into one pre-pilot gate. It returns `status`,
 `blockers_count`, `warnings_count`, structured `checks`,
-`recommended_actions`, and a `limitation` stating that this is not a completed production security review.
+`recommended_actions`, and a `limitation` stating that this is not a completed
+production security review.
+
+Identity Readiness v1 is a narrower admin-only review surface for production
+identity assumptions. It returns stable provider/mode fields plus component
+rows with `key`, `status`, `severity`, `summary`, and `action`. It summarizes:
+
+- current local password-auth provider mode;
+- invite delivery provider mode;
+- staff MFA attestation and prototype-code posture;
+- staff session inventory/revoke posture;
+- in-memory rate-limit assumptions;
+- storage readiness assumptions;
+- tenant isolation posture;
+- production blockers and next required controls.
+
+The endpoint is intentionally blocked for production while MicroScore uses local
+password auth, prototype shared-code MFA, in-memory rate limiting, local invite
+delivery, and SQLite storage. It does not return raw passwords, raw invite
+tokens, bearer tokens, session ids, MFA codes, or borrower-private review data.
+It is not a completed production security review.
 
 MFA Readiness v2 records admin attestation for active `admin` and
 `mfi_analyst` accounts and the local prototype requires a second-factor code

@@ -55,6 +55,7 @@ from .schemas import (
     ClearApplicationsResponse,
     DecisionAnalyticsResponse,
     HealthResponse,
+    IdentityReadinessResponse,
     LoanApplicationResponse,
     LoginRequest,
     LogoutResponse,
@@ -929,6 +930,172 @@ def _security_readiness_response(repository: MicroScoreRepository) -> dict[str, 
         "limitation": (
             "Security Readiness v1 is a pre-pilot control summary for the local prototype; "
             "MFA enforcement uses a local prototype code and is not a completed production security review."
+        ),
+    }
+
+
+def _identity_readiness_response(repository: MicroScoreRepository) -> dict[str, Any]:
+    users = repository.list_users()
+    invites = repository.list_staff_invites()
+    staff_sessions = repository.list_active_sessions(staff_only=True)
+    mfa_readiness = _mfa_readiness_response(users)
+    invite_health = _staff_invite_health_response(invites)
+    storage = repository.storage_readiness()
+    session_ttl_hours = configured_session_ttl_hours()
+    session_ttl_seconds = int(round(session_ttl_hours * 3600))
+    provider = configured_invite_delivery_provider()
+    invite_base_url = configured_invite_web_base_url()
+    now = datetime.now(timezone.utc)
+    active_pending_invites = [
+        invite for invite in invites if _staff_invite_is_active_pending(invite, now=now)
+    ]
+
+    components: list[dict[str, Any]] = [
+        {
+            "key": "auth_provider",
+            "label": "Authentication provider",
+            "status": "blocker",
+            "severity": "blocker",
+            "summary": (
+                "Staff authentication uses local email/password accounts managed "
+                "inside the prototype API."
+            ),
+            "action": (
+                "Replace local staff password auth with an external IdP before "
+                "handling real borrower or MFI staff data."
+            ),
+        },
+        {
+            "key": "mfa_posture",
+            "label": "Staff MFA posture",
+            "status": "blocker" if mfa_readiness["missing_mfa_count"] else "warning",
+            "severity": "blocker" if mfa_readiness["missing_mfa_count"] else "warning",
+            "summary": (
+                f"{mfa_readiness['missing_mfa_count']} active staff account(s) "
+                "lack MFA attestation."
+                if mfa_readiness["missing_mfa_count"]
+                else (
+                    "All active staff accounts have MFA attestation, but enforcement "
+                    "still uses the local prototype code."
+                )
+            ),
+            "action": (
+                "Record missing staff MFA attestations."
+                if mfa_readiness["missing_mfa_count"]
+                else "Replace prototype-code MFA with IdP-backed TOTP/WebAuthn."
+            ),
+        },
+        {
+            "key": "invite_delivery",
+            "label": "Invite delivery mode",
+            "status": "blocker" if invite_health["action_required_count"] else "warning",
+            "severity": "blocker" if invite_health["action_required_count"] else "warning",
+            "summary": (
+                f"Invite delivery provider is {provider!r} with URL base {invite_base_url!r}."
+            ),
+            "action": (
+                "Clear expired or soon-expiring invites before onboarding continues."
+                if invite_health["action_required_count"]
+                else (
+                    "Move staff invite delivery to transactional email or "
+                    "approved secure messaging."
+                )
+            ),
+        },
+        {
+            "key": "session_control",
+            "label": "Staff session controls",
+            "status": "pass" if session_ttl_hours <= 8 else "warning",
+            "severity": "info" if session_ttl_hours <= 8 else "warning",
+            "summary": (
+                f"{len(staff_sessions)} active staff session(s); TTL is "
+                f"{session_ttl_seconds} seconds."
+            ),
+            "action": (
+                "Continue using hashed session ids/previews for inventory and targeted revoke."
+                if session_ttl_hours <= 8
+                else "Reduce MICROSCORE_SESSION_TTL_HOURS to 8 hours or less."
+            ),
+        },
+        {
+            "key": "rate_limit",
+            "label": "Login rate limiting",
+            "status": "blocker",
+            "severity": "blocker",
+            "summary": "Login throttling is in-memory and protects only one API process.",
+            "action": "Move rate limiting to the external IdP, Redis, or managed edge control.",
+        },
+        {
+            "key": "storage_backend",
+            "label": "Identity storage backend",
+            "status": "blocker" if not storage["production_ready"] else "pass",
+            "severity": "blocker" if not storage["production_ready"] else "info",
+            "summary": (
+                f"Storage backend is {storage['backend']!r}; "
+                f"production_ready={storage['production_ready']}."
+            ),
+            "action": (
+                "Complete PostgreSQL migration readiness and disposable integration tests."
+                if not storage["production_ready"]
+                else "Keep storage health checks in the release gate."
+            ),
+        },
+        {
+            "key": "tenant_isolation",
+            "label": "Tenant isolation",
+            "status": "pass",
+            "severity": "info",
+            "summary": (
+                "MFI queues, review packets, analytics, simulations, and staff "
+                "invites are organization-scoped; admins retain global visibility."
+            ),
+            "action": "Keep organization_id checks on every new staff or MFI endpoint.",
+        },
+    ]
+
+    blockers = [
+        {
+            "key": component["key"],
+            "severity": "blocker",
+            "summary": component["summary"],
+            "action": component["action"],
+        }
+        for component in components
+        if component["status"] == "blocker"
+    ]
+    warnings = [
+        {
+            "key": component["key"],
+            "severity": "warning",
+            "summary": component["summary"],
+            "action": component["action"],
+        }
+        for component in components
+        if component["status"] == "warning"
+    ]
+    next_required_controls = blockers + warnings
+    status_value = "blocked" if blockers else "review" if warnings else "ready"
+
+    return {
+        "status": status_value,
+        "generated_at": _utc_now_iso(),
+        "auth_provider_mode": "local_password_prototype",
+        "invite_delivery_mode": provider,
+        "mfa_mode": "prototype_shared_code_with_admin_attestation",
+        "session_control_mode": "local_bearer_sessions_with_admin_revoke",
+        "rate_limit_mode": "in_memory_single_process",
+        "storage_backend": storage["backend"],
+        "tenant_isolation_mode": "organization_id_scoped_mfi_access",
+        "active_staff_count": mfa_readiness["active_staff_count"],
+        "active_staff_session_count": len(staff_sessions),
+        "active_pending_invite_count": len(active_pending_invites),
+        "components": components,
+        "production_blockers": blockers,
+        "next_required_controls": next_required_controls,
+        "limitation": (
+            "Identity Readiness v1 is an externally reviewable prototype control "
+            "summary. It does not integrate an external IdP, production MFA, "
+            "distributed rate limiting, transactional delivery, or PostgreSQL."
         ),
     }
 
@@ -2198,6 +2365,14 @@ def security_readiness(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return _security_readiness_response(repository)
+
+
+@app.get("/admin/security/identity-readiness", response_model=IdentityReadinessResponse)
+def identity_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _identity_readiness_response(repository)
 
 
 @app.get("/admin/security/mfa-readiness", response_model=MfaReadinessResponse)
