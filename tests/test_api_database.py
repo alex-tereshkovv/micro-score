@@ -117,8 +117,13 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(readiness["database_exists"])
         self.assertIn("sessions", readiness["required_tables"])
         self.assertIn("staff_invites", readiness["required_tables"])
+        self.assertIn("staff_invite_delivery_events", readiness["required_tables"])
         self.assertIn("portfolio_simulations", readiness["required_tables"])
         self.assertIn("audit_events.details_json", readiness["json_columns"])
+        self.assertIn(
+            "staff_invite_delivery_events.metadata_json",
+            readiness["json_columns"],
+        )
         self.assertIn(
             "loan_applications.organization_id",
             readiness["tenant_scoped_tables"],
@@ -263,6 +268,50 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(invite_with_attempt["delivery_attempt_count"], 1)
         self.assertEqual(invite_with_attempt["last_delivery_status"], "sent")
         self.assertEqual(invite_with_attempt["last_delivery_provider"], "local_outbox")
+        event = self.repository.record_staff_invite_delivery_event(
+            event_id="event-1",
+            provider="local_outbox",
+            provider_event_id="provider-event-1",
+            attempt_id="attempt-1",
+            token="staff-invite-token",
+            event_type="delivered",
+            mapped_attempt_status="sent",
+            occurred_at="2026-06-25T12:00:00+00:00",
+            recipient="invited@example.com",
+            error=None,
+            metadata={"message_id": "demo-message-1"},
+        )
+        self.assertEqual(event["event_type"], "delivered")
+        self.assertFalse(event["was_duplicate"])
+        duplicate_event = self.repository.record_staff_invite_delivery_event(
+            event_id="event-duplicate",
+            provider="local_outbox",
+            provider_event_id="provider-event-1",
+            attempt_id="attempt-1",
+            token="staff-invite-token",
+            event_type="delivered",
+            mapped_attempt_status="sent",
+            occurred_at=None,
+            recipient=None,
+            error=None,
+            metadata={},
+        )
+        self.assertEqual(duplicate_event["event_id"], "event-1")
+        self.assertTrue(duplicate_event["was_duplicate"])
+        self.assertEqual(
+            len(self.repository.list_staff_invite_delivery_events("staff-invite-token")),
+            1,
+        )
+        invite_with_event = self.repository.get_staff_invite("staff-invite-token")
+        self.assertEqual(invite_with_event["delivery_event_count"], 1)
+        self.assertEqual(invite_with_event["last_delivery_event_type"], "delivered")
+        updated_attempt = self.repository.update_staff_invite_delivery_attempt_status(
+            "attempt-1",
+            status="failed",
+            error="provider bounce",
+        )
+        self.assertEqual(updated_attempt["status"], "failed")
+        self.assertEqual(updated_attempt["error"], "provider bounce")
         delivered = self.repository.mark_staff_invite_delivered(
             "staff-invite-token",
             delivered_by="admin@example.com",

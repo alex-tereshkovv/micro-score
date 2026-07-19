@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 import warnings
 from pathlib import Path
@@ -90,6 +93,20 @@ class ApiIntegrationTests(unittest.TestCase):
     @staticmethod
     def _headers(token: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {token}"}
+
+    @staticmethod
+    def _webhook_headers(body: bytes, secret: str = "webhook-secret") -> dict[str, str]:
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            secret.encode("utf-8"),
+            timestamp.encode("utf-8") + b"." + body,
+            hashlib.sha256,
+        ).hexdigest()
+        return {
+            "content-type": "application/json",
+            "x-microscore-delivery-timestamp": timestamp,
+            "x-microscore-delivery-signature": f"sha256={signature}",
+        }
 
     def test_full_borrower_mfi_admin_flow(self) -> None:
         health = self.client.get("/health")
@@ -517,6 +534,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteCreatedResponse", schemas)
         self.assertIn("StaffInviteDeliveryCreate", schemas)
         self.assertIn("StaffInviteDeliveryAttemptResponse", schemas)
+        self.assertIn("StaffInviteDeliveryWebhookCreate", schemas)
+        self.assertIn("StaffInviteDeliveryWebhookEventResponse", schemas)
         self.assertIn("StaffInviteDeliveryResponse", schemas)
         self.assertIn("StaffInviteRotateCreate", schemas)
         self.assertIn("StaffInviteHealthResponse", schemas)
@@ -622,6 +641,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("delivery_url_base", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("delivery_attempt_count", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("last_delivery_status", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("delivery_event_count", schemas["StaffInviteResponse"]["properties"])
+        self.assertIn("last_delivery_event_type", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("queue_delivery", schemas["StaffInviteCreate"]["properties"])
         self.assertIn("delivery_provider", schemas["StaffInviteCreate"]["properties"])
         self.assertIn("provider", schemas["StaffInviteDeliveryRetryCreate"]["properties"])
@@ -629,6 +650,13 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("delivery_attempt", schemas["StaffInviteDeliveryResponse"]["properties"])
         self.assertIn("provider", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
         self.assertIn("invite_token_id", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
+        webhook_properties = schemas["StaffInviteDeliveryWebhookEventResponse"][
+            "properties"
+        ]
+        self.assertIn("provider_event_id", webhook_properties)
+        self.assertIn("mapped_attempt_status", webhook_properties)
+        self.assertIn("delivery_recorded", webhook_properties)
+        self.assertIn("metadata", schemas["StaffInviteDeliveryWebhookCreate"]["properties"])
         self.assertNotIn("token", schemas["StaffInviteResponse"]["properties"])
         self.assertIn("token", schemas["StaffInviteCreatedResponse"]["properties"])
         self.assertIn("invite_url", schemas["StaffInviteCreatedResponse"]["properties"])
@@ -654,9 +682,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites/delivery-readiness", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts", paths)
+        self.assertIn("/admin/staff-invites/{token_id}/delivery-events", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts/retry", paths)
         self.assertIn("/admin/staff-invites/{token_id}/rotate", paths)
         self.assertIn("/admin/staff-invites/{token_id}", paths)
+        self.assertIn("/webhooks/staff-invite-delivery", paths)
         self.assertIn("/auth/accept-staff-invite", paths)
         self.assertIn("/admin/users/{email}/disable", paths)
         self.assertIn("/admin/users/{email}/reactivate", paths)
@@ -1124,6 +1154,162 @@ class ApiIntegrationTests(unittest.TestCase):
             "delivery_provider_not_production_ready",
             configured_blocker_keys,
         )
+
+    def test_signed_delivery_webhook_records_provider_events(self) -> None:
+        admin_token = self._register("delivery-webhook-admin@example.com", "admin")
+        invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "delivery-webhook-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "queue_delivery": True,
+                "delivery_channel": "email",
+                "delivery_provider": "transactional_email",
+            },
+        )
+        self.assertEqual(invite.status_code, 201, invite.text)
+        invite_payload = invite.json()
+        raw_token = invite_payload["token"]
+        attempt_id = invite_payload["delivery_attempt"]["attempt_id"]
+        self.assertEqual(invite_payload["delivery_attempt"]["status"], "queued")
+        self.assertIsNone(invite_payload["delivered_at"])
+
+        webhook_payload = {
+            "provider": "transactional_email",
+            "provider_event_id": "email-event-delivered-1",
+            "attempt_id": attempt_id,
+            "event_type": "delivered",
+            "recipient": "delivery-webhook-analyst@example.com",
+            "metadata": {"message_id": "message-1"},
+        }
+        webhook_body = json.dumps(
+            webhook_payload,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+        disabled = self.client.post(
+            "/webhooks/staff-invite-delivery",
+            content=webhook_body,
+            headers={"content-type": "application/json"},
+        )
+        self.assertEqual(disabled.status_code, 503, disabled.text)
+
+        with patch.dict(
+            os.environ,
+            {"MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET": "webhook-secret"},
+            clear=False,
+        ):
+            unsigned = self.client.post(
+                "/webhooks/staff-invite-delivery",
+                content=webhook_body,
+                headers={"content-type": "application/json"},
+            )
+            self.assertEqual(unsigned.status_code, 401, unsigned.text)
+
+            delivered = self.client.post(
+                "/webhooks/staff-invite-delivery",
+                content=webhook_body,
+                headers=self._webhook_headers(webhook_body),
+            )
+            self.assertEqual(delivered.status_code, 202, delivered.text)
+            delivered_payload = delivered.json()
+            self.assertEqual(delivered_payload["event_type"], "delivered")
+            self.assertEqual(delivered_payload["mapped_attempt_status"], "sent")
+            self.assertTrue(delivered_payload["delivery_recorded"])
+            self.assertFalse(delivered_payload["was_duplicate"])
+            self.assertNotIn("webhook-secret", json.dumps(delivered_payload))
+
+            duplicate = self.client.post(
+                "/webhooks/staff-invite-delivery",
+                content=webhook_body,
+                headers=self._webhook_headers(webhook_body),
+            )
+            self.assertEqual(duplicate.status_code, 202, duplicate.text)
+            self.assertTrue(duplicate.json()["was_duplicate"])
+            self.assertFalse(duplicate.json()["delivery_recorded"])
+
+        listed_invites = self.client.get(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(listed_invites.status_code, 200, listed_invites.text)
+        listed = next(
+            row for row in listed_invites.json() if row["token_id"] == invite_payload["token_id"]
+        )
+        self.assertIsNotNone(listed["delivered_at"])
+        self.assertIsNone(listed["delivered_by"])
+        self.assertEqual(listed["last_delivery_status"], "sent")
+        self.assertEqual(listed["delivery_event_count"], 1)
+        self.assertEqual(listed["last_delivery_event_type"], "delivered")
+
+        events = self.client.get(
+            f"/admin/staff-invites/{invite_payload['token_id']}/delivery-events",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(events.status_code, 200, events.text)
+        self.assertEqual(len(events.json()), 1)
+        self.assertEqual(events.json()[0]["provider_event_id"], "email-event-delivered-1")
+        self.assertNotIn(raw_token, json.dumps(events.json()))
+
+        failed_invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "delivery-webhook-bounced@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "queue_delivery": True,
+                "delivery_channel": "email",
+                "delivery_provider": "transactional_email",
+            },
+        )
+        self.assertEqual(failed_invite.status_code, 201, failed_invite.text)
+        failed_payload = {
+            "provider": "transactional_email",
+            "provider_event_id": "email-event-bounced-1",
+            "attempt_id": failed_invite.json()["delivery_attempt"]["attempt_id"],
+            "event_type": "bounced",
+            "recipient": "delivery-webhook-bounced@example.com",
+            "error": "Mailbox unavailable",
+            "metadata": {"message_id": "message-2"},
+        }
+        failed_body = json.dumps(failed_payload, separators=(",", ":")).encode("utf-8")
+        with patch.dict(
+            os.environ,
+            {"MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET": "webhook-secret"},
+            clear=False,
+        ):
+            failed_webhook = self.client.post(
+                "/webhooks/staff-invite-delivery",
+                content=failed_body,
+                headers=self._webhook_headers(failed_body),
+            )
+        self.assertEqual(failed_webhook.status_code, 202, failed_webhook.text)
+        self.assertEqual(failed_webhook.json()["mapped_attempt_status"], "failed")
+        self.assertFalse(failed_webhook.json()["delivery_recorded"])
+
+        refreshed_failed = self.client.get(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+        )
+        bounced = next(
+            row
+            for row in refreshed_failed.json()
+            if row["token_id"] == failed_invite.json()["token_id"]
+        )
+        self.assertIsNone(bounced["delivered_at"])
+        self.assertEqual(bounced["last_delivery_status"], "failed")
+        self.assertEqual(bounced["last_delivery_event_type"], "bounced")
+
+        audit = self.client.get(
+            "/admin/audit-events",
+            headers=self._headers(admin_token),
+        )
+        serialized_audit = json.dumps(audit.json())
+        self.assertIn("staff_invite_delivery_webhook_received", serialized_audit)
+        self.assertNotIn(raw_token, serialized_audit)
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:
         borrower_token = self._register("regular@example.com", "borrower")

@@ -217,6 +217,8 @@ SECURITY_MATRIX_ROWS = [
         ],
         "markers": [
             "/admin/staff-invites/delivery-readiness",
+            "/webhooks/staff-invite-delivery",
+            "staff_invite_delivery_webhook_received",
             "delivery_provider_not_production_ready",
             "delivery_provider_configuration_missing",
             "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",

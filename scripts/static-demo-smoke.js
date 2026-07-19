@@ -771,6 +771,71 @@ async function main() {
   if (!retriedDeliveryReadiness.checks.some((check) => check.key === "invite_delivery_attempts" && check.status === "pass")) {
     throw new Error("Expected retry to clear failed delivery attempt warning");
   }
+  const webhookDeliveryInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "webhook-delivery-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 72,
+        queue_delivery: true,
+        delivery_channel: "email",
+        delivery_recipient: "webhook-delivery-analyst@test.com",
+        delivery_provider: "transactional_email",
+      }),
+    },
+    adminSession,
+  );
+  if (
+    webhookDeliveryInvite.delivered_at
+    || webhookDeliveryInvite.delivery_attempt?.status !== "queued"
+    || webhookDeliveryInvite.last_delivery_provider !== "transactional_email"
+  ) {
+    throw new Error("Expected transactional email invite to start as queued for webhook completion");
+  }
+  const webhookEvent = await api.request(
+    "/webhooks/staff-invite-delivery",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "transactional_email",
+        provider_event_id: "static-email-delivered-1",
+        attempt_id: webhookDeliveryInvite.delivery_attempt.attempt_id,
+        event_type: "delivered",
+        recipient: "webhook-delivery-analyst@test.com",
+        metadata: { message_id: "static-message-1" },
+      }),
+    },
+  );
+  if (
+    webhookEvent.event_type !== "delivered"
+    || webhookEvent.mapped_attempt_status !== "sent"
+    || !webhookEvent.delivery_recorded
+    || webhookEvent.was_duplicate
+    || Object.values(webhookEvent).includes(webhookDeliveryInvite.token)
+  ) {
+    throw new Error("Expected webhook delivery event to map to sent without leaking raw token");
+  }
+  const webhookEvents = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(webhookDeliveryInvite.token_id)}/delivery-events`,
+    {},
+    adminSession,
+  );
+  const webhookInvites = await api.request("/admin/staff-invites", {}, adminSession);
+  const webhookInviteListed = webhookInvites.find((row) => row.token_id === webhookDeliveryInvite.token_id);
+  if (
+    webhookEvents.length !== 1
+    || webhookEvents[0].provider_event_id !== "static-email-delivered-1"
+    || webhookEvents.some((event) => Object.values(event).includes(webhookDeliveryInvite.token))
+    || !webhookInviteListed?.delivered_at
+    || webhookInviteListed.delivery_event_count !== 1
+    || webhookInviteListed.last_delivery_event_type !== "delivered"
+    || webhookInviteListed.last_delivery_status !== "sent"
+  ) {
+    throw new Error("Expected webhook delivery event to be visible in invite admin telemetry");
+  }
   let weakInvitePasswordRejected = false;
   try {
     await api.request("/auth/accept-staff-invite", {
@@ -1016,6 +1081,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_delivery_attempted")) {
     throw new Error("Expected staff invite delivery attempt audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_delivery_webhook_received")) {
+    throw new Error("Expected staff invite delivery webhook audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_rotated")) {
     throw new Error("Expected staff invite rotation audit event");
@@ -1295,6 +1363,7 @@ async function main() {
       staff_invite_delivery_outbox: true,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
+      staff_invite_delivery_webhook: true,
       staff_invite_delivery_retry: true,
       staff_invite_rotation: true,
       staff_invite_health: true,

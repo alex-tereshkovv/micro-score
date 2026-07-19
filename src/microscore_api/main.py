@@ -84,6 +84,8 @@ from .schemas import (
     StaffInviteDeliveryReadinessResponse,
     StaffInviteDeliveryRetryCreate,
     StaffInviteDeliveryResponse,
+    StaffInviteDeliveryWebhookCreate,
+    StaffInviteDeliveryWebhookEventResponse,
     StaffInviteHealthResponse,
     StaffInviteRotateCreate,
     StaffInviteResponse,
@@ -118,6 +120,15 @@ TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT = (
 TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = (
     "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
 )
+INVITE_DELIVERY_WEBHOOK_SIGNATURE_HEADER = "x-microscore-delivery-signature"
+INVITE_DELIVERY_WEBHOOK_TIMESTAMP_HEADER = "x-microscore-delivery-timestamp"
+INVITE_DELIVERY_WEBHOOK_REPLAY_WINDOW_SECONDS = 300
+INVITE_DELIVERY_WEBHOOK_EVENT_STATUS_MAP = {
+    "delivered": "sent",
+    "bounced": "failed",
+    "failed": "failed",
+    "deferred": "queued",
+}
 INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
     "local_outbox": {
         "attempt_status": "sent",
@@ -214,6 +225,10 @@ def configured_invite_delivery_provider() -> str:
     ).strip() or DEFAULT_INVITE_DELIVERY_PROVIDER
 
 
+def configured_transactional_email_webhook_secret() -> str:
+    return os.environ.get("MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET", "").strip()
+
+
 def _configured_environment_names(names: tuple[str, ...]) -> list[str]:
     return [name for name in names if os.environ.get(name, "").strip()]
 
@@ -276,6 +291,54 @@ def _provider_configuration_defaults() -> dict[str, Any]:
         "missing_environment": [],
         "configuration_warnings": [],
     }
+
+
+def _verify_staff_invite_delivery_webhook_signature(
+    *,
+    raw_body: bytes,
+    signature_header: str | None,
+    timestamp_header: str | None,
+) -> None:
+    secret = configured_transactional_email_webhook_secret()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Invite delivery webhook secret is not configured",
+        )
+    if not signature_header or not timestamp_header:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invite delivery webhook signature required",
+        )
+    try:
+        timestamp_value = int(timestamp_header)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid invite delivery webhook timestamp",
+        ) from exc
+
+    now_timestamp = int(datetime.now(timezone.utc).timestamp())
+    if abs(now_timestamp - timestamp_value) > INVITE_DELIVERY_WEBHOOK_REPLAY_WINDOW_SECONDS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invite delivery webhook timestamp outside replay window",
+        )
+
+    supplied_signature = signature_header.strip()
+    if supplied_signature.startswith("sha256="):
+        supplied_signature = supplied_signature.removeprefix("sha256=")
+    signed_payload = str(timestamp_value).encode("utf-8") + b"." + raw_body
+    expected_signature = hmac.new(
+        secret.encode("utf-8"),
+        signed_payload,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(supplied_signature, expected_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid invite delivery webhook signature",
+        )
 
 
 def _invite_delivery_provider_profile(provider: str | None) -> dict[str, Any]:
@@ -588,6 +651,9 @@ def _staff_invite_response(
         "last_delivery_attempt_at": invite.get("last_delivery_attempt_at"),
         "last_delivery_status": invite.get("last_delivery_status"),
         "last_delivery_provider": invite.get("last_delivery_provider"),
+        "delivery_event_count": invite.get("delivery_event_count", 0),
+        "last_delivery_event_at": invite.get("last_delivery_event_at"),
+        "last_delivery_event_type": invite.get("last_delivery_event_type"),
     }
     if raw_token is not None:
         response["token"] = raw_token
@@ -615,6 +681,37 @@ def _staff_invite_delivery_attempt_response(
         "delivery_url_base": attempt.get("delivery_url_base"),
         "note": attempt.get("note"),
         "error": attempt.get("error"),
+    }
+
+
+def _staff_invite_delivery_webhook_event_response(
+    event: dict[str, Any],
+    *,
+    delivery_recorded: bool | None = None,
+) -> dict[str, Any]:
+    event_type = event["event_type"]
+    mapped_status = event.get(
+        "mapped_attempt_status",
+        INVITE_DELIVERY_WEBHOOK_EVENT_STATUS_MAP[event_type],
+    )
+    return {
+        "event_id": event["event_id"],
+        "provider_event_id": event["provider_event_id"],
+        "attempt_id": event["attempt_id"],
+        "invite_token_id": event["invite_token"],
+        "provider": event["provider"],
+        "event_type": event_type,
+        "mapped_attempt_status": mapped_status,
+        "received_at": event["received_at"],
+        "occurred_at": event.get("occurred_at"),
+        "recipient": event.get("recipient"),
+        "error": event.get("error"),
+        "was_duplicate": bool(event.get("was_duplicate", False)),
+        "delivery_recorded": bool(
+            delivery_recorded
+            if delivery_recorded is not None
+            else mapped_status == "sent"
+        ),
     }
 
 
@@ -755,6 +852,127 @@ def _record_staff_invite_delivery_attempt(
             },
         )
     return attempt, delivered
+
+
+def _record_staff_invite_delivery_webhook_event(
+    repository: MicroScoreRepository,
+    *,
+    payload: StaffInviteDeliveryWebhookCreate,
+) -> dict[str, Any]:
+    provider = payload.provider.strip()
+    provider_event_id = payload.provider_event_id.strip()
+    attempt_id = payload.attempt_id.strip()
+    mapped_status = INVITE_DELIVERY_WEBHOOK_EVENT_STATUS_MAP[payload.event_type]
+    attempt = repository.get_staff_invite_delivery_attempt(attempt_id)
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite delivery attempt not found",
+        )
+    if attempt["provider"] != provider:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Webhook provider does not match delivery attempt provider",
+        )
+    invite = repository.get_staff_invite(attempt["invite_token"])
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+
+    event = repository.record_staff_invite_delivery_event(
+        event_id=str(uuid4()),
+        provider=provider,
+        provider_event_id=provider_event_id,
+        attempt_id=attempt_id,
+        token=attempt["invite_token"],
+        event_type=payload.event_type,
+        mapped_attempt_status=mapped_status,
+        occurred_at=payload.occurred_at,
+        recipient=payload.recipient,
+        error=payload.error,
+        metadata=payload.metadata,
+    )
+    if event.get("was_duplicate"):
+        return _staff_invite_delivery_webhook_event_response(
+            event,
+            delivery_recorded=False,
+        )
+
+    updated_attempt = repository.update_staff_invite_delivery_attempt_status(
+        attempt_id,
+        status=mapped_status,
+        error=payload.error,
+    )
+    if updated_attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite delivery attempt not found",
+        )
+
+    delivery_recorded = False
+    if mapped_status == "sent":
+        delivered = repository.mark_staff_invite_delivered(
+            attempt["invite_token"],
+            delivered_by=None,
+            channel=attempt["channel"],
+            recipient=payload.recipient or attempt.get("recipient"),
+            url_base=attempt.get("delivery_url_base") or _validated_invite_url_base(),
+            note=attempt.get("note"),
+        )
+        if delivered is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Staff invite not found",
+            )
+        delivery_recorded = not delivered.get("was_already_delivered", False)
+        if delivery_recorded:
+            repository.record_audit_event(
+                actor_email=None,
+                action="staff_invite_delivered",
+                entity_type="staff_invite",
+                entity_id=attempt["invite_token"],
+                details={
+                    "email": invite["email"],
+                    "role": invite["role"],
+                    "organization_id": invite["organization_id"],
+                    "token_preview": _staff_invite_token_preview(attempt["invite_token"]),
+                    "delivery_attempt_id": attempt_id,
+                    "delivery_provider": provider,
+                    "delivery_channel": attempt["channel"],
+                    "delivery_recipient": payload.recipient or attempt.get("recipient"),
+                    "delivery_url_base": attempt.get("delivery_url_base"),
+                    "source": "delivery_webhook",
+                    "provider_event_id": provider_event_id,
+                },
+            )
+
+    repository.record_audit_event(
+        actor_email=None,
+        action="staff_invite_delivery_webhook_received",
+        entity_type="staff_invite_delivery_event",
+        entity_id=event["event_id"],
+        details={
+            "staff_invite_token_preview": _staff_invite_token_preview(
+                attempt["invite_token"],
+            ),
+            "staff_invite_token_id": attempt["invite_token"],
+            "delivery_attempt_id": attempt_id,
+            "provider": provider,
+            "provider_event_id": provider_event_id,
+            "event_type": payload.event_type,
+            "mapped_attempt_status": mapped_status,
+            "recipient": payload.recipient,
+            "error_present": bool(payload.error),
+            "metadata_keys": sorted(payload.metadata),
+            "delivery_recorded": delivery_recorded,
+        },
+    )
+    return _staff_invite_delivery_webhook_event_response(
+        event,
+        delivery_recorded=delivery_recorded,
+    )
 
 
 def _staff_invite_health_response(
@@ -2934,6 +3152,28 @@ def staff_invite_delivery_readiness(
 
 
 @app.post(
+    "/webhooks/staff-invite-delivery",
+    response_model=StaffInviteDeliveryWebhookEventResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def receive_staff_invite_delivery_webhook(
+    payload: StaffInviteDeliveryWebhookCreate,
+    request: Request,
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    raw_body = await request.body()
+    _verify_staff_invite_delivery_webhook_signature(
+        raw_body=raw_body,
+        signature_header=request.headers.get(INVITE_DELIVERY_WEBHOOK_SIGNATURE_HEADER),
+        timestamp_header=request.headers.get(INVITE_DELIVERY_WEBHOOK_TIMESTAMP_HEADER),
+    )
+    return _record_staff_invite_delivery_webhook_event(
+        repository,
+        payload=payload,
+    )
+
+
+@app.post(
     "/admin/staff-invites",
     response_model=StaffInviteCreatedResponse,
     status_code=status.HTTP_201_CREATED,
@@ -3063,6 +3303,26 @@ def list_staff_invite_delivery_attempts(
     return [
         _staff_invite_delivery_attempt_response(attempt)
         for attempt in repository.list_staff_invite_delivery_attempts(token_id)
+    ]
+
+
+@app.get(
+    "/admin/staff-invites/{token_id}/delivery-events",
+    response_model=list[StaffInviteDeliveryWebhookEventResponse],
+)
+def list_staff_invite_delivery_events(
+    token_id: str,
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> list[dict[str, Any]]:
+    if repository.get_staff_invite(token_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff invite not found",
+        )
+    return [
+        _staff_invite_delivery_webhook_event_response(event)
+        for event in repository.list_staff_invite_delivery_events(token_id)
     ]
 
 

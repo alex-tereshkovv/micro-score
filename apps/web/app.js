@@ -3117,8 +3117,9 @@ function renderStaffInvites(rows) {
         ? `${formatPolicyName(invite.delivery_channel || "delivered")} by ${invite.delivered_by || "-"}`
         : "not delivered";
       const deliveryAttempts = Number(invite.delivery_attempt_count || 0);
+      const deliveryEvents = Number(invite.delivery_event_count || 0);
       const deliverySummary = deliveryAttempts
-        ? `${delivery}; ${deliveryAttempts} attempt(s), last ${formatPolicyName(invite.last_delivery_status || "unknown")} via ${invite.last_delivery_provider || "-"}`
+        ? `${delivery}; ${deliveryAttempts} attempt(s), last ${formatPolicyName(invite.last_delivery_status || "unknown")} via ${invite.last_delivery_provider || "-"}; ${deliveryEvents} webhook event(s), latest ${formatPolicyName(invite.last_delivery_event_type || "none")}`
         : delivery;
       return `
         <tr>

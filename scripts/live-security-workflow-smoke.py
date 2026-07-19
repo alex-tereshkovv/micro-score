@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import socket
@@ -23,6 +25,7 @@ if str(SRC_ROOT) not in sys.path:
 DEMO_PASSWORD = "password123"
 DEMO_MFA_CODE = "246810"
 DEMO_ORGANIZATION_ID = "pavlodar-demo-mfi"
+DEMO_WEBHOOK_SECRET = "live-security-webhook-secret"
 
 
 class SmokeFailure(AssertionError):
@@ -32,6 +35,20 @@ class SmokeFailure(AssertionError):
 def assert_true(condition: bool, message: str) -> None:
     if not condition:
         raise SmokeFailure(message)
+
+
+def signed_webhook_headers(payload: dict[str, Any]) -> dict[str, str]:
+    body = json.dumps(payload).encode("utf-8")
+    timestamp = str(int(time.time()))
+    signature = hmac.new(
+        DEMO_WEBHOOK_SECRET.encode("utf-8"),
+        timestamp.encode("utf-8") + b"." + body,
+        hashlib.sha256,
+    ).hexdigest()
+    return {
+        "X-MicroScore-Delivery-Timestamp": timestamp,
+        "X-MicroScore-Delivery-Signature": f"sha256={signature}",
+    }
 
 
 def free_port() -> int:
@@ -61,20 +78,23 @@ class ApiClient:
         *,
         token: str | None = None,
         payload: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
         expected_status: int = 200,
     ) -> Any:
         data = None
-        headers = {"Accept": "application/json"}
+        request_headers = {"Accept": "application/json"}
         if payload is not None:
             data = json.dumps(payload).encode("utf-8")
-            headers["Content-Type"] = "application/json"
+            request_headers["Content-Type"] = "application/json"
         if token:
-            headers["Authorization"] = f"Bearer {token}"
+            request_headers["Authorization"] = f"Bearer {token}"
+        if headers:
+            request_headers.update(headers)
 
         request = urllib.request.Request(
             f"{self.base_url}{path}",
             data=data,
-            headers=headers,
+            headers=request_headers,
             method=method,
         )
         try:
@@ -133,6 +153,7 @@ def seed_database(db_path: Path) -> dict[str, Any]:
 def start_api(db_path: Path, port: int) -> subprocess.Popen[str]:
     env = os.environ.copy()
     env["MICROSCORE_API_DB_PATH"] = str(db_path)
+    env["MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET"] = DEMO_WEBHOOK_SECRET
     env["PYTHONPATH"] = (
         str(SRC_ROOT)
         if not env.get("PYTHONPATH")
@@ -333,6 +354,68 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "Queued local_outbox invite should already have audited delivery metadata",
     )
 
+    webhook_invite = client.request(
+        "POST",
+        "/admin/staff-invites",
+        token=admin_token,
+        payload={
+            "email": f"live-webhook-{unique}@example.com",
+            "role": "mfi_analyst",
+            "organization_id": DEMO_ORGANIZATION_ID,
+            "expires_in_hours": 72,
+            "queue_delivery": True,
+            "delivery_channel": "email",
+            "delivery_provider": "transactional_email",
+        },
+        expected_status=201,
+    )
+    assert_true(
+        webhook_invite["delivery_attempt"]["status"] == "queued",
+        "Transactional email attempt should wait for provider webhook",
+    )
+    webhook_payload = {
+        "provider": "transactional_email",
+        "provider_event_id": f"live-email-delivered-{unique}",
+        "attempt_id": webhook_invite["delivery_attempt"]["attempt_id"],
+        "event_type": "delivered",
+        "recipient": webhook_invite["email"],
+        "metadata": {"message_id": f"live-message-{unique}"},
+    }
+    webhook_event = client.request(
+        "POST",
+        "/webhooks/staff-invite-delivery",
+        payload=webhook_payload,
+        headers=signed_webhook_headers(webhook_payload),
+        expected_status=202,
+    )
+    assert_true(
+        webhook_event["mapped_attempt_status"] == "sent"
+        and webhook_event["delivery_recorded"]
+        and not webhook_event["was_duplicate"],
+        "Signed delivery webhook should mark queued transactional attempt sent",
+    )
+    webhook_events = client.request(
+        "GET",
+        f"/admin/staff-invites/{urllib.parse.quote(webhook_invite['token_id'], safe='')}/delivery-events",
+        token=admin_token,
+    )
+    assert_true(
+        len(webhook_events) == 1
+        and webhook_events[0]["provider_event_id"] == webhook_payload["provider_event_id"],
+        "Webhook events should be visible to admins without raw tokens",
+    )
+    listed_after_webhook = client.request("GET", "/admin/staff-invites", token=admin_token)
+    webhook_listed = next(
+        row for row in listed_after_webhook if row["token_id"] == webhook_invite["token_id"]
+    )
+    assert_true(
+        webhook_listed["delivered_at"]
+        and webhook_listed["delivery_event_count"] == 1
+        and webhook_listed["last_delivery_event_type"] == "delivered"
+        and webhook_listed["last_delivery_status"] == "sent",
+        "Webhook delivery should update invite delivery telemetry",
+    )
+
     accepted = client.request(
         "POST",
         "/auth/accept-staff-invite",
@@ -447,6 +530,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
     for expected_action in {
         "staff_invite_created",
         "staff_invite_delivery_attempted",
+        "staff_invite_delivery_webhook_received",
         "staff_invite_accepted",
         "staff_session_revoked",
         "staff_user_disabled",
@@ -466,8 +550,9 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "delivery_readiness_status": delivery_readiness["status"],
         "delivery_provider": delivery_readiness["configured_provider"],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
+        "delivery_webhook_events": len(webhook_events),
         "final_security_status": final_readiness["status"],
-        "audit_actions_checked": 7,
+        "audit_actions_checked": 8,
     }
 
 

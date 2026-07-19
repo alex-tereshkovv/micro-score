@@ -7,6 +7,7 @@
     staffInvites: {},
     staffInviteSecrets: {},
     staffInviteDeliveryAttempts: [],
+    staffInviteDeliveryEvents: [],
     applications: [],
     decisions: {},
     simulations: [],
@@ -328,6 +329,8 @@
   function publicStaffInvite(invite, rawToken = null) {
     const attempts = staffInviteDeliveryAttempts(invite.token_id);
     const lastAttempt = attempts[0] || null;
+    const events = staffInviteDeliveryEvents(invite.token_id);
+    const lastEvent = events[0] || null;
     const response = {
       token_id: invite.token_id,
       token_preview: invite.token_preview,
@@ -351,6 +354,9 @@
       last_delivery_attempt_at: lastAttempt?.attempted_at || null,
       last_delivery_status: lastAttempt?.status || null,
       last_delivery_provider: lastAttempt?.provider || null,
+      delivery_event_count: events.length,
+      last_delivery_event_at: lastEvent?.received_at || null,
+      last_delivery_event_type: lastEvent?.event_type || null,
     };
     if (rawToken) {
       response.token = rawToken;
@@ -378,6 +384,24 @@
     };
   }
 
+  function publicStaffInviteDeliveryWebhookEvent(event, deliveryRecorded = false) {
+    return {
+      event_id: event.event_id,
+      provider_event_id: event.provider_event_id,
+      attempt_id: event.attempt_id,
+      invite_token_id: event.invite_token,
+      provider: event.provider,
+      event_type: event.event_type,
+      mapped_attempt_status: event.mapped_attempt_status,
+      received_at: event.received_at,
+      occurred_at: event.occurred_at,
+      recipient: event.recipient,
+      error: event.error,
+      was_duplicate: Boolean(event.was_duplicate),
+      delivery_recorded: Boolean(deliveryRecorded),
+    };
+  }
+
   function staffInviteDeliveryAttempts(tokenId) {
     return demo.staffInviteDeliveryAttempts
       .filter((attempt) => attempt.invite_token === tokenId)
@@ -386,6 +410,103 @@
         || Number(right.attempt_sequence || 0) - Number(left.attempt_sequence || 0)
         || right.attempt_id.localeCompare(left.attempt_id)
       ));
+  }
+
+  function staffInviteDeliveryEvents(tokenId) {
+    return demo.staffInviteDeliveryEvents
+      .filter((event) => event.invite_token === tokenId)
+      .sort((left, right) => (
+        right.received_at.localeCompare(left.received_at)
+        || right.event_id.localeCompare(left.event_id)
+      ));
+  }
+
+  function mapInviteDeliveryWebhookStatus(eventType) {
+    return {
+      delivered: "sent",
+      bounced: "failed",
+      failed: "failed",
+      deferred: "queued",
+    }[eventType] || "queued";
+  }
+
+  function recordStaffInviteDeliveryWebhookEvent(payload) {
+    const provider = String(payload.provider || "").trim();
+    const providerEventId = String(payload.provider_event_id || "").trim();
+    const attemptId = String(payload.attempt_id || "").trim();
+    const eventType = String(payload.event_type || "").trim();
+    if (!provider || !providerEventId || !attemptId) throw new Error("Webhook event id, provider, and attempt id are required");
+    if (!["delivered", "bounced", "failed", "deferred"].includes(eventType)) throw new Error("Unsupported webhook event type");
+    const attempt = demo.staffInviteDeliveryAttempts.find((row) => row.attempt_id === attemptId);
+    if (!attempt) throw new Error("Staff invite delivery attempt not found");
+    if (attempt.provider !== provider) throw new Error("Webhook provider does not match delivery attempt provider");
+    const invite = demo.staffInvites[attempt.invite_token];
+    if (!invite) throw new Error("Staff invite not found");
+    const duplicate = demo.staffInviteDeliveryEvents.find((row) => (
+      row.provider === provider && row.provider_event_id === providerEventId
+    ));
+    if (duplicate) {
+      duplicate.was_duplicate = true;
+      return { event: duplicate, deliveryRecorded: false };
+    }
+
+    const mappedStatus = mapInviteDeliveryWebhookStatus(eventType);
+    const event = {
+      event_id: `invite-delivery-event-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      provider,
+      provider_event_id: providerEventId,
+      attempt_id: attemptId,
+      invite_token: attempt.invite_token,
+      event_type: eventType,
+      mapped_attempt_status: mappedStatus,
+      received_at: nowIso(),
+      occurred_at: payload.occurred_at || null,
+      recipient: payload.recipient || null,
+      error: payload.error || null,
+      metadata: payload.metadata || {},
+      was_duplicate: false,
+    };
+    demo.staffInviteDeliveryEvents.push(event);
+    attempt.status = mappedStatus;
+    attempt.error = payload.error || null;
+
+    let deliveryRecorded = false;
+    if (mappedStatus === "sent" && !invite.delivered_at) {
+      invite.delivered_at = nowIso();
+      invite.delivered_by = null;
+      invite.delivery_channel = attempt.channel;
+      invite.delivery_recipient = payload.recipient || attempt.recipient;
+      invite.delivery_url_base = attempt.delivery_url_base;
+      invite.delivery_note = attempt.note;
+      deliveryRecorded = true;
+      addAudit("staff_invite_delivered", "staff_invite", invite.token_id, null, {
+        email: invite.email,
+        role: invite.role,
+        organization_id: invite.organization_id,
+        token_preview: invite.token_preview,
+        delivery_attempt_id: attemptId,
+        delivery_provider: provider,
+        delivery_channel: attempt.channel,
+        delivery_recipient: payload.recipient || attempt.recipient,
+        delivery_url_base: attempt.delivery_url_base,
+        source: "delivery_webhook",
+        provider_event_id: providerEventId,
+      });
+    }
+    addAudit("staff_invite_delivery_webhook_received", "staff_invite_delivery_event", event.event_id, null, {
+      staff_invite_token_id: invite.token_id,
+      staff_invite_token_preview: invite.token_preview,
+      delivery_attempt_id: attemptId,
+      provider,
+      provider_event_id: providerEventId,
+      event_type: eventType,
+      mapped_attempt_status: mappedStatus,
+      recipient: payload.recipient || null,
+      error_present: Boolean(payload.error),
+      metadata_keys: Object.keys(payload.metadata || {}).sort(),
+      delivery_recorded: deliveryRecorded,
+    });
+    return { event, deliveryRecorded };
   }
 
   function staffInviteDeliveryProviderResult(provider) {
@@ -1147,6 +1268,7 @@
     demo.staffInvites = {};
     demo.staffInviteSecrets = {};
     demo.staffInviteDeliveryAttempts = [];
+    demo.staffInviteDeliveryEvents = [];
     demo.modelVersions = {
       "static-demo-v1": {
         version: "static-demo-v1",
@@ -2866,6 +2988,11 @@
       return clone(inviteDeliveryReadiness());
     }
 
+    if (cleanPath === "/webhooks/staff-invite-delivery" && method === "POST") {
+      const { event, deliveryRecorded } = recordStaffInviteDeliveryWebhookEvent(body);
+      return clone(publicStaffInviteDeliveryWebhookEvent(event, deliveryRecorded));
+    }
+
     if (cleanPath === "/admin/staff-invites" && method === "POST") {
       const user = requireAdmin(session);
       const email = String(body.email || "").trim().toLowerCase();
@@ -2928,6 +3055,15 @@
       const invite = demo.staffInvites[tokenId];
       if (!invite) throw new Error("Staff invite not found");
       return clone(staffInviteDeliveryAttempts(tokenId).map((attempt) => publicStaffInviteDeliveryAttempt(attempt)));
+    }
+
+    const staffInviteDeliveryEventsMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/delivery-events$/);
+    if (staffInviteDeliveryEventsMatch && method === "GET") {
+      requireAdmin(session);
+      const tokenId = decodeURIComponent(staffInviteDeliveryEventsMatch[1]);
+      const invite = demo.staffInvites[tokenId];
+      if (!invite) throw new Error("Staff invite not found");
+      return clone(staffInviteDeliveryEvents(tokenId).map((event) => publicStaffInviteDeliveryWebhookEvent(event)));
     }
 
     const retryStaffInviteDeliveryMatch = cleanPath.match(/^\/admin\/staff-invites\/([^/]+)\/delivery-attempts\/retry$/);

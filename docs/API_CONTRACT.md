@@ -431,7 +431,8 @@ one-time `invite_url`, and safe invite metadata: `token_id`, `token_preview`,
 `revoked_by`, `delivered_at`, `delivered_by`, `delivery_channel`,
 `delivery_recipient`, `delivery_url_base`, `delivery_note`,
 `delivery_attempt_count`, `last_delivery_attempt_at`, `last_delivery_status`,
-and `last_delivery_provider`.
+`last_delivery_provider`, `delivery_event_count`, `last_delivery_event_at`, and
+`last_delivery_event_type`.
 
 The raw `token` must be copied at creation time. Later admin list/revoke
 responses expose only `token_id`, `token_preview`, and delivery metadata.
@@ -489,6 +490,48 @@ GET /admin/staff-invites/{token_id}/delivery-attempts
 This returns newest-first `StaffInviteDeliveryAttemptResponse` rows. Attempts
 contain the invite `token_id`, provider, status, channel, recipient, URL base,
 and optional note/error; they never contain raw tokens.
+
+List delivery webhook events for an invite:
+
+```http
+GET /admin/staff-invites/{token_id}/delivery-events
+```
+
+This admin-only endpoint returns newest-first
+`StaffInviteDeliveryWebhookEventResponse` rows with `event_id`,
+`provider_event_id`, `attempt_id`, `invite_token_id`, `provider`, `event_type`,
+`mapped_attempt_status`, `received_at`, optional `occurred_at`, optional
+recipient/error, `was_duplicate`, and `delivery_recorded`. It does not return
+raw invite tokens, full invite URLs, webhook secrets, provider API keys, or
+metadata payloads.
+
+Receive transactional delivery webhooks:
+
+```http
+POST /webhooks/staff-invite-delivery
+```
+
+This public endpoint is for a future transactional email provider and does not
+accept bearer tokens. It requires:
+
+- `X-MicroScore-Delivery-Timestamp` as a Unix timestamp inside the 5-minute
+  replay window;
+- `X-MicroScore-Delivery-Signature` as `sha256=<hex hmac>` over
+  `<timestamp>.<raw-json-body>`;
+- `MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET` configured server-side.
+
+Webhook payloads include `provider`, `provider_event_id`, `attempt_id`,
+`event_type` (`delivered`, `bounced`, `failed`, or `deferred`), optional
+`occurred_at`, optional `recipient`, optional `error`, and optional metadata.
+Metadata keys containing `token`, `secret`, `password`, `authorization`, or
+`api_key` are rejected before storage.
+
+Webhook events are idempotent by `(provider, provider_event_id)`. `delivered`
+maps the linked attempt to `sent` and marks the invite delivered without a staff
+actor; `bounced` and `failed` map the attempt to `failed`; `deferred` leaves the
+attempt `queued`. Every accepted first-time event records
+`staff_invite_delivery_webhook_received`, and delivery events also emit
+`staff_invite_delivered` with `source: delivery_webhook`.
 
 Retry delivery for an active pending invite:
 
@@ -1076,6 +1119,7 @@ Current audited actions:
 - `staff_user_reactivated`
 - `staff_invite_created`
 - `staff_invite_delivery_attempted`
+- `staff_invite_delivery_webhook_received`
 - `staff_invite_delivered`
 - `staff_invite_rotated`
 - `staff_invite_accepted`

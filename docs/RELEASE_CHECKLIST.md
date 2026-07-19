@@ -122,6 +122,11 @@ git diff --check
   readiness (`MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY`, sender, template, and
   webhook secret), active undelivered invite blockers, and a clear limitation
   that the prototype adapter records attempts without sending external email.
+- Invite Delivery Webhook v1 exposes signed
+  `/webhooks/staff-invite-delivery`, HMAC/timestamp replay protection,
+  provider-event idempotency, admin-visible `/delivery-events`, delivery/bounce
+  status mapping, and `staff_invite_delivery_webhook_received` audit evidence
+  without exposing raw invite tokens or webhook secrets.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

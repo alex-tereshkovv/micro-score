@@ -55,6 +55,7 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("staff_invite_token_hygiene", script)
         self.assertIn("staff_invite_delivery", script)
         self.assertIn("staff_invite_delivery_outbox", script)
+        self.assertIn("staff_invite_delivery_webhook", script)
         self.assertIn("staff_invite_delivery_retry", script)
         self.assertIn("staff_invite_rotation", script)
         self.assertIn("staff_invite_health", script)

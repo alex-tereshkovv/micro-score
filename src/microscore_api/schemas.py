@@ -262,6 +262,7 @@ class IdentityReadinessResponse(BaseModel):
 InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local_demo"]
 InviteDeliveryAttemptStatus = Literal["queued", "sent", "failed"]
 InviteDeliveryConfigurationStatus = Literal["not_required", "missing", "invalid", "ready"]
+InviteDeliveryWebhookEventType = Literal["delivered", "bounced", "failed", "deferred"]
 
 
 class StaffInviteDeliveryOptions(BaseModel):
@@ -302,6 +303,43 @@ class StaffInviteDeliveryRetryCreate(BaseModel):
     provider: str | None = Field(default=None, max_length=100)
 
 
+class StaffInviteDeliveryWebhookCreate(BaseModel):
+    provider: str = Field(min_length=1, max_length=100)
+    provider_event_id: str = Field(min_length=1, max_length=200)
+    attempt_id: str = Field(min_length=1, max_length=100)
+    event_type: InviteDeliveryWebhookEventType
+    occurred_at: str | None = Field(default=None, max_length=100)
+    recipient: str | None = Field(default=None, max_length=200)
+    error: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def reject_sensitive_metadata(self) -> "StaffInviteDeliveryWebhookCreate":
+        forbidden_terms = ("token", "secret", "password", "authorization", "api_key")
+
+        def walk(value: Any, path: str = "metadata") -> list[str]:
+            violations: list[str] = []
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    key_text = str(key).lower()
+                    key_path = f"{path}.{key}"
+                    if any(term in key_text for term in forbidden_terms):
+                        violations.append(key_path)
+                    violations.extend(walk(nested, key_path))
+            elif isinstance(value, list):
+                for index, nested in enumerate(value):
+                    violations.extend(walk(nested, f"{path}[{index}]"))
+            return violations
+
+        violations = walk(self.metadata)
+        if violations:
+            raise ValueError(
+                "Webhook metadata cannot include secret-bearing keys: "
+                + ", ".join(violations)
+            )
+        return self
+
+
 class StaffInviteResponse(BaseModel):
     token_id: str
     token_preview: str
@@ -325,6 +363,9 @@ class StaffInviteResponse(BaseModel):
     last_delivery_attempt_at: str | None = None
     last_delivery_status: InviteDeliveryAttemptStatus | None = None
     last_delivery_provider: str | None = None
+    delivery_event_count: int = Field(default=0, ge=0)
+    last_delivery_event_at: str | None = None
+    last_delivery_event_type: InviteDeliveryWebhookEventType | None = None
 
 
 class StaffInviteDeliveryAttemptResponse(BaseModel):
@@ -339,6 +380,22 @@ class StaffInviteDeliveryAttemptResponse(BaseModel):
     delivery_url_base: str | None = None
     note: str | None = None
     error: str | None = None
+
+
+class StaffInviteDeliveryWebhookEventResponse(BaseModel):
+    event_id: str
+    provider_event_id: str
+    attempt_id: str
+    invite_token_id: str
+    provider: str
+    event_type: InviteDeliveryWebhookEventType
+    mapped_attempt_status: InviteDeliveryAttemptStatus
+    received_at: str
+    occurred_at: str | None = None
+    recipient: str | None = None
+    error: str | None = None
+    was_duplicate: bool = False
+    delivery_recorded: bool = False
 
 
 class StaffInviteDeliveryProviderProfile(BaseModel):

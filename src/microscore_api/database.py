@@ -30,6 +30,7 @@ REQUIRED_SCHEMA_TABLES = (
     "sessions",
     "staff_invites",
     "staff_invite_delivery_attempts",
+    "staff_invite_delivery_events",
     "loan_applications",
     "application_decisions",
     "audit_events",
@@ -44,6 +45,7 @@ JSON_TEXT_COLUMNS = (
     "model_versions.limitations_json",
     "portfolio_simulations.request_json",
     "portfolio_simulations.result_json",
+    "staff_invite_delivery_events.metadata_json",
 )
 TENANT_SCOPED_TABLES = (
     "users.organization_id",
@@ -338,6 +340,23 @@ class MicroScoreRepository:
                     error TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS staff_invite_delivery_events (
+                    event_id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    provider_event_id TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL REFERENCES staff_invite_delivery_attempts(attempt_id)
+                        ON DELETE CASCADE,
+                    invite_token TEXT NOT NULL REFERENCES staff_invites(token) ON DELETE CASCADE,
+                    event_type TEXT NOT NULL,
+                    mapped_attempt_status TEXT NOT NULL,
+                    received_at TEXT NOT NULL,
+                    occurred_at TEXT,
+                    recipient TEXT,
+                    error TEXT,
+                    metadata_json TEXT NOT NULL,
+                    UNIQUE(provider, provider_event_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS loan_applications (
                     id TEXT PRIMARY KEY,
                     borrower_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
@@ -410,6 +429,10 @@ class MicroScoreRepository:
                     ON staff_invites(email, created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_staff_invite_delivery_attempts_invite
                     ON staff_invite_delivery_attempts(invite_token, attempted_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_staff_invite_delivery_events_attempt
+                    ON staff_invite_delivery_events(attempt_id, received_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_staff_invite_delivery_events_invite
+                    ON staff_invite_delivery_events(invite_token, received_at DESC);
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_model_versions_single_active
                     ON model_versions(is_active)
                     WHERE is_active = 1;
@@ -1035,7 +1058,26 @@ class MicroScoreRepository:
                         WHERE invite_token = staff_invites.token
                         ORDER BY attempted_at DESC, attempt_id DESC
                         LIMIT 1
-                    ) AS last_delivery_provider
+                    ) AS last_delivery_provider,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                    ), 0) AS delivery_event_count,
+                    (
+                        SELECT received_at
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY received_at DESC, event_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_event_at,
+                    (
+                        SELECT event_type
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY received_at DESC, event_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_event_type
                 FROM staff_invites
                 WHERE token = ?
                 """,
@@ -1090,7 +1132,26 @@ class MicroScoreRepository:
                         WHERE invite_token = staff_invites.token
                         ORDER BY attempted_at DESC, attempt_id DESC
                         LIMIT 1
-                    ) AS last_delivery_provider
+                    ) AS last_delivery_provider,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                    ), 0) AS delivery_event_count,
+                    (
+                        SELECT received_at
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY received_at DESC, event_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_event_at,
+                    (
+                        SELECT event_type
+                        FROM staff_invite_delivery_events
+                        WHERE invite_token = staff_invites.token
+                        ORDER BY received_at DESC, event_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_event_type
                 FROM staff_invites
                 ORDER BY created_at DESC
                 """
@@ -1127,7 +1188,7 @@ class MicroScoreRepository:
         self,
         token: str,
         *,
-        delivered_by: str,
+        delivered_by: str | None,
         channel: str,
         recipient: str | None,
         url_base: str,
@@ -1259,6 +1320,159 @@ class MicroScoreRepository:
                 (token,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def update_staff_invite_delivery_attempt_status(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        error: str | None,
+    ) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE staff_invite_delivery_attempts
+                SET status = ?, error = ?
+                WHERE attempt_id = ?
+                """,
+                (status, error, attempt_id),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_staff_invite_delivery_attempt(attempt_id)
+
+    def record_staff_invite_delivery_event(
+        self,
+        *,
+        event_id: str,
+        provider: str,
+        provider_event_id: str,
+        attempt_id: str,
+        token: str,
+        event_type: str,
+        mapped_attempt_status: str,
+        occurred_at: str | None,
+        recipient: str | None,
+        error: str | None,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        received_at = _now_iso()
+        with self._connection() as connection:
+            existing = connection.execute(
+                """
+                SELECT event_id
+                FROM staff_invite_delivery_events
+                WHERE provider = ? AND provider_event_id = ?
+                """,
+                (provider, provider_event_id),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """
+                    INSERT INTO staff_invite_delivery_events (
+                        event_id,
+                        provider,
+                        provider_event_id,
+                        attempt_id,
+                        invite_token,
+                        event_type,
+                        mapped_attempt_status,
+                        received_at,
+                        occurred_at,
+                        recipient,
+                        error,
+                        metadata_json
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id,
+                        provider,
+                        provider_event_id,
+                        attempt_id,
+                        token,
+                        event_type,
+                        mapped_attempt_status,
+                        received_at,
+                        occurred_at,
+                        recipient,
+                        error,
+                        _json_dumps(metadata),
+                    ),
+                )
+                stored_event_id = event_id
+                was_duplicate = False
+            else:
+                stored_event_id = existing["event_id"]
+                was_duplicate = True
+        event = self.get_staff_invite_delivery_event(stored_event_id) or {}
+        event["was_duplicate"] = was_duplicate
+        return event
+
+    def get_staff_invite_delivery_event(
+        self,
+        event_id: str,
+    ) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    event_id,
+                    provider,
+                    provider_event_id,
+                    attempt_id,
+                    invite_token,
+                    event_type,
+                    mapped_attempt_status,
+                    received_at,
+                    occurred_at,
+                    recipient,
+                    error,
+                    metadata_json
+                FROM staff_invite_delivery_events
+                WHERE event_id = ?
+                """,
+                (event_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        event = dict(row)
+        event["metadata"] = _json_loads(event.pop("metadata_json")) or {}
+        return event
+
+    def list_staff_invite_delivery_events(
+        self,
+        token: str,
+    ) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    event_id,
+                    provider,
+                    provider_event_id,
+                    attempt_id,
+                    invite_token,
+                    event_type,
+                    mapped_attempt_status,
+                    received_at,
+                    occurred_at,
+                    recipient,
+                    error,
+                    metadata_json
+                FROM staff_invite_delivery_events
+                WHERE invite_token = ?
+                ORDER BY received_at DESC, event_id DESC
+                """,
+                (token,),
+            ).fetchall()
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            event = dict(row)
+            event["metadata"] = _json_loads(event.pop("metadata_json")) or {}
+            event["was_duplicate"] = False
+            events.append(event)
+        return events
 
     def assign_user_organization(self, email: str, organization_id: str | None) -> None:
         with self._connection() as connection:
