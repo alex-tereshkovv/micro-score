@@ -590,6 +590,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("ClearApplicationsResponse", schemas)
         self.assertIn("PilotReadinessResponse", schemas)
         self.assertIn("PilotDataClassRow", schemas)
+        self.assertIn("PrePilotReadinessCheck", schemas)
+        self.assertIn("PrePilotReadinessResponse", schemas)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("storage", schemas["HealthResponse"]["properties"])
@@ -699,6 +701,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("recommended_action", schemas["StaffInviteHealthResponse"]["properties"])
         paths = response.json()["paths"]
         self.assertIn("/admin/security/readiness", paths)
+        self.assertIn("/admin/governance/pre-pilot-readiness", paths)
         self.assertIn("/admin/security/identity-readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
@@ -747,6 +750,78 @@ class ApiIntegrationTests(unittest.TestCase):
                 for item in payload["first_pilot_success_criteria"]
             )
         )
+
+    def test_admin_pre_pilot_readiness_aggregates_release_controls(self) -> None:
+        borrower_token = self._register("pre-pilot-borrower@example.com", "borrower")
+        forbidden = self.client.get(
+            "/admin/governance/pre-pilot-readiness",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("pre-pilot-admin@example.com", "admin")
+        response = self.client.get(
+            "/admin/governance/pre-pilot-readiness",
+            headers=self._headers(admin_token),
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "blocked")
+        self.assertFalse(payload["production_data_allowed"])
+        self.assertFalse(payload["public_demo_allowed"])
+        self.assertLess(payload["readiness_score"], 100)
+        self.assertIn("Pavlodar", payload["region"])
+        self.assertIn("not real borrower onboarding", payload["release_target"])
+        self.assertIn("does not grant permission", payload["limitation"])
+
+        checks = {check["key"]: check for check in payload["checks"]}
+        for key in [
+            "security_readiness",
+            "identity_provider",
+            "transactional_delivery_adapter",
+            "invite_delivery_evidence",
+            "storage_backend",
+            "model_registry",
+            "monte_carlo_evidence",
+            "review_flow_evidence",
+            "privacy_data_boundary",
+            "tenant_isolation",
+        ]:
+            self.assertIn(key, checks)
+
+        self.assertEqual(checks["identity_provider"]["status"], "blocker")
+        self.assertEqual(checks["transactional_delivery_adapter"]["status"], "blocker")
+        self.assertEqual(checks["storage_backend"]["status"], "blocker")
+        self.assertEqual(checks["privacy_data_boundary"]["status"], "pass")
+        self.assertEqual(checks["tenant_isolation"]["status"], "pass")
+        self.assertEqual(checks["model_registry"]["status"], "warning")
+        self.assertEqual(checks["monte_carlo_evidence"]["status"], "warning")
+        self.assertEqual(checks["review_flow_evidence"]["status"], "warning")
+        self.assertIn(
+            "external_send_adapter_disabled",
+            checks["transactional_delivery_adapter"]["evidence"]["blocker_keys"],
+        )
+        self.assertIn(
+            "raw_invite_token",
+            checks["transactional_delivery_adapter"]["evidence"]["forbidden_payload_fields"],
+        )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"]["postgresql_migration_status"],
+            "planned",
+        )
+        self.assertTrue(payload["next_required_controls"])
+        self.assertIn(
+            "Production identity and access",
+            payload["blocked_capabilities"],
+        )
+        self.assertIn(
+            "Minimum-data and sensitive-field boundary",
+            payload["signed_off_capabilities"],
+        )
+        serialized = json.dumps(payload)
+        self.assertNotIn(TEST_PASSWORD, serialized)
+        self.assertNotIn("webhook-secret", serialized)
 
     def test_application_boundary_enforces_consent_and_rejects_sensitive_fields(self) -> None:
         borrower_token = self._register("privacy-borrower@example.com", "borrower")

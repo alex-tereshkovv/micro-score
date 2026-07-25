@@ -65,6 +65,8 @@
     "attempt_id",
     "adapter_idempotency_key",
   ];
+  const PRE_PILOT_RELEASE_TARGET = "public portfolio demo and controlled MFI validation planning, not real borrower onboarding";
+  const PRE_PILOT_READINESS_LIMITATION = "Pre-Pilot Readiness Gate v1 aggregates live prototype evidence for release planning. It does not grant permission to collect real borrower data; production IdP/TOTP/WebAuthn, managed PostgreSQL, real KZT calibration, legal/privacy sign-off, and transactional invite delivery must be completed before a real pilot.";
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -1529,6 +1531,222 @@
       })),
       next_required_controls: nextRequiredControls,
       limitation: "Identity Readiness v1 is reviewer-facing prototype evidence. It is not a completed production security review and does not certify production readiness, identity provider maturity, encrypted storage, or permission to collect real borrower data.",
+    };
+  }
+
+  function prePilotCheckStatus(status) {
+    if (["blocked", "blocker", "missing", "invalid"].includes(status)) return "blocker";
+    if (["review", "warning", "planned"].includes(status)) return "warning";
+    return "pass";
+  }
+
+  function prePilotReadiness(session = {}) {
+    const security = securityReadiness();
+    const identity = identityReadiness(session);
+    const delivery = inviteDeliveryReadiness();
+    const adapter = inviteDeliveryAdapterReadiness();
+    const activeModel = activeModelVersion();
+    const scored = demo.applications.filter((app) => app.score_result);
+    const decided = demo.applications.filter((app) => app.decision_result);
+    const latestSimulation = demo.simulations[0] || null;
+    const latestScenarios = new Set((latestSimulation?.scenarios || []).map((row) => row.scenario));
+    const hasCoreSimulationScenarios = ["baseline", "adverse", "severe"]
+      .every((scenario) => latestScenarios.has(scenario));
+    const modelLimitations = activeModel?.limitations || [];
+    const checks = [
+      {
+        key: "security_readiness",
+        label: "Security readiness gate",
+        category: "security",
+        status: prePilotCheckStatus(security.status),
+        summary: `Security readiness is ${security.status} with ${security.blockers_count} blocker(s) and ${security.warnings_count} warning(s).`,
+        action: security.recommended_actions[0] || "Keep security readiness checks in the release gate.",
+        evidence: {
+          status: security.status,
+          blockers_count: security.blockers_count,
+          warnings_count: security.warnings_count,
+          check_keys: security.checks.map((check) => check.key),
+        },
+      },
+      {
+        key: "identity_provider",
+        label: "Production identity and access",
+        category: "identity",
+        status: prePilotCheckStatus(identity.status),
+        summary: `Identity readiness is ${identity.status}; ${identity.production_blockers.length} production blocker(s) remain.`,
+        action: identity.next_required_controls[0]?.action || "Keep identity evidence current before pilot access.",
+        evidence: {
+          auth_provider_mode: identity.auth_provider_mode,
+          mfa_mode: identity.mfa_mode,
+          session_control_mode: identity.session_control_mode,
+          rate_limit_mode: identity.rate_limit_mode,
+          production_blocker_keys: identity.production_blockers.map((item) => item.key),
+        },
+      },
+      {
+        key: "transactional_delivery_adapter",
+        label: "Transactional invite delivery",
+        category: "delivery",
+        status: prePilotCheckStatus(adapter.status),
+        summary: `Delivery adapter is ${adapter.status}; external_send_enabled=${adapter.external_send_enabled} and send_adapter_ready=${adapter.send_adapter_ready}.`,
+        action: adapter.next_required_controls[0]?.action || "Keep the adapter boundary blocked until a production sender exists.",
+        evidence: {
+          provider: adapter.provider,
+          adapter_mode: adapter.adapter_mode,
+          configuration_status: adapter.configuration_status,
+          secret_rotation_ready: adapter.secret_rotation_ready,
+          blocker_keys: adapter.blockers.map((item) => item.key),
+          safe_payload_fields: adapter.safe_payload_fields,
+          forbidden_payload_fields: adapter.forbidden_payload_fields,
+        },
+      },
+      {
+        key: "invite_delivery_evidence",
+        label: "Audited invite delivery evidence",
+        category: "delivery",
+        status: prePilotCheckStatus(delivery.status),
+        summary: `Invite delivery readiness is ${delivery.status} using '${delivery.configured_provider}'; ${delivery.undelivered_active_invite_count} active pending invite(s) lack delivery evidence.`,
+        action: delivery.next_required_controls[0]?.action || "Continue recording audited invite delivery attempts.",
+        evidence: {
+          configured_provider: delivery.configured_provider,
+          invite_url_https: delivery.invite_url_https,
+          invite_url_local: delivery.invite_url_local,
+          active_pending_invite_count: delivery.active_pending_invite_count,
+          undelivered_active_invite_count: delivery.undelivered_active_invite_count,
+          failed_latest_attempt_count: delivery.failed_latest_attempt_count,
+        },
+      },
+      {
+        key: "storage_backend",
+        label: "Production storage backend",
+        category: "storage",
+        status: "blocker",
+        summary: "Storage backend is 'sqlite_static_demo'; production_ready=false.",
+        action: "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests.",
+        evidence: {
+          backend: "sqlite_static_demo",
+          production_ready: false,
+          postgresql_migration_status: "planned",
+          tenant_scoped_tables: [
+            "users.organization_id",
+            "loan_applications.organization_id",
+            "staff_invites.organization_id",
+            "portfolio_simulations.organization_id",
+          ],
+        },
+      },
+      {
+        key: "model_registry",
+        label: "Model registry and validation boundary",
+        category: "model",
+        status: !activeModel
+          ? "blocker"
+          : modelLimitations.some((item) => /synthetic|not validated/i.test(item))
+            ? "warning"
+            : "pass",
+        summary: activeModel
+          ? `Active model '${activeModel.version}' is registered with ${modelLimitations.length} limitation(s).`
+          : "No active model version is registered.",
+        action: activeModel
+          ? "Replace synthetic-only validation with permitted MFI/KZT calibration evidence before real pilot decisions."
+          : "Register and activate a reviewed model version before scoring.",
+        evidence: {
+          active_model_version: activeModel?.version || null,
+          registered_model_count: Object.keys(demo.modelVersions).length,
+          feature_schema_version: activeModel?.feature_schema_version || null,
+          training_data_label: activeModel?.training_data_label || null,
+        },
+      },
+      {
+        key: "monte_carlo_evidence",
+        label: "Monte Carlo portfolio stress evidence",
+        category: "simulation",
+        status: hasCoreSimulationScenarios ? "pass" : "warning",
+        summary: hasCoreSimulationScenarios
+          ? "Latest saved Monte Carlo run includes baseline/adverse/severe scenarios."
+          : "No saved Monte Carlo run with baseline/adverse/severe scenarios is available for the current release evidence.",
+        action: hasCoreSimulationScenarios
+          ? "Keep seeded simulations reproducible and clearly labeled as scenario planning."
+          : "Run and save a seeded baseline/adverse/severe simulation before a reviewer demo.",
+        evidence: {
+          simulation_count: demo.simulations.length,
+          latest_simulation_id: latestSimulation?.simulation_id || null,
+          latest_scenarios: [...latestScenarios].sort(),
+          latest_warning_count: latestSimulation?.warnings?.length ?? null,
+        },
+      },
+      {
+        key: "review_flow_evidence",
+        label: "Borrower-to-analyst review flow",
+        category: "demo",
+        status: scored.length ? "pass" : "warning",
+        summary: `${demo.applications.length} application(s), ${scored.length} scored application(s), and ${decided.length} recorded analyst decision(s) are present.`,
+        action: scored.length
+          ? "Keep borrower-safe status and MFI review packet smokes in the release gate."
+          : "Submit and score a synthetic application before a reviewer demo.",
+        evidence: {
+          application_count: demo.applications.length,
+          scored_application_count: scored.length,
+          decided_application_count: decided.length,
+        },
+      },
+      {
+        key: "privacy_data_boundary",
+        label: "Minimum-data and sensitive-field boundary",
+        category: "privacy",
+        status: "pass",
+        summary: "Pilot data classes and forbidden data remain explicit; application intake requires consent and rejects secret-bearing/sensitive fields.",
+        action: "Keep legal/privacy review ahead of any real borrower data collection.",
+        evidence: {
+          data_class_count: 5,
+          forbidden_data_count: 7,
+          consent_required: true,
+          sensitive_field_rejection: true,
+        },
+      },
+      {
+        key: "tenant_isolation",
+        label: "Organization-scoped MFI access",
+        category: "tenant",
+        status: "pass",
+        summary: `${Object.keys(demo.organizations).length} organization record(s); queues, review packets, analytics, simulations, and staff invites remain organization-scoped.`,
+        action: "Keep organization_id guards on every new MFI/admin surface.",
+        evidence: {
+          organization_count: Object.keys(demo.organizations).length,
+          tenant_scoped_tables: [
+            "users.organization_id",
+            "loan_applications.organization_id",
+            "staff_invites.organization_id",
+            "portfolio_simulations.organization_id",
+          ],
+        },
+      },
+    ];
+    const blockers = checks.filter((check) => check.status === "blocker");
+    const warnings = checks.filter((check) => check.status === "warning");
+    const passes = checks.filter((check) => check.status === "pass");
+    const status = blockers.length ? "blocked" : warnings.length ? "review" : "ready";
+    return {
+      status,
+      generated_at: nowIso(),
+      region: "Pavlodar region, Kazakhstan",
+      release_target: PRE_PILOT_RELEASE_TARGET,
+      blockers_count: blockers.length,
+      warnings_count: warnings.length,
+      passes_count: passes.length,
+      readiness_score: Math.max(0, Math.min(100, 100 - blockers.length * 15 - warnings.length * 7)),
+      production_data_allowed: !blockers.length && !warnings.length,
+      public_demo_allowed: Boolean(activeModel && scored.length),
+      checks,
+      next_required_controls: blockers.concat(warnings).map((check) => ({
+        key: check.key,
+        severity: check.status === "blocker" ? "blocker" : "warning",
+        summary: check.summary,
+        action: check.action,
+      })),
+      signed_off_capabilities: passes.map((check) => check.label),
+      blocked_capabilities: blockers.map((check) => check.label),
+      limitation: PRE_PILOT_READINESS_LIMITATION,
     };
   }
 
@@ -3098,6 +3316,11 @@
     if (cleanPath === "/admin/security/readiness" && method === "GET") {
       requireAdmin(session);
       return clone(securityReadiness());
+    }
+
+    if (cleanPath === "/admin/governance/pre-pilot-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(prePilotReadiness(session));
     }
 
     if (cleanPath === "/admin/security/identity-readiness" && method === "GET") {

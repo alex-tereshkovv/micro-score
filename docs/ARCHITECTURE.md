@@ -165,6 +165,10 @@ It supports:
 10. A later model activation marks older scores as stale without rewriting their
    original provenance.
 11. Admin/audit views record demo actions so decisions remain inspectable.
+12. Pre-Pilot Readiness Gate v1 aggregates live security, identity, delivery,
+    storage, model, Monte Carlo, privacy, review-flow, and tenant-isolation
+    evidence into `/admin/governance/pre-pilot-readiness`; it separates public
+    demo readiness from permission to handle real borrower data.
 
 ## Privacy Boundary
 
@@ -195,6 +199,9 @@ while the research is still pre-pilot.
   not estimates calibrated from real MFI outcomes.
 - The pilot-data schema is defined, but it has not been validated with a real
   Pavlodar MFI dataset.
+- The pre-pilot gate is intentionally blocked for real data until production
+  identity, managed storage, transactional delivery, legal/privacy sign-off,
+  and real KZT calibration are complete.
 
 These gaps are intentional next milestones. The current architecture keeps the
 project honest: public demo for accessibility, local API for product realism,

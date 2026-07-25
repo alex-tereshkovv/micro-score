@@ -436,6 +436,22 @@ async function main() {
   ) {
     throw new Error("Expected invite delivery adapter readiness to block external sends by design");
   }
+  const prePilotReadinessInitial = await api.request("/admin/governance/pre-pilot-readiness", {}, adminSession);
+  const prePilotChecks = new Map((prePilotReadinessInitial.checks || []).map((check) => [check.key, check]));
+  if (
+    prePilotReadinessInitial.status !== "blocked"
+    || prePilotReadinessInitial.production_data_allowed
+    || !prePilotReadinessInitial.public_demo_allowed
+    || prePilotReadinessInitial.readiness_score >= 100
+    || prePilotChecks.get("transactional_delivery_adapter")?.status !== "blocker"
+    || prePilotChecks.get("storage_backend")?.status !== "blocker"
+    || prePilotChecks.get("monte_carlo_evidence")?.status !== "pass"
+    || prePilotChecks.get("privacy_data_boundary")?.status !== "pass"
+    || !prePilotReadinessInitial.next_required_controls?.length
+    || !String(prePilotReadinessInitial.limitation || "").includes("does not grant permission")
+  ) {
+    throw new Error("Expected pre-pilot readiness gate to aggregate blocked real-data controls and passing demo evidence");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -1466,6 +1482,9 @@ async function main() {
       staff_invite_delivery_worker: true,
       staff_invite_delivery_dead_letter: true,
       staff_invite_delivery_adapter_boundary: true,
+      pre_pilot_readiness_gate: true,
+      pre_pilot_public_demo_allowed: prePilotReadinessInitial.public_demo_allowed,
+      pre_pilot_production_data_allowed: prePilotReadinessInitial.production_data_allowed,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
       staff_invite_delivery_webhook: true,

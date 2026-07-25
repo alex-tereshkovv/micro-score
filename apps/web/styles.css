@@ -1984,18 +1984,24 @@ label {
   margin-bottom: 12px;
 }
 
-.identity-readiness {
+.identity-readiness,
+.pre-pilot-readiness {
   display: grid;
   gap: 12px;
   min-height: 140px;
 }
 
-.identity-readiness.empty {
+.identity-readiness.empty,
+.pre-pilot-readiness.empty {
   border: 1px dashed var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
   padding: 14px;
   color: var(--muted);
+}
+
+.pre-pilot-hero {
+  border-left-color: var(--red);
 }
 
 .evidence-hero,

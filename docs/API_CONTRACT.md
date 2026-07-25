@@ -68,6 +68,35 @@ supervised Pavlodar pilot. It returns:
 The endpoint does not expose borrower data. It exists so the API contract makes
 MicroScore's privacy boundary explicit.
 
+Admin pre-pilot release gate:
+
+```http
+GET /admin/governance/pre-pilot-readiness
+```
+
+This admin-only endpoint aggregates the live prototype state into one
+machine-checkable `PrePilotReadinessResponse`. It reports `ready`, `review`, or
+`blocked` across security readiness, identity provider maturity, transactional
+invite delivery, storage, model registry, Monte Carlo evidence, borrower/MFI
+review-flow evidence, privacy boundaries, and tenant isolation.
+
+Important fields:
+
+- `production_data_allowed`: remains `false` unless every blocker and warning
+  is cleared;
+- `public_demo_allowed`: can be `true` when the synthetic scored demo portfolio
+  has enough evidence for a reviewer demo;
+- `readiness_score`: compact release-planning score derived from blockers and
+  warnings;
+- `checks`: category-keyed evidence rows with `pass`, `warning`, or `blocker`
+  status;
+- `next_required_controls`: ordered controls that must be resolved before real
+  borrower data.
+
+The gate is intentionally blocked for real pilot use while production
+IdP/TOTP/WebAuthn, managed PostgreSQL, real KZT calibration, legal/privacy
+sign-off, and transactional invite delivery remain incomplete.
+
 ## Roles
 
 - `borrower`: can create and view own loan applications.

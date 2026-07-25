@@ -95,6 +95,7 @@ const els = {
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
+  prePilotReadiness: document.querySelector("#prePilotReadiness"),
   auditTrail: document.querySelector("#auditTrail"),
   identityReadiness: document.querySelector("#identityReadiness"),
   securityReadiness: document.querySelector("#securityReadiness"),
@@ -981,6 +982,8 @@ function resetPrivilegedViews() {
   }
   els.identityReadiness.className = "identity-readiness empty";
   els.identityReadiness.textContent = "Identity readiness evidence not loaded.";
+  els.prePilotReadiness.className = "pre-pilot-readiness empty";
+  els.prePilotReadiness.textContent = "Pre-pilot readiness gate not loaded.";
   els.mfaReadiness.className = "metric-grid mfa-readiness empty";
   els.mfaReadiness.textContent = "MFA readiness not loaded.";
   els.staffInviteHealth.className = "metric-grid invite-health empty";
@@ -2638,6 +2641,80 @@ async function refreshAudit() {
   ]);
 }
 
+function renderPrePilotReadiness(payload) {
+  if (!els.prePilotReadiness) return;
+  if (!payload) {
+    setPanelState(
+      els.prePilotReadiness,
+      "pre-pilot-readiness",
+      "empty",
+      "No pre-pilot gate loaded",
+      "Refresh the admin workspace to load the release readiness control.",
+    );
+    return;
+  }
+
+  const statusClass = payload.status === "blocked"
+    ? "risk-high"
+    : payload.status === "review"
+      ? "risk-medium"
+      : "risk-low";
+  const checks = [...(payload.checks || [])].sort((left, right) => {
+    const rank = { blocker: 0, warning: 1, pass: 2 };
+    return (rank[left.status] ?? 9) - (rank[right.status] ?? 9)
+      || String(left.category).localeCompare(String(right.category))
+      || String(left.label).localeCompare(String(right.label));
+  });
+  const rows = checks.map((row) => `
+    <article class="evidence-row ${severityClass(row.status)}">
+      <div>
+        <span>${escapeHtml(severityLabel(row.status))} · ${escapeHtml(formatPolicyName(row.category || "gate"))}</span>
+        <strong>${escapeHtml(row.label || formatPolicyName(row.key))}</strong>
+      </div>
+      <p>${escapeHtml(row.summary || "No summary provided.")}</p>
+      <em>${escapeHtml(row.action || "Keep this control under review before pilot use.")}</em>
+    </article>
+  `).join("");
+  const nextControls = (payload.next_required_controls || []).length
+    ? payload.next_required_controls
+      .slice(0, 6)
+      .map((item) => `<li><strong>${escapeHtml(formatPolicyName(item.key))}:</strong> ${escapeHtml(item.action || item.summary || "Resolve this control.")}</li>`)
+      .join("")
+    : "<li>All gate controls are passing; keep release evidence current.</li>";
+
+  els.prePilotReadiness.className = "pre-pilot-readiness";
+  els.prePilotReadiness.innerHTML = `
+    <section class="evidence-hero pre-pilot-hero">
+      <div>
+        <span>Pre-pilot release status</span>
+        <strong class="${statusClass}">${escapeHtml(formatPolicyName(payload.status || "blocked"))}</strong>
+        <p>${escapeHtml(payload.limitation || "This gate is a prototype release-control summary.")}</p>
+      </div>
+      <dl>
+        <div><dt>Score</dt><dd>${Number(payload.readiness_score || 0)}/100</dd></div>
+        <div><dt>Blockers</dt><dd>${Number(payload.blockers_count || 0)}</dd></div>
+        <div><dt>Warnings</dt><dd>${Number(payload.warnings_count || 0)}</dd></div>
+        <div><dt>Public demo</dt><dd>${payload.public_demo_allowed ? "Allowed" : "Needs evidence"}</dd></div>
+        <div><dt>Real data</dt><dd>${payload.production_data_allowed ? "Allowed" : "Blocked"}</dd></div>
+        <div><dt>Generated</dt><dd>${escapeHtml(payload.generated_at || "-")}</dd></div>
+      </dl>
+    </section>
+    <section class="evidence-summary-grid">
+      <div><span>Region</span><strong>${escapeHtml(payload.region || "unknown")}</strong><em>Validation context for the current prototype.</em></div>
+      <div><span>Release target</span><strong>Controlled demo</strong><em>${escapeHtml(payload.release_target || "Portfolio/public-demo release evidence.")}</em></div>
+      <div><span>Signed-off controls</span><strong>${Number(payload.passes_count || 0)}</strong><em>${escapeHtml((payload.signed_off_capabilities || []).slice(0, 3).join(", ") || "No passing controls reported.")}</em></div>
+    </section>
+    <section class="evidence-section">
+      <h4>Gate evidence</h4>
+      <div class="evidence-row-list">${rows || "<p class=\"tiny-text\">No gate rows returned.</p>"}</div>
+    </section>
+    <section class="evidence-section">
+      <h4>Next required controls</h4>
+      <ul class="evidence-next-controls">${nextControls}</ul>
+    </section>
+  `;
+}
+
 function renderSecurityReadiness(readiness) {
   if (!els.securityReadiness) return;
   const statusClass = readiness.status === "blocked"
@@ -2785,6 +2862,13 @@ function renderIdentityReadiness(payload) {
 
 async function refreshSecurityReadiness() {
   setPanelState(
+    els.prePilotReadiness,
+    "pre-pilot-readiness",
+    "loading",
+    "Loading Pre-Pilot Gate",
+    "Aggregating security, identity, delivery, storage, model, simulation, privacy, and tenant evidence.",
+  );
+  setPanelState(
     els.identityReadiness,
     "identity-readiness",
     "loading",
@@ -2798,10 +2882,23 @@ async function refreshSecurityReadiness() {
     "Loading security readiness",
     "Checking current pre-pilot security controls.",
   );
-  const [readinessResult, identityResult] = await Promise.allSettled([
+  const [prePilotResult, readinessResult, identityResult] = await Promise.allSettled([
+    apiFetch("/admin/governance/pre-pilot-readiness"),
     apiFetch("/admin/security/readiness"),
     apiFetch("/admin/security/identity-readiness"),
   ]);
+
+  if (prePilotResult.status === "fulfilled") {
+    renderPrePilotReadiness(prePilotResult.value);
+  } else {
+    setPanelState(
+      els.prePilotReadiness,
+      "pre-pilot-readiness",
+      "error",
+      "Pre-Pilot Gate unavailable",
+      prePilotResult.reason?.message || "The release readiness gate could not be loaded.",
+    );
+  }
 
   if (readinessResult.status === "fulfilled") {
     renderSecurityReadiness(readinessResult.value);
@@ -2827,10 +2924,15 @@ async function refreshSecurityReadiness() {
     );
   }
 
-  if (readinessResult.status === "rejected" && identityResult.status === "rejected") {
-    throw readinessResult.reason;
+  if (
+    prePilotResult.status === "rejected"
+    && readinessResult.status === "rejected"
+    && identityResult.status === "rejected"
+  ) {
+    throw prePilotResult.reason;
   }
   return {
+    pre_pilot_readiness: prePilotResult.status === "fulfilled" ? prePilotResult.value : null,
     readiness: readinessResult.status === "fulfilled" ? readinessResult.value : null,
     identity_readiness: identityResult.status === "fulfilled" ? identityResult.value : null,
   };

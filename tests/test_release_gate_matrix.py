@@ -155,6 +155,23 @@ MATRIX_ROWS = [
         ],
     },
     {
+        "area": "Pre-pilot release readiness gate",
+        "artifacts": [
+            "tests/test_api_integration.py",
+            "scripts/static-demo-smoke.js",
+            "scripts/live-security-workflow-smoke.py",
+            "tests/test_web_static.py",
+            "docs/RELEASE_CHECKLIST.md",
+        ],
+        "markers": [
+            "/admin/governance/pre-pilot-readiness",
+            "PrePilotReadinessResponse",
+            "production_data_allowed",
+            "public_demo_allowed",
+            "pre_pilot_readiness_gate",
+        ],
+    },
+    {
         "area": "Privacy intake and sensitive-field rejection",
         "artifacts": [
             "tests/test_api_integration.py",

@@ -1078,3 +1078,41 @@ class PilotReadinessResponse(BaseModel):
     forbidden_data: list[str] = Field(default_factory=list)
     validation_questions: list[str] = Field(default_factory=list)
     first_pilot_success_criteria: list[str] = Field(default_factory=list)
+
+
+class PrePilotReadinessCheck(BaseModel):
+    key: str
+    label: str
+    category: Literal[
+        "security",
+        "identity",
+        "delivery",
+        "storage",
+        "model",
+        "simulation",
+        "privacy",
+        "tenant",
+        "demo",
+    ]
+    status: Literal["pass", "warning", "blocker"]
+    summary: str
+    action: str
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class PrePilotReadinessResponse(BaseModel):
+    status: Literal["ready", "review", "blocked"]
+    generated_at: str
+    region: str
+    release_target: str
+    blockers_count: int = Field(ge=0)
+    warnings_count: int = Field(ge=0)
+    passes_count: int = Field(ge=0)
+    readiness_score: int = Field(ge=0, le=100)
+    production_data_allowed: bool = False
+    public_demo_allowed: bool = False
+    checks: list[PrePilotReadinessCheck] = Field(default_factory=list)
+    next_required_controls: list[IdentityReadinessControl] = Field(default_factory=list)
+    signed_off_capabilities: list[str] = Field(default_factory=list)
+    blocked_capabilities: list[str] = Field(default_factory=list)
+    limitation: str

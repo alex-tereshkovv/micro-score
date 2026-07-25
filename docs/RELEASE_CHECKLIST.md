@@ -150,6 +150,12 @@ git diff --check
 - Security Readiness v1 aggregates MFA posture, invite hygiene, audited invite
   delivery, session TTL, and remaining production caveats into a pre-pilot
   admin gate.
+- Pre-Pilot Readiness Gate v1 exposes
+  `/admin/governance/pre-pilot-readiness`, aggregates security, identity,
+  transactional delivery, storage, model, Monte Carlo, review-flow, privacy,
+  and tenant-isolation evidence, keeps `production_data_allowed=false` while
+  blockers or warnings remain, and separates public demo readiness from real
+  borrower pilot permission.
 - Storage readiness remains explicit: SQLite is the prototype backend,
   PostgreSQL migration remains planned, and no release should imply production
   storage readiness until that gate changes.

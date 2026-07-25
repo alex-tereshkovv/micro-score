@@ -300,6 +300,24 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and "raw_invite_token" in delivery_adapter_readiness["forbidden_payload_fields"],
         "Delivery adapter readiness should block external sends by design",
     )
+    pre_pilot_readiness = client.request(
+        "GET",
+        "/admin/governance/pre-pilot-readiness",
+        token=admin_token,
+    )
+    pre_pilot_checks = {
+        check["key"]: check for check in pre_pilot_readiness.get("checks", [])
+    }
+    assert_true(
+        pre_pilot_readiness["status"] == "blocked"
+        and not pre_pilot_readiness["production_data_allowed"]
+        and pre_pilot_readiness["readiness_score"] < 100
+        and pre_pilot_checks["transactional_delivery_adapter"]["status"] == "blocker"
+        and pre_pilot_checks["storage_backend"]["status"] == "blocker"
+        and pre_pilot_checks["privacy_data_boundary"]["status"] == "pass"
+        and "does not grant permission" in pre_pilot_readiness["limitation"],
+        "Pre-pilot readiness should aggregate blocked real-data controls",
+    )
 
     mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
     assert_true(mfa_readiness["status"] == "ready", "Seeded staff MFA readiness should be ready")
@@ -649,6 +667,10 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "delivery_readiness_status": delivery_readiness["status"],
         "delivery_provider": delivery_readiness["configured_provider"],
         "delivery_adapter_status": delivery_adapter_readiness["status"],
+        "pre_pilot_readiness": pre_pilot_readiness["status"],
+        "pre_pilot_production_data_allowed": pre_pilot_readiness[
+            "production_data_allowed"
+        ],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
         "delivery_webhook_events": len(webhook_events),
         "delivery_worker_dead_lettered": delivery_worker_run["dead_lettered_count"],

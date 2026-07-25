@@ -70,6 +70,7 @@ from .schemas import (
     OrganizationPublic,
     PilotReadinessResponse,
     PolicyAnalyticsResponse,
+    PrePilotReadinessResponse,
     PortfolioSimulationRequest,
     PortfolioSimulationResponse,
     PortfolioSimulationSummary,
@@ -2104,6 +2105,333 @@ def _identity_readiness_response(repository: MicroScoreRepository) -> dict[str, 
     }
 
 
+def _pre_pilot_check_status(status_value: str) -> str:
+    if status_value in {"blocked", "blocker", "missing", "invalid"}:
+        return "blocker"
+    if status_value in {"review", "warning", "planned"}:
+        return "warning"
+    return "pass"
+
+
+def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str, Any]:
+    security_readiness = _security_readiness_response(repository)
+    identity_readiness = _identity_readiness_response(repository)
+    delivery_readiness = _staff_invite_delivery_readiness_response(repository)
+    adapter_readiness = _staff_invite_delivery_adapter_readiness_response()
+    storage_readiness = repository.storage_readiness()
+    active_model = repository.get_active_model_version()
+    model_versions = repository.list_model_versions()
+    applications = repository.list_applications()
+    scored_applications = [
+        application for application in applications if application.get("score_result")
+    ]
+    decided_applications = [
+        application for application in applications if application.get("decision_result")
+    ]
+    simulations = repository.list_portfolio_simulations()
+    latest_simulation = simulations[0] if simulations else None
+    latest_simulation_summary = (
+        _simulation_summary(latest_simulation) if latest_simulation else None
+    )
+    latest_simulation_scenarios = (
+        set(latest_simulation_summary.get("scenarios", []))
+        if latest_simulation_summary
+        else set()
+    )
+    has_core_simulation_scenarios = {"baseline", "adverse", "severe"}.issubset(
+        latest_simulation_scenarios
+    )
+    organizations = repository.list_organizations()
+
+    checks: list[dict[str, Any]] = [
+        {
+            "key": "security_readiness",
+            "label": "Security readiness gate",
+            "category": "security",
+            "status": _pre_pilot_check_status(security_readiness["status"]),
+            "summary": (
+                f"Security readiness is {security_readiness['status']} with "
+                f"{security_readiness['blockers_count']} blocker(s) and "
+                f"{security_readiness['warnings_count']} warning(s)."
+            ),
+            "action": (
+                security_readiness["recommended_actions"][0]
+                if security_readiness["recommended_actions"]
+                else "Keep security readiness checks in the release gate."
+            ),
+            "evidence": {
+                "status": security_readiness["status"],
+                "blockers_count": security_readiness["blockers_count"],
+                "warnings_count": security_readiness["warnings_count"],
+                "check_keys": [check["key"] for check in security_readiness["checks"]],
+            },
+        },
+        {
+            "key": "identity_provider",
+            "label": "Production identity and access",
+            "category": "identity",
+            "status": _pre_pilot_check_status(identity_readiness["status"]),
+            "summary": (
+                f"Identity readiness is {identity_readiness['status']}; "
+                f"{len(identity_readiness['production_blockers'])} production "
+                "blocker(s) remain."
+            ),
+            "action": (
+                identity_readiness["next_required_controls"][0]["action"]
+                if identity_readiness["next_required_controls"]
+                else "Keep identity evidence current before pilot access."
+            ),
+            "evidence": {
+                "auth_provider_mode": identity_readiness["auth_provider_mode"],
+                "mfa_mode": identity_readiness["mfa_mode"],
+                "session_control_mode": identity_readiness["session_control_mode"],
+                "rate_limit_mode": identity_readiness["rate_limit_mode"],
+                "production_blocker_keys": [
+                    item["key"] for item in identity_readiness["production_blockers"]
+                ],
+            },
+        },
+        {
+            "key": "transactional_delivery_adapter",
+            "label": "Transactional invite delivery",
+            "category": "delivery",
+            "status": _pre_pilot_check_status(adapter_readiness["status"]),
+            "summary": (
+                f"Delivery adapter is {adapter_readiness['status']}; "
+                f"external_send_enabled={adapter_readiness['external_send_enabled']} "
+                f"and send_adapter_ready={adapter_readiness['send_adapter_ready']}."
+            ),
+            "action": (
+                adapter_readiness["next_required_controls"][0]["action"]
+                if adapter_readiness["next_required_controls"]
+                else "Keep the adapter boundary blocked until a production sender exists."
+            ),
+            "evidence": {
+                "provider": adapter_readiness["provider"],
+                "adapter_mode": adapter_readiness["adapter_mode"],
+                "configuration_status": adapter_readiness["configuration_status"],
+                "secret_rotation_ready": adapter_readiness["secret_rotation_ready"],
+                "blocker_keys": [item["key"] for item in adapter_readiness["blockers"]],
+                "safe_payload_fields": adapter_readiness["safe_payload_fields"],
+                "forbidden_payload_fields": adapter_readiness["forbidden_payload_fields"],
+            },
+        },
+        {
+            "key": "invite_delivery_evidence",
+            "label": "Audited invite delivery evidence",
+            "category": "delivery",
+            "status": _pre_pilot_check_status(delivery_readiness["status"]),
+            "summary": (
+                f"Invite delivery readiness is {delivery_readiness['status']} using "
+                f"{delivery_readiness['configured_provider']!r}; "
+                f"{delivery_readiness['undelivered_active_invite_count']} active "
+                "pending invite(s) lack delivery evidence."
+            ),
+            "action": (
+                delivery_readiness["next_required_controls"][0]["action"]
+                if delivery_readiness["next_required_controls"]
+                else "Continue recording audited invite delivery attempts."
+            ),
+            "evidence": {
+                "configured_provider": delivery_readiness["configured_provider"],
+                "invite_url_https": delivery_readiness["invite_url_https"],
+                "invite_url_local": delivery_readiness["invite_url_local"],
+                "active_pending_invite_count": delivery_readiness[
+                    "active_pending_invite_count"
+                ],
+                "undelivered_active_invite_count": delivery_readiness[
+                    "undelivered_active_invite_count"
+                ],
+                "failed_latest_attempt_count": delivery_readiness[
+                    "failed_latest_attempt_count"
+                ],
+            },
+        },
+        {
+            "key": "storage_backend",
+            "label": "Production storage backend",
+            "category": "storage",
+            "status": "pass" if storage_readiness["production_ready"] else "blocker",
+            "summary": (
+                f"Storage backend is {storage_readiness['backend']!r}; "
+                f"production_ready={storage_readiness['production_ready']}."
+            ),
+            "action": (
+                "Keep managed storage checks in release validation."
+                if storage_readiness["production_ready"]
+                else "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests."
+            ),
+            "evidence": {
+                "backend": storage_readiness["backend"],
+                "production_ready": storage_readiness["production_ready"],
+                "postgresql_migration_status": storage_readiness[
+                    "postgresql_migration_status"
+                ],
+                "tenant_scoped_tables": storage_readiness["tenant_scoped_tables"],
+            },
+        },
+        {
+            "key": "model_registry",
+            "label": "Model registry and validation boundary",
+            "category": "model",
+            "status": (
+                "blocker"
+                if active_model is None
+                else "warning"
+                if any(
+                    "synthetic" in limitation.lower()
+                    or "not validated" in limitation.lower()
+                    for limitation in active_model.get("limitations") or []
+                )
+                else "pass"
+            ),
+            "summary": (
+                "No active model version is registered."
+                if active_model is None
+                else (
+                    f"Active model {active_model['version']!r} is registered with "
+                    f"{len(active_model.get('limitations') or [])} limitation(s)."
+                )
+            ),
+            "action": (
+                "Register and activate a reviewed model version before scoring."
+                if active_model is None
+                else "Replace synthetic-only validation with permitted MFI/KZT calibration evidence before real pilot decisions."
+            ),
+            "evidence": {
+                "active_model_version": active_model["version"] if active_model else None,
+                "registered_model_count": len(model_versions),
+                "feature_schema_version": (
+                    active_model.get("feature_schema_version") if active_model else None
+                ),
+                "training_data_label": (
+                    active_model.get("training_data_label") if active_model else None
+                ),
+            },
+        },
+        {
+            "key": "monte_carlo_evidence",
+            "label": "Monte Carlo portfolio stress evidence",
+            "category": "simulation",
+            "status": "pass" if has_core_simulation_scenarios else "warning",
+            "summary": (
+                "Latest saved Monte Carlo run includes baseline/adverse/severe scenarios."
+                if has_core_simulation_scenarios
+                else (
+                    "No saved Monte Carlo run with baseline/adverse/severe scenarios "
+                    "is available for the current release evidence."
+                )
+            ),
+            "action": (
+                "Keep seeded simulations reproducible and clearly labeled as scenario planning."
+                if has_core_simulation_scenarios
+                else "Run and save a seeded baseline/adverse/severe simulation before a reviewer demo."
+            ),
+            "evidence": {
+                "simulation_count": len(simulations),
+                "latest_simulation_id": (
+                    latest_simulation_summary.get("simulation_id")
+                    if latest_simulation_summary
+                    else None
+                ),
+                "latest_scenarios": sorted(latest_simulation_scenarios),
+                "latest_warning_count": (
+                    latest_simulation_summary.get("warning_count")
+                    if latest_simulation_summary
+                    else None
+                ),
+            },
+        },
+        {
+            "key": "review_flow_evidence",
+            "label": "Borrower-to-analyst review flow",
+            "category": "demo",
+            "status": "pass" if scored_applications else "warning",
+            "summary": (
+                f"{len(applications)} application(s), {len(scored_applications)} "
+                f"scored application(s), and {len(decided_applications)} recorded "
+                "analyst decision(s) are present."
+            ),
+            "action": (
+                "Keep borrower-safe status and MFI review packet smokes in the release gate."
+                if scored_applications
+                else "Submit and score a synthetic application before a reviewer demo."
+            ),
+            "evidence": {
+                "application_count": len(applications),
+                "scored_application_count": len(scored_applications),
+                "decided_application_count": len(decided_applications),
+            },
+        },
+        {
+            "key": "privacy_data_boundary",
+            "label": "Minimum-data and sensitive-field boundary",
+            "category": "privacy",
+            "status": "pass",
+            "summary": (
+                "Pilot data classes and forbidden data remain explicit; application intake "
+                "requires consent and rejects secret-bearing/sensitive fields."
+            ),
+            "action": "Keep legal/privacy review ahead of any real borrower data collection.",
+            "evidence": {
+                "data_class_count": len(PILOT_DATA_CLASSES),
+                "forbidden_data_count": len(FORBIDDEN_PILOT_DATA),
+                "consent_required": True,
+                "sensitive_field_rejection": True,
+            },
+        },
+        {
+            "key": "tenant_isolation",
+            "label": "Organization-scoped MFI access",
+            "category": "tenant",
+            "status": "pass",
+            "summary": (
+                f"{len(organizations)} organization record(s); queues, review packets, "
+                "analytics, simulations, and staff invites remain organization-scoped."
+            ),
+            "action": "Keep organization_id guards on every new MFI/admin surface.",
+            "evidence": {
+                "organization_count": len(organizations),
+                "tenant_scoped_tables": storage_readiness["tenant_scoped_tables"],
+            },
+        },
+    ]
+
+    blockers = [check for check in checks if check["status"] == "blocker"]
+    warnings = [check for check in checks if check["status"] == "warning"]
+    passes = [check for check in checks if check["status"] == "pass"]
+    readiness_score = max(0, min(100, 100 - len(blockers) * 15 - len(warnings) * 7))
+    status_value = "blocked" if blockers else "review" if warnings else "ready"
+    next_required_controls = [
+        {
+            "key": check["key"],
+            "severity": "blocker" if check["status"] == "blocker" else "warning",
+            "summary": check["summary"],
+            "action": check["action"],
+        }
+        for check in blockers + warnings
+    ]
+    public_demo_allowed = bool(active_model and scored_applications)
+
+    return {
+        "status": status_value,
+        "generated_at": _utc_now_iso(),
+        "region": "Pavlodar region, Kazakhstan",
+        "release_target": PRE_PILOT_RELEASE_TARGET,
+        "blockers_count": len(blockers),
+        "warnings_count": len(warnings),
+        "passes_count": len(passes),
+        "readiness_score": readiness_score,
+        "production_data_allowed": not blockers and not warnings,
+        "public_demo_allowed": public_demo_allowed,
+        "checks": checks,
+        "next_required_controls": next_required_controls,
+        "signed_off_capabilities": [check["label"] for check in passes],
+        "blocked_capabilities": [check["label"] for check in blockers],
+        "limitation": PRE_PILOT_READINESS_LIMITATION,
+    }
+
+
 def _get_staff_invite_by_secret(
     repository: MicroScoreRepository,
     raw_token: str,
@@ -2668,6 +2996,16 @@ PILOT_SUCCESS_CRITERIA = [
     "segment/fairness reporting by gender, employment type, and district",
     "analyst feedback on whether explanations are understandable",
 ]
+
+PRE_PILOT_RELEASE_TARGET = (
+    "public portfolio demo and controlled MFI validation planning, not real borrower onboarding"
+)
+PRE_PILOT_READINESS_LIMITATION = (
+    "Pre-Pilot Readiness Gate v1 aggregates live prototype evidence for release planning. "
+    "It does not grant permission to collect real borrower data; production IdP/TOTP/WebAuthn, "
+    "managed PostgreSQL, real KZT calibration, legal/privacy sign-off, and transactional "
+    "invite delivery must be completed before a real pilot."
+)
 
 
 def _portfolio_export_csv(applications: list[dict[str, Any]]) -> str:
@@ -3353,6 +3691,17 @@ def audit_events(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> list[dict[str, Any]]:
     return repository.list_audit_events()
+
+
+@app.get(
+    "/admin/governance/pre-pilot-readiness",
+    response_model=PrePilotReadinessResponse,
+)
+def admin_pre_pilot_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _pre_pilot_readiness_response(repository)
 
 
 @app.get("/admin/users", response_model=list[UserPublic])
