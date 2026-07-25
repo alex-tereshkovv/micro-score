@@ -37,7 +37,7 @@ class WebStaticTests(unittest.TestCase):
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
 
-        self.assertIn('href="./styles.css?v=20260725-delivery-worker-v1"', html)
+        self.assertIn('href="./styles.css?v=20260725-delivery-adapter-v1"', html)
         self.assertIn('href="./assets/favicon.svg"', html)
         self.assertIn('href="./assets/favicon-32.png"', html)
         self.assertIn('href="./assets/apple-touch-icon.png"', html)
@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260717-pilot-readiness-v1"', html)
-        self.assertIn('src="./mock-api.js?v=20260725-delivery-worker-v1"', html)
+        self.assertIn('src="./mock-api.js?v=20260725-delivery-adapter-v1"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260725-delivery-worker-v1"', html)
+        self.assertIn('src="./app.js?v=20260725-delivery-adapter-v1"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -96,6 +96,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="mfaReadiness"', html)
         self.assertIn('id="staffUsers"', html)
         self.assertIn('id="staffInviteDeliveryReadiness"', html)
+        self.assertIn('id="staffInviteDeliveryAdapterReadiness"', html)
         self.assertIn('id="staffInviteDeliveryOutbox"', html)
         self.assertIn('id="refreshUsers"', html)
         self.assertIn('id="organizationForm"', html)
@@ -162,6 +163,7 @@ class WebStaticTests(unittest.TestCase):
             "/admin/staff-invites",
             "/admin/staff-invites/health",
             "/admin/staff-invites/delivery-readiness",
+            "/admin/staff-invites/delivery-adapter-readiness",
             "/admin/staff-invites/delivery-outbox",
             "/delivery",
             "/rotate",
@@ -351,6 +353,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('"/admin/staff-sessions"', mock_script)
         self.assertIn('"/admin/staff-invites/health"', mock_script)
         self.assertIn('"/admin/staff-invites/delivery-readiness"', mock_script)
+        self.assertIn('"/admin/staff-invites/delivery-adapter-readiness"', mock_script)
         self.assertIn('"/admin/staff-invites/delivery-outbox"', mock_script)
         self.assertIn('"/admin/staff-invites/delivery-outbox/run"', mock_script)
         self.assertIn('"/webhooks/staff-invite-delivery"', mock_script)
@@ -368,6 +371,12 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("staff_invite_revoked", mock_script)
         self.assertIn("staffInviteHealth", mock_script)
         self.assertIn("inviteDeliveryReadiness", mock_script)
+        self.assertIn("inviteDeliveryAdapterReadiness", mock_script)
+        self.assertIn("INVITE_DELIVERY_ADAPTER_LIMITATION", mock_script)
+        self.assertIn("external_send_adapter_disabled", mock_script)
+        self.assertIn("invite_secret_material_not_available", mock_script)
+        self.assertIn("adapter_idempotency_key", mock_script)
+        self.assertIn("raw_invite_token", mock_script)
         self.assertIn("inviteDeliveryOutbox", mock_script)
         self.assertIn("runInviteDeliveryOutbox", mock_script)
         self.assertIn("staffInviteDeliveryOutboxItem", mock_script)
@@ -409,6 +418,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("renderIdentityReadiness", script)
         self.assertIn("renderIdentityEvidenceRow", script)
         self.assertIn("renderStaffInviteDeliveryReadiness", script)
+        self.assertIn("renderStaffInviteDeliveryAdapterReadiness", script)
+        self.assertIn("staffInviteDeliveryAdapterReadiness", script)
+        self.assertIn("Delivery adapter", script)
         self.assertIn("renderStaffInviteDeliveryOutbox", script)
         self.assertIn("staffInviteDeliveryOutbox", script)
         self.assertIn("Delivery outbox", script)
@@ -448,6 +460,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("one-time URL", script)
         self.assertIn("Staff Invite v3", markup)
         self.assertIn('id="staffInviteDeliveryReadiness"', markup)
+        self.assertIn('id="staffInviteDeliveryAdapterReadiness"', markup)
         self.assertIn('id="staffInviteDeliveryOutbox"', markup)
         self.assertIn('id="staffInviteHealth"', markup)
         self.assertIn('id="staffSessions"', markup)
@@ -486,6 +499,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn(".risk-readiness", styles)
         self.assertIn(".identity-readiness", styles)
         self.assertIn(".invite-delivery-readiness", styles)
+        self.assertIn(".invite-delivery-adapter-readiness", styles)
         self.assertIn(".invite-delivery-outbox", styles)
         self.assertIn(".evidence-hero", styles)
         self.assertIn(".evidence-summary-grid", styles)

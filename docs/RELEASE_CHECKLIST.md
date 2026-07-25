@@ -122,6 +122,12 @@ git diff --check
   readiness (`MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY`, sender, template, and
   webhook secret), active undelivered invite blockers, and a clear limitation
   that the prototype adapter records attempts without sending external email.
+- Transactional Delivery Adapter Boundary v1 exposes
+  `/admin/staff-invites/delivery-adapter-readiness`, blocks external sends by
+  design, reports `external_send_adapter_disabled`,
+  `invite_secret_material_not_available`, secret-rotation readiness, safe vs
+  forbidden payload fields, webhook correlation fields, and the
+  `adapter_idempotency_key` strategy without exposing secret values.
 - Invite Delivery Webhook v1 exposes signed
   `/webhooks/staff-invite-delivery`, HMAC/timestamp replay protection,
   provider-event idempotency, admin-visible `/delivery-events`, delivery/bounce
@@ -132,8 +138,9 @@ git diff --check
   `/admin/staff-invites/delivery-outbox/run`, persists worker status on
   attempts (`queued`, `retry_scheduled`, `completed`, `dead_letter`),
   supports dry-run/retry/dead-letter handling, emits
-  `staff_invite_delivery_worker_run`, and clearly states that the prototype
-  worker does not send messages through an external provider.
+  `staff_invite_delivery_worker_run` with safe `adapter_idempotency_keys`, and
+  clearly states that the prototype worker does not send messages through an
+  external provider.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

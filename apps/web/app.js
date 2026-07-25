@@ -104,6 +104,7 @@ const els = {
   staffUsers: document.querySelector("#staffUsers"),
   staffSessions: document.querySelector("#staffSessions"),
   staffInviteDeliveryReadiness: document.querySelector("#staffInviteDeliveryReadiness"),
+  staffInviteDeliveryAdapterReadiness: document.querySelector("#staffInviteDeliveryAdapterReadiness"),
   staffInviteDeliveryOutbox: document.querySelector("#staffInviteDeliveryOutbox"),
   staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
@@ -986,6 +987,8 @@ function resetPrivilegedViews() {
   els.staffInviteHealth.textContent = "Invite health not loaded.";
   els.staffInviteDeliveryReadiness.className = "metric-grid invite-delivery-readiness empty";
   els.staffInviteDeliveryReadiness.textContent = "Invite delivery readiness not loaded.";
+  els.staffInviteDeliveryAdapterReadiness.className = "metric-grid invite-delivery-adapter-readiness empty";
+  els.staffInviteDeliveryAdapterReadiness.textContent = "Invite delivery adapter readiness not loaded.";
   els.staffInviteDeliveryOutbox.className = "metric-grid invite-delivery-outbox empty";
   els.staffInviteDeliveryOutbox.textContent = "Invite delivery outbox not loaded.";
   els.modelStatusPill.className = "pill muted";
@@ -3047,6 +3050,46 @@ function renderStaffInviteDeliveryReadiness(readiness) {
   `;
 }
 
+function renderStaffInviteDeliveryAdapterReadiness(adapter) {
+  if (!els.staffInviteDeliveryAdapterReadiness) return;
+  const statusClass = adapter.status === "blocked" ? "risk-high" : "risk-low";
+  const blockerCount = (adapter.blockers || []).length;
+  const warningCount = (adapter.warnings || []).length;
+  const forbiddenFields = adapter.forbidden_payload_fields || [];
+  els.staffInviteDeliveryAdapterReadiness.className = "metric-grid invite-delivery-adapter-readiness";
+  els.staffInviteDeliveryAdapterReadiness.innerHTML = `
+    <div class="metric">
+      <span>Delivery adapter</span>
+      <strong class="${statusClass}">${escapeHtml(formatPolicyName(adapter.status || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>Provider</span>
+      <strong>${escapeHtml(formatPolicyName(adapter.provider || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>External send</span>
+      <strong>${adapter.external_send_enabled ? "Requested" : "Disabled"}</strong>
+    </div>
+    <div class="metric">
+      <span>Config</span>
+      <strong>${escapeHtml(formatPolicyName(adapter.configuration_status || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>Secret rotation</span>
+      <strong>${adapter.secret_rotation_ready ? "Ready" : "Missing"}</strong>
+    </div>
+    <div class="metric">
+      <span>Blockers</span>
+      <strong>${Number(blockerCount)}</strong>
+    </div>
+    <p class="tiny-text full-width">
+      Idempotency: ${escapeHtml(adapter.idempotency_key_strategy || "not reported")}.
+      Forbidden payload fields: ${forbiddenFields.length ? escapeHtml(forbiddenFields.join(", ")) : "none reported"}.
+      Warnings: ${Number(warningCount)}. ${escapeHtml(adapter.limitation || "")}
+    </p>
+  `;
+}
+
 function renderStaffInviteDeliveryOutbox(outbox) {
   if (!els.staffInviteDeliveryOutbox) return;
   const statusClass = outbox.status === "attention" ? "risk-high" : "risk-low";
@@ -3201,14 +3244,16 @@ function renderStaffInvites(rows) {
 }
 
 async function refreshStaffInvites() {
-  const [health, deliveryReadiness, deliveryOutbox, rows] = await Promise.all([
+  const [health, deliveryReadiness, deliveryAdapterReadiness, deliveryOutbox, rows] = await Promise.all([
     apiFetch("/admin/staff-invites/health"),
     apiFetch("/admin/staff-invites/delivery-readiness"),
+    apiFetch("/admin/staff-invites/delivery-adapter-readiness"),
     apiFetch("/admin/staff-invites/delivery-outbox"),
     apiFetch("/admin/staff-invites"),
   ]);
   renderStaffInviteHealth(health);
   renderStaffInviteDeliveryReadiness(deliveryReadiness);
+  renderStaffInviteDeliveryAdapterReadiness(deliveryAdapterReadiness);
   renderStaffInviteDeliveryOutbox(deliveryOutbox);
   renderStaffInvites(rows);
 }

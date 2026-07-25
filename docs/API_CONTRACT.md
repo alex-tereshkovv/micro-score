@@ -405,6 +405,41 @@ delivery evidence, and transactional email secrets/configuration are present.
 The prototype transactional adapter records safe audited attempts without
 sending external email.
 
+Summarize the transactional delivery adapter boundary:
+
+```http
+GET /admin/staff-invites/delivery-adapter-readiness
+```
+
+The adapter-readiness endpoint requires an `admin` bearer token and returns the
+pre-flight contract for a future transactional email sender. It reports
+`provider`, `adapter_mode`, `send_adapter_ready`, `external_send_enabled`,
+`configuration_status`, `configuration_ready`, `secret_rotation_ready`,
+`idempotency_key_strategy`, `safe_payload_fields`,
+`forbidden_payload_fields`, `webhook_correlation_fields`, required/optional
+environment variable names, configured/missing environment variable names,
+`blockers`, `warnings`, `next_required_controls`, and `limitation`.
+
+The endpoint is intentionally `blocked` in the prototype. Even when
+transactional email configuration is present, external sending remains blocked
+by `external_send_adapter_disabled` because MicroScore has not implemented a
+signed provider adapter with timeout, retry, idempotency, secret isolation, and
+delivery webhook reconciliation. It also reports
+`invite_secret_material_not_available`: queued worker attempts persist only
+invite token ids/previews, not raw invite tokens or full invite URLs. A
+production sender must use a dedicated one-time link issuance service or send
+while the raw invite token is still in process; raw invite secrets must not be
+persisted.
+
+The adapter contract uses `adapter_idempotency_key` with strategy
+`sha256(provider:attempt_id:invite_token_id)`. Safe outbound payload fields are
+limited to provider/attempt metadata, recipient/channel, environment variable
+names for sender/template, invite token preview, and organization id. Forbidden
+payload fields include `raw_invite_token`, `full_invite_url`, `api_key`,
+`webhook_secret`, `authorization`, and `password`. Webhook correlation should
+use `provider`, `provider_event_id`, `attempt_id`, and
+`adapter_idempotency_key`.
+
 Summarize the invite delivery worker outbox:
 
 ```http
@@ -415,8 +450,9 @@ The outbox endpoint requires an `admin` bearer token and returns local worker
 telemetry for queued delivery attempts: `queued_count`, `due_count`,
 `retry_scheduled_count`, `dead_letter_count`, `completed_count`, safe `items`,
 `recommended_action`, and `limitation`. Item rows include `attempt_id`,
-`invite_token_id`, `token_preview`, `email`, `provider`, `attempt_status`,
-`worker_status`, `worker_attempt_count`, `next_worker_run_at`,
+`invite_token_id`, `token_preview`, `email`, `provider`,
+`adapter_idempotency_key`, `attempt_status`, `worker_status`,
+`worker_attempt_count`, `next_worker_run_at`,
 `dead_letter_at`, `last_worker_error`, `due`, `invite_active_pending`, and
 `last_delivery_event_type`. They never include raw invite tokens, full invite
 URLs, provider secrets, or webhook secrets.
@@ -443,7 +479,8 @@ returns due work without mutating state. A normal run increments
 `worker_attempt_count`, returns `scheduled_retry` while attempts remain below
 `max_attempts`, and returns `dead_lettered` with `worker_status:
 dead_letter` when retries are exhausted. Each non-dry run records
-`staff_invite_delivery_worker_run` with safe token previews only.
+`staff_invite_delivery_worker_run` with safe token previews and
+`adapter_idempotency_keys` only.
 
 Create an expiring MFI analyst invite:
 

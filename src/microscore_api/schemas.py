@@ -417,6 +417,7 @@ class StaffInviteDeliveryOutboxItemResponse(BaseModel):
     token_preview: str
     email: str
     provider: str
+    adapter_idempotency_key: str
     attempt_status: InviteDeliveryAttemptStatus
     worker_status: InviteDeliveryWorkerStatus
     worker_attempt_count: int = Field(ge=0)
@@ -445,6 +446,7 @@ class StaffInviteDeliveryOutboxRunItemResponse(BaseModel):
     attempt_id: str
     invite_token_id: str
     provider: str
+    adapter_idempotency_key: str
     action: Literal["scheduled_retry", "dead_lettered", "completed", "skipped", "dry_run"]
     previous_worker_status: InviteDeliveryWorkerStatus
     worker_status: InviteDeliveryWorkerStatus
@@ -485,6 +487,30 @@ class StaffInviteDeliveryProviderProfile(BaseModel):
     summary: str
     action: str
     error: str | None = None
+
+
+class StaffInviteDeliveryAdapterReadinessResponse(BaseModel):
+    status: Literal["ready", "blocked"]
+    generated_at: str
+    provider: str
+    adapter_mode: str
+    send_adapter_ready: bool = False
+    external_send_enabled: bool = False
+    configuration_status: InviteDeliveryConfigurationStatus
+    configuration_ready: bool = False
+    secret_rotation_ready: bool = False
+    idempotency_key_strategy: str
+    safe_payload_fields: list[str] = Field(default_factory=list)
+    forbidden_payload_fields: list[str] = Field(default_factory=list)
+    webhook_correlation_fields: list[str] = Field(default_factory=list)
+    required_environment: list[str] = Field(default_factory=list)
+    optional_environment: list[str] = Field(default_factory=list)
+    configured_environment: list[str] = Field(default_factory=list)
+    missing_environment: list[str] = Field(default_factory=list)
+    blockers: list[IdentityReadinessControl] = Field(default_factory=list)
+    warnings: list[IdentityReadinessControl] = Field(default_factory=list)
+    next_required_controls: list[IdentityReadinessControl] = Field(default_factory=list)
+    limitation: str
 
 
 class StaffInviteDeliveryReadinessResponse(BaseModel):

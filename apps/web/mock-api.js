@@ -35,8 +35,36 @@
   ];
   const TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = [
     "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_SEND_ENABLED",
   ];
   const INVITE_DELIVERY_WORKER_LIMITATION = "Invite Delivery Worker v1 is an audited local outbox runner. It can classify queued attempts, schedule retries, and dead-letter exhausted items, but it does not send messages through an external provider in this prototype.";
+  const INVITE_DELIVERY_ADAPTER_LIMITATION = "Transactional Delivery Adapter Boundary v1 defines safe configuration, idempotency, payload, and webhook-correlation contracts, but external sending is disabled in this prototype. Queued worker attempts persist only token ids, not raw invite secrets, so a future production sender must use a dedicated one-time link issuance service or send while the raw token is still in process.";
+  const INVITE_DELIVERY_ADAPTER_SAFE_PAYLOAD_FIELDS = [
+    "provider",
+    "attempt_id",
+    "adapter_idempotency_key",
+    "recipient",
+    "channel",
+    "template_id_env_name",
+    "sender_env_name",
+    "invite_token_preview",
+    "organization_id",
+  ];
+  const INVITE_DELIVERY_ADAPTER_FORBIDDEN_PAYLOAD_FIELDS = [
+    "raw_invite_token",
+    "full_invite_url",
+    "api_key",
+    "webhook_secret",
+    "authorization",
+    "password",
+  ];
+  const INVITE_DELIVERY_ADAPTER_WEBHOOK_CORRELATION_FIELDS = [
+    "provider",
+    "provider_event_id",
+    "attempt_id",
+    "adapter_idempotency_key",
+  ];
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -327,6 +355,10 @@
     return `${String(tokenId).slice(0, 12)}...`;
   }
 
+  function staffInviteDeliveryAdapterIdempotencyKey(attempt) {
+    return staffInviteTokenId(`${attempt.provider}:${attempt.attempt_id}:${attempt.invite_token}`);
+  }
+
   function publicStaffInvite(invite, rawToken = null) {
     const attempts = staffInviteDeliveryAttempts(invite.token_id);
     const lastAttempt = attempts[0] || null;
@@ -544,6 +576,7 @@
       configuration_status: "missing",
       configuration_ready: false,
       required_environment: TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT.slice(),
+      optional_environment: TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT.slice(),
       configured_environment: [],
       missing_environment: TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT.slice(),
       configuration_warnings: [],
@@ -917,6 +950,59 @@
     };
   }
 
+  function inviteDeliveryAdapterReadiness() {
+    const configuration = transactionalEmailConfigurationProfile();
+    const blockers = [
+      {
+        key: "external_send_adapter_disabled",
+        severity: "blocker",
+        summary: "Transactional email external sends are disabled in the prototype adapter.",
+        action: "Implement a signed provider adapter with timeout, retry, idempotency, secret isolation, and delivery webhook reconciliation before enabling sends.",
+      },
+      {
+        key: "invite_secret_material_not_available",
+        severity: "blocker",
+        summary: "Queued worker attempts persist invite token ids and previews only, not raw invite tokens or full invite URLs.",
+        action: "Add a production one-time link issuance service or send while the raw invite token is still in process; do not persist raw invite secrets.",
+      },
+      {
+        key: "transactional_email_configuration_missing",
+        severity: "blocker",
+        summary: `Transactional email adapter is missing required environment variable(s): ${configuration.missing_environment.length}.`,
+        action: "Set API key, sender, template id, and webhook secret using secret storage; never return secret values through API responses.",
+      },
+      {
+        key: "secret_rotation_version_missing",
+        severity: "blocker",
+        summary: "Transactional email secret version is not declared for rotation evidence.",
+        action: "Set MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION to a non-secret rotation label before production adapter tests.",
+      },
+    ];
+    return {
+      status: "blocked",
+      generated_at: nowIso(),
+      provider: "transactional_email",
+      adapter_mode: "prototype_boundary_no_external_send",
+      send_adapter_ready: false,
+      external_send_enabled: false,
+      configuration_status: configuration.configuration_status,
+      configuration_ready: configuration.configuration_ready,
+      secret_rotation_ready: false,
+      idempotency_key_strategy: "sha256(provider:attempt_id:invite_token_id)",
+      safe_payload_fields: INVITE_DELIVERY_ADAPTER_SAFE_PAYLOAD_FIELDS.slice(),
+      forbidden_payload_fields: INVITE_DELIVERY_ADAPTER_FORBIDDEN_PAYLOAD_FIELDS.slice(),
+      webhook_correlation_fields: INVITE_DELIVERY_ADAPTER_WEBHOOK_CORRELATION_FIELDS.slice(),
+      required_environment: configuration.required_environment,
+      optional_environment: configuration.optional_environment,
+      configured_environment: configuration.configured_environment,
+      missing_environment: configuration.missing_environment,
+      blockers,
+      warnings: [],
+      next_required_controls: blockers,
+      limitation: INVITE_DELIVERY_ADAPTER_LIMITATION,
+    };
+  }
+
   function staffInviteDeliveryWorkerError(provider) {
     return `Invite delivery worker cannot send through provider '${provider}' in this prototype.`;
   }
@@ -944,6 +1030,7 @@
       token_preview: invite.token_preview || staffInviteTokenPreview(attempt.invite_token),
       email: invite.email || "",
       provider: attempt.provider,
+      adapter_idempotency_key: staffInviteDeliveryAdapterIdempotencyKey(attempt),
       attempt_status: attempt.status,
       worker_status: workerStatus,
       worker_attempt_count: Number(attempt.worker_attempt_count || 0),
@@ -1018,6 +1105,7 @@
         attempt_id: attempt.attempt_id,
         invite_token_id: attempt.invite_token,
         provider: attempt.provider,
+        adapter_idempotency_key: item.adapter_idempotency_key,
         action: dryRun ? "dry_run" : "skipped",
         previous_worker_status: previousWorkerStatus,
         worker_status: previousWorkerStatus,
@@ -1095,6 +1183,7 @@
         backoff_seconds: backoffSeconds,
         dry_run: dryRun,
         attempt_previews: results.map((result) => staffInviteTokenPreview(result.invite_token_id)),
+        adapter_idempotency_keys: results.map((result) => result.adapter_idempotency_key),
       });
     }
     return {
@@ -3195,6 +3284,11 @@
     if (cleanPath === "/admin/staff-invites/delivery-readiness" && method === "GET") {
       requireAdmin(session);
       return clone(inviteDeliveryReadiness());
+    }
+
+    if (cleanPath === "/admin/staff-invites/delivery-adapter-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(inviteDeliveryAdapterReadiness());
     }
 
     if (cleanPath === "/admin/staff-invites/delivery-outbox" && method === "GET") {

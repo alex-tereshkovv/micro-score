@@ -536,6 +536,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteDeliveryAttemptResponse", schemas)
         self.assertIn("StaffInviteDeliveryWebhookCreate", schemas)
         self.assertIn("StaffInviteDeliveryWebhookEventResponse", schemas)
+        self.assertIn("StaffInviteDeliveryAdapterReadinessResponse", schemas)
         self.assertIn("StaffInviteDeliveryOutboxResponse", schemas)
         self.assertIn("StaffInviteDeliveryOutboxRunCreate", schemas)
         self.assertIn("StaffInviteDeliveryOutboxRunResponse", schemas)
@@ -664,6 +665,14 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("dead_letter_count", outbox_properties)
         self.assertIn("items", outbox_properties)
         self.assertIn("limitation", outbox_properties)
+        adapter_properties = schemas["StaffInviteDeliveryAdapterReadinessResponse"][
+            "properties"
+        ]
+        self.assertIn("external_send_enabled", adapter_properties)
+        self.assertIn("idempotency_key_strategy", adapter_properties)
+        self.assertIn("safe_payload_fields", adapter_properties)
+        self.assertIn("forbidden_payload_fields", adapter_properties)
+        self.assertIn("secret_rotation_ready", adapter_properties)
         outbox_run_properties = schemas["StaffInviteDeliveryOutboxRunResponse"]["properties"]
         self.assertIn("processed_count", outbox_run_properties)
         self.assertIn("dead_lettered_count", outbox_run_properties)
@@ -698,6 +707,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/delivery-readiness", paths)
+        self.assertIn("/admin/staff-invites/delivery-adapter-readiness", paths)
         self.assertIn("/admin/staff-invites/delivery-outbox", paths)
         self.assertIn("/admin/staff-invites/delivery-outbox/run", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
@@ -1175,6 +1185,80 @@ class ApiIntegrationTests(unittest.TestCase):
             configured_blocker_keys,
         )
 
+    def test_delivery_adapter_readiness_blocks_external_send_boundary(self) -> None:
+        borrower_token = self._register("adapter-readiness-borrower@example.com", "borrower")
+        forbidden = self.client.get(
+            "/admin/staff-invites/delivery-adapter-readiness",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("adapter-readiness-admin@example.com", "admin")
+        response = self.client.get(
+            "/admin/staff-invites/delivery-adapter-readiness",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["provider"], "transactional_email")
+        self.assertFalse(payload["send_adapter_ready"])
+        self.assertFalse(payload["external_send_enabled"])
+        self.assertFalse(payload["secret_rotation_ready"])
+        self.assertEqual(
+            payload["idempotency_key_strategy"],
+            "sha256(provider:attempt_id:invite_token_id)",
+        )
+        self.assertIn("adapter_idempotency_key", payload["safe_payload_fields"])
+        self.assertIn("raw_invite_token", payload["forbidden_payload_fields"])
+        self.assertIn("full_invite_url", payload["forbidden_payload_fields"])
+        self.assertIn("attempt_id", payload["webhook_correlation_fields"])
+        blocker_keys = {row["key"] for row in payload["blockers"]}
+        self.assertIn("external_send_adapter_disabled", blocker_keys)
+        self.assertIn("invite_secret_material_not_available", blocker_keys)
+        self.assertIn("transactional_email_configuration_missing", blocker_keys)
+        self.assertIn("secret_rotation_version_missing", blocker_keys)
+
+        secret_value = "adapter-secret-should-not-leak"
+        with patch.dict(
+            os.environ,
+            {
+                "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY": secret_value,
+                "MICROSCORE_TRANSACTIONAL_EMAIL_FROM": "security@example.com",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID": "staff-invite-v1",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET": "webhook-secret",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL": "https://email.example.com/api",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION": "2026-07-rotation-a",
+                "MICROSCORE_TRANSACTIONAL_EMAIL_SEND_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            configured = self.client.get(
+                "/admin/staff-invites/delivery-adapter-readiness",
+                headers=self._headers(admin_token),
+            )
+        self.assertEqual(configured.status_code, 200, configured.text)
+        configured_payload = configured.json()
+        self.assertEqual(configured_payload["status"], "blocked")
+        self.assertEqual(configured_payload["configuration_status"], "ready")
+        self.assertTrue(configured_payload["configuration_ready"])
+        self.assertTrue(configured_payload["secret_rotation_ready"])
+        self.assertTrue(configured_payload["external_send_enabled"])
+        self.assertFalse(configured_payload["send_adapter_ready"])
+        self.assertEqual(configured_payload["missing_environment"], [])
+        self.assertIn(
+            "MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION",
+            configured_payload["configured_environment"],
+        )
+        configured_blockers = {row["key"] for row in configured_payload["blockers"]}
+        configured_warnings = {row["key"] for row in configured_payload["warnings"]}
+        self.assertIn("external_send_adapter_disabled", configured_blockers)
+        self.assertIn("invite_secret_material_not_available", configured_blockers)
+        self.assertNotIn("transactional_email_configuration_missing", configured_blockers)
+        self.assertNotIn("secret_rotation_version_missing", configured_blockers)
+        self.assertIn("external_send_flag_ignored", configured_warnings)
+        self.assertNotIn(secret_value, json.dumps(configured_payload))
+
     def test_signed_delivery_webhook_records_provider_events(self) -> None:
         admin_token = self._register("delivery-webhook-admin@example.com", "admin")
         invite = self.client.post(
@@ -1367,6 +1451,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("does not send messages", outbox.json()["limitation"])
         self.assertTrue(outbox.json()["items"][0]["due"])
         self.assertTrue(outbox.json()["items"][0]["invite_active_pending"])
+        adapter_key = outbox.json()["items"][0]["adapter_idempotency_key"]
+        self.assertGreaterEqual(len(adapter_key), 12)
 
         dry_run = self.client.post(
             "/admin/staff-invites/delivery-outbox/run",
@@ -1377,6 +1463,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(dry_run.json()["dry_run"])
         self.assertEqual(dry_run.json()["processed_count"], 1)
         self.assertEqual(dry_run.json()["results"][0]["action"], "dry_run")
+        self.assertEqual(dry_run.json()["results"][0]["adapter_idempotency_key"], adapter_key)
 
         run = self.client.post(
             "/admin/staff-invites/delivery-outbox/run",
@@ -1392,6 +1479,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(run_payload["results"][0]["action"], "dead_lettered")
         self.assertEqual(run_payload["results"][0]["worker_status"], "dead_letter")
         self.assertEqual(run_payload["results"][0]["worker_attempt_count"], 1)
+        self.assertEqual(run_payload["results"][0]["adapter_idempotency_key"], adapter_key)
         self.assertIn("cannot send", run_payload["results"][0]["error"])
 
         attempts = self.client.get(
@@ -1422,6 +1510,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(audit.status_code, 200, audit.text)
         serialized_audit = json.dumps(audit.json())
         self.assertIn("staff_invite_delivery_worker_run", serialized_audit)
+        self.assertIn("adapter_idempotency_keys", serialized_audit)
         self.assertNotIn(invite_payload["token"], serialized_audit)
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:

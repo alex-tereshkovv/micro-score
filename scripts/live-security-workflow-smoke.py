@@ -284,6 +284,22 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         in transactional_profile["missing_environment"],
         "Transactional email profile should list missing API key environment name",
     )
+    delivery_adapter_readiness = client.request(
+        "GET",
+        "/admin/staff-invites/delivery-adapter-readiness",
+        token=admin_token,
+    )
+    adapter_blockers = {row["key"] for row in delivery_adapter_readiness["blockers"]}
+    assert_true(
+        delivery_adapter_readiness["status"] == "blocked"
+        and delivery_adapter_readiness["provider"] == "transactional_email"
+        and not delivery_adapter_readiness["send_adapter_ready"]
+        and "external_send_adapter_disabled" in adapter_blockers
+        and "invite_secret_material_not_available" in adapter_blockers
+        and "adapter_idempotency_key" in delivery_adapter_readiness["safe_payload_fields"]
+        and "raw_invite_token" in delivery_adapter_readiness["forbidden_payload_fields"],
+        "Delivery adapter readiness should block external sends by design",
+    )
 
     mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
     assert_true(mfa_readiness["status"] == "ready", "Seeded staff MFA readiness should be ready")
@@ -442,15 +458,17 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "/admin/staff-invites/delivery-outbox",
         token=admin_token,
     )
+    worker_outbox_item = next(
+        row
+        for row in delivery_outbox["items"]
+        if row["attempt_id"] == worker_invite["delivery_attempt"]["attempt_id"]
+    )
     assert_true(
         delivery_outbox["status"] == "attention"
         and delivery_outbox["queued_count"] >= 1
         and delivery_outbox["due_count"] >= 1
-        and any(
-            row["attempt_id"] == worker_invite["delivery_attempt"]["attempt_id"]
-            and row["due"]
-            for row in delivery_outbox["items"]
-        ),
+        and worker_outbox_item["due"]
+        and worker_outbox_item["adapter_idempotency_key"],
         "Invite delivery outbox should surface due queued worker attempts",
     )
     delivery_worker_run = client.request(
@@ -466,6 +484,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
             row["attempt_id"] == worker_invite["delivery_attempt"]["attempt_id"]
             and row["action"] == "dead_lettered"
             and row["worker_status"] == "dead_letter"
+            and row["adapter_idempotency_key"] == worker_outbox_item["adapter_idempotency_key"]
             for row in delivery_worker_run["results"]
         ),
         "Invite delivery worker should dead-letter exhausted local queue attempts",
@@ -611,6 +630,13 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "staff_mfa_challenge_failed",
     }:
         assert_true(expected_action in actions, f"Missing audit action {expected_action}")
+    worker_audit_events = [
+        event for event in audit if event["action"] == "staff_invite_delivery_worker_run"
+    ]
+    assert_true(
+        any(event["details"].get("adapter_idempotency_keys") for event in worker_audit_events),
+        "Delivery worker audit should include adapter idempotency keys",
+    )
 
     return {
         "invite_token_id": invite["token_id"],
@@ -622,6 +648,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "mfa_failure_warning": failure_check["status"],
         "delivery_readiness_status": delivery_readiness["status"],
         "delivery_provider": delivery_readiness["configured_provider"],
+        "delivery_adapter_status": delivery_adapter_readiness["status"],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
         "delivery_webhook_events": len(webhook_events),
         "delivery_worker_dead_lettered": delivery_worker_run["dead_lettered_count"],

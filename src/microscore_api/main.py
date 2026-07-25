@@ -79,6 +79,7 @@ from .schemas import (
     StaffInviteAccept,
     StaffInviteCreate,
     StaffInviteCreatedResponse,
+    StaffInviteDeliveryAdapterReadinessResponse,
     StaffInviteDeliveryAttemptResponse,
     StaffInviteDeliveryCreate,
     StaffInviteDeliveryOutboxResponse,
@@ -122,6 +123,8 @@ TRANSACTIONAL_EMAIL_REQUIRED_ENVIRONMENT = (
 )
 TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = (
     "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION",
+    "MICROSCORE_TRANSACTIONAL_EMAIL_SEND_ENABLED",
 )
 INVITE_DELIVERY_WEBHOOK_SIGNATURE_HEADER = "x-microscore-delivery-signature"
 INVITE_DELIVERY_WEBHOOK_TIMESTAMP_HEADER = "x-microscore-delivery-timestamp"
@@ -136,6 +139,38 @@ INVITE_DELIVERY_WORKER_LIMITATION = (
     "Invite Delivery Worker v1 is an audited local outbox runner. It can classify queued "
     "attempts, schedule retries, and dead-letter exhausted items, but it does not send "
     "messages through an external provider in this prototype."
+)
+INVITE_DELIVERY_ADAPTER_LIMITATION = (
+    "Transactional Delivery Adapter Boundary v1 defines safe configuration, "
+    "idempotency, payload, and webhook-correlation contracts, but external sending "
+    "is disabled in this prototype. Queued worker attempts persist only token ids, "
+    "not raw invite secrets, so a future production sender must use a dedicated "
+    "one-time link issuance service or send while the raw token is still in process."
+)
+INVITE_DELIVERY_ADAPTER_SAFE_PAYLOAD_FIELDS = (
+    "provider",
+    "attempt_id",
+    "adapter_idempotency_key",
+    "recipient",
+    "channel",
+    "template_id_env_name",
+    "sender_env_name",
+    "invite_token_preview",
+    "organization_id",
+)
+INVITE_DELIVERY_ADAPTER_FORBIDDEN_PAYLOAD_FIELDS = (
+    "raw_invite_token",
+    "full_invite_url",
+    "api_key",
+    "webhook_secret",
+    "authorization",
+    "password",
+)
+INVITE_DELIVERY_ADAPTER_WEBHOOK_CORRELATION_FIELDS = (
+    "provider",
+    "provider_event_id",
+    "attempt_id",
+    "adapter_idempotency_key",
 )
 INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
     "local_outbox": {
@@ -235,6 +270,17 @@ def configured_invite_delivery_provider() -> str:
 
 def configured_transactional_email_webhook_secret() -> str:
     return os.environ.get("MICROSCORE_TRANSACTIONAL_EMAIL_WEBHOOK_SECRET", "").strip()
+
+
+def configured_transactional_email_secret_version() -> str:
+    return os.environ.get("MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION", "").strip()
+
+
+def configured_transactional_email_send_enabled() -> bool:
+    return os.environ.get(
+        "MICROSCORE_TRANSACTIONAL_EMAIL_SEND_ENABLED",
+        "",
+    ).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _configured_environment_names(names: tuple[str, ...]) -> list[str]:
@@ -417,6 +463,121 @@ def _invite_delivery_provider_result(provider: str | None) -> tuple[str, str, st
     return profile["provider"], profile["attempt_status"], profile["error"]
 
 
+def _staff_invite_delivery_adapter_readiness_response() -> dict[str, Any]:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    provider = "transactional_email"
+    profile = _invite_delivery_provider_profile(provider)
+    configuration = _transactional_email_configuration_profile()
+    secret_version = configured_transactional_email_secret_version()
+    external_send_enabled = configured_transactional_email_send_enabled()
+    secret_rotation_ready = bool(secret_version) and configuration["configuration_ready"]
+    blockers: list[dict[str, Any]] = [
+        {
+            "key": "external_send_adapter_disabled",
+            "severity": "blocker",
+            "summary": (
+                "Transactional email external sends are disabled in the prototype adapter."
+            ),
+            "action": (
+                "Implement a signed provider adapter with timeout, retry, idempotency, "
+                "secret isolation, and delivery webhook reconciliation before enabling sends."
+            ),
+        },
+        {
+            "key": "invite_secret_material_not_available",
+            "severity": "blocker",
+            "summary": (
+                "Queued worker attempts persist invite token ids and previews only, "
+                "not raw invite tokens or full invite URLs."
+            ),
+            "action": (
+                "Add a production one-time link issuance service or send while the "
+                "raw invite token is still in process; do not persist raw invite secrets."
+            ),
+        },
+    ]
+    warnings: list[dict[str, Any]] = []
+    if configuration["missing_environment"]:
+        blockers.append(
+            {
+                "key": "transactional_email_configuration_missing",
+                "severity": "blocker",
+                "summary": (
+                    "Transactional email adapter is missing required environment "
+                    f"variable(s): {len(configuration['missing_environment'])}."
+                ),
+                "action": (
+                    "Set API key, sender, template id, and webhook secret using "
+                    "secret storage; never return secret values through API responses."
+                ),
+            }
+        )
+    if configuration["configuration_warnings"]:
+        blockers.append(
+            {
+                "key": "transactional_email_configuration_invalid",
+                "severity": "blocker",
+                "summary": "Transactional email adapter configuration contains invalid values.",
+                "action": "Fix sender/API base URL configuration before adapter testing.",
+            }
+        )
+    if not secret_version:
+        blockers.append(
+            {
+                "key": "secret_rotation_version_missing",
+                "severity": "blocker",
+                "summary": (
+                    "Transactional email secret version is not declared for rotation evidence."
+                ),
+                "action": (
+                    "Set MICROSCORE_TRANSACTIONAL_EMAIL_SECRET_VERSION to a non-secret "
+                    "rotation label before production adapter tests."
+                ),
+            }
+        )
+    if external_send_enabled:
+        warnings.append(
+            {
+                "key": "external_send_flag_ignored",
+                "severity": "warning",
+                "summary": (
+                    "MICROSCORE_TRANSACTIONAL_EMAIL_SEND_ENABLED is set, but this "
+                    "prototype still refuses external delivery sends."
+                ),
+                "action": (
+                    "Keep the flag off until the real adapter implementation and "
+                    "production controls are reviewed."
+                ),
+            }
+        )
+
+    return {
+        "status": "blocked" if blockers else "ready",
+        "generated_at": generated_at,
+        "provider": provider,
+        "adapter_mode": "prototype_boundary_no_external_send",
+        "send_adapter_ready": False if blockers else profile["production_ready"],
+        "external_send_enabled": external_send_enabled,
+        "configuration_status": configuration["configuration_status"],
+        "configuration_ready": configuration["configuration_ready"],
+        "secret_rotation_ready": secret_rotation_ready,
+        "idempotency_key_strategy": "sha256(provider:attempt_id:invite_token_id)",
+        "safe_payload_fields": list(INVITE_DELIVERY_ADAPTER_SAFE_PAYLOAD_FIELDS),
+        "forbidden_payload_fields": list(INVITE_DELIVERY_ADAPTER_FORBIDDEN_PAYLOAD_FIELDS),
+        "webhook_correlation_fields": list(
+            INVITE_DELIVERY_ADAPTER_WEBHOOK_CORRELATION_FIELDS
+        ),
+        "required_environment": configuration["required_environment"],
+        "optional_environment": configuration["optional_environment"],
+        "configured_environment": configuration["configured_environment"],
+        "missing_environment": configuration["missing_environment"],
+        "blockers": blockers,
+        "warnings": warnings,
+        "next_required_controls": blockers + warnings,
+        "limitation": INVITE_DELIVERY_ADAPTER_LIMITATION,
+    }
+
+
 app = FastAPI(
     title="MicroScore API",
     version="0.1.0",
@@ -562,6 +723,15 @@ def _staff_invite_token_id(raw_token: str) -> str:
 
 def _staff_invite_token_preview(token_id: str) -> str:
     return f"{token_id[:12]}..."
+
+
+def _staff_invite_delivery_adapter_idempotency_key(attempt: dict[str, Any]) -> str:
+    material = (
+        f"{attempt.get('provider', '')}:"
+        f"{attempt.get('attempt_id', '')}:"
+        f"{attempt.get('invite_token', '')}"
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _invite_url_base_is_safe(url_base: str | None) -> bool:
@@ -1021,6 +1191,7 @@ def _staff_invite_delivery_outbox_item(
         "token_preview": _staff_invite_token_preview(attempt["invite_token"]),
         "email": attempt["email"],
         "provider": attempt["provider"],
+        "adapter_idempotency_key": _staff_invite_delivery_adapter_idempotency_key(attempt),
         "attempt_status": attempt["status"],
         "worker_status": worker_status,
         "worker_attempt_count": attempt.get("worker_attempt_count", 0),
@@ -1113,6 +1284,7 @@ def _run_staff_invite_delivery_outbox(
             "attempt_id": attempt["attempt_id"],
             "invite_token_id": attempt["invite_token"],
             "provider": attempt["provider"],
+            "adapter_idempotency_key": item["adapter_idempotency_key"],
             "action": "dry_run" if payload.dry_run else "skipped",
             "previous_worker_status": previous_worker_status,
             "worker_status": previous_worker_status,
@@ -1236,6 +1408,9 @@ def _run_staff_invite_delivery_outbox(
                 "attempt_previews": [
                     _staff_invite_token_preview(result["invite_token_id"])
                     for result in results
+                ],
+                "adapter_idempotency_keys": [
+                    result["adapter_idempotency_key"] for result in results
                 ],
             },
         )
@@ -3427,6 +3602,16 @@ def staff_invite_delivery_readiness(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return _staff_invite_delivery_readiness_response(repository)
+
+
+@app.get(
+    "/admin/staff-invites/delivery-adapter-readiness",
+    response_model=StaffInviteDeliveryAdapterReadinessResponse,
+)
+def staff_invite_delivery_adapter_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+) -> dict[str, Any]:
+    return _staff_invite_delivery_adapter_readiness_response()
 
 
 @app.get(

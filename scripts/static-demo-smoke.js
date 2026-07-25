@@ -422,6 +422,20 @@ async function main() {
   ) {
     throw new Error("Expected invite delivery readiness to expose local provider contract blockers");
   }
+  const inviteDeliveryAdapterReadinessInitial = await api.request("/admin/staff-invites/delivery-adapter-readiness", {}, adminSession);
+  if (
+    inviteDeliveryAdapterReadinessInitial.status !== "blocked"
+    || inviteDeliveryAdapterReadinessInitial.provider !== "transactional_email"
+    || inviteDeliveryAdapterReadinessInitial.send_adapter_ready
+    || inviteDeliveryAdapterReadinessInitial.external_send_enabled
+    || !inviteDeliveryAdapterReadinessInitial.blockers?.some((row) => row.key === "external_send_adapter_disabled")
+    || !inviteDeliveryAdapterReadinessInitial.blockers?.some((row) => row.key === "invite_secret_material_not_available")
+    || !inviteDeliveryAdapterReadinessInitial.safe_payload_fields?.includes("adapter_idempotency_key")
+    || !inviteDeliveryAdapterReadinessInitial.forbidden_payload_fields?.includes("raw_invite_token")
+    || !String(inviteDeliveryAdapterReadinessInitial.limitation || "").includes("external sending is disabled")
+  ) {
+    throw new Error("Expected invite delivery adapter readiness to block external sends by design");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -862,11 +876,13 @@ async function main() {
     throw new Error("Expected local_queue invite to enter delivery worker outbox");
   }
   const deliveryOutbox = await api.request("/admin/staff-invites/delivery-outbox", {}, adminSession);
+  const workerOutboxItem = deliveryOutbox.items.find((item) => item.attempt_id === workerDeliveryInvite.delivery_attempt.attempt_id);
   if (
     deliveryOutbox.status !== "attention"
     || deliveryOutbox.queued_count < 1
     || deliveryOutbox.due_count < 1
-    || !deliveryOutbox.items.some((item) => item.attempt_id === workerDeliveryInvite.delivery_attempt.attempt_id && item.due)
+    || !workerOutboxItem?.due
+    || !workerOutboxItem.adapter_idempotency_key
     || !String(deliveryOutbox.limitation || "").includes("does not send messages")
   ) {
     throw new Error("Expected invite delivery outbox to surface due queued worker attempts");
@@ -891,6 +907,7 @@ async function main() {
       && result.action === "dead_lettered"
       && result.worker_status === "dead_letter"
       && result.worker_attempt_count === 1
+      && result.adapter_idempotency_key === workerOutboxItem.adapter_idempotency_key
     ))
   ) {
     throw new Error("Expected invite delivery worker run to dead-letter exhausted local queue attempts");
@@ -1165,6 +1182,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_delivery_worker_run")) {
     throw new Error("Expected staff invite delivery worker run audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_delivery_worker_run" && event.details?.adapter_idempotency_keys?.length)) {
+    throw new Error("Expected delivery worker audit event to include adapter idempotency keys");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_rotated")) {
     throw new Error("Expected staff invite rotation audit event");
@@ -1441,9 +1461,11 @@ async function main() {
       staff_invite_token_hygiene: true,
       staff_invite_delivery: true,
       staff_invite_delivery_readiness: true,
+      staff_invite_delivery_adapter_readiness: true,
       staff_invite_delivery_outbox: true,
       staff_invite_delivery_worker: true,
       staff_invite_delivery_dead_letter: true,
+      staff_invite_delivery_adapter_boundary: true,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
       staff_invite_delivery_webhook: true,
