@@ -53,7 +53,7 @@ borrower data or production onboarding.
 | Security promise | Primary proof | Required security markers |
 | --- | --- | --- |
 | Production identity readiness is explicit, not complete | `tests/test_api_integration.py`, `tests/test_research_docs.py`, `scripts/static-demo-smoke.js`, `docs/RELEASE_CHECKLIST.md` | `not a completed production security review`, `production IdP/TOTP/WebAuthn remains future work`, `/admin/security/readiness`, `security_readiness` |
-| Invite delivery mode is audited and local-only by default | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py`, `docs/RELEASE_CHECKLIST.md` | `/admin/staff-invites/delivery-readiness`, `/webhooks/staff-invite-delivery`, `staff_invite_delivery_webhook_received`, `delivery_provider_not_production_ready`, `delivery_provider_configuration_missing`, `MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY`, `transactional_email_contract`, `local_outbox`, `staff_invite_delivery_retry` |
+| Invite delivery mode is audited and local-only by default | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py`, `docs/RELEASE_CHECKLIST.md` | `/admin/staff-invites/delivery-readiness`, `/admin/staff-invites/delivery-outbox`, `/admin/staff-invites/delivery-outbox/run`, `/webhooks/staff-invite-delivery`, `staff_invite_delivery_webhook_received`, `staff_invite_delivery_worker_run`, `delivery_provider_not_production_ready`, `delivery_provider_configuration_missing`, `MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY`, `transactional_email_contract`, `dead_letter`, `local_outbox`, `staff_invite_delivery_retry` |
 | MFA and staff-session lifecycle are proven end to end | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `staff_mfa_login_verified`, `staff_mfa_challenge_failed`, `/admin/staff-sessions`, `staff_session_revoked`, `staff_user_disabled` |
 | Storage assumptions remain visible before pilot use | `tests/test_api_integration.py`, `tests/test_api_database.py`, `scripts/live-api-workflow-smoke.py`, `docs/RELEASE_CHECKLIST.md` | `storage_readiness`, `MICROSCORE_STORAGE_BACKEND`, `production_ready`, `temporary-sqlite`, `PostgreSQL` |
 | Live security workflow stays inside the release gate | `scripts/check.ps1`, `scripts/live-api-workflow-smoke.py`, `scripts/live-security-workflow-smoke.py`, `tests/test_github_workflows.py`, `docs/RELEASE_CHECKLIST.md` | `Live API workflow smoke test`, `Live security workflow smoke test`, `scripts\live-security-workflow-smoke.py`, `temporary-sqlite`, `session_preview`, `token_preview` |
@@ -102,6 +102,9 @@ The smoke test verifies that the in-browser static backend can:
   and ensure attempt rows/audit events never expose raw invite tokens
 - simulate failed local invite delivery, verify Security Readiness warning,
   retry with a working provider, and confirm raw invite tokens remain hidden
+- run the audited invite delivery worker outbox, verify due queued attempts,
+  dead-letter exhausted local queue attempts, and confirm worker audit events
+  never expose raw invite tokens
 - rotate unused staff invites as the safe resend path, verify the old raw token
   is revoked, and assert `staff_invite_rotated` contains previews rather than
   raw secrets

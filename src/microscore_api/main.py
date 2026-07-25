@@ -81,6 +81,9 @@ from .schemas import (
     StaffInviteCreatedResponse,
     StaffInviteDeliveryAttemptResponse,
     StaffInviteDeliveryCreate,
+    StaffInviteDeliveryOutboxResponse,
+    StaffInviteDeliveryOutboxRunCreate,
+    StaffInviteDeliveryOutboxRunResponse,
     StaffInviteDeliveryReadinessResponse,
     StaffInviteDeliveryRetryCreate,
     StaffInviteDeliveryResponse,
@@ -129,6 +132,11 @@ INVITE_DELIVERY_WEBHOOK_EVENT_STATUS_MAP = {
     "failed": "failed",
     "deferred": "queued",
 }
+INVITE_DELIVERY_WORKER_LIMITATION = (
+    "Invite Delivery Worker v1 is an audited local outbox runner. It can classify queued "
+    "attempts, schedule retries, and dead-letter exhausted items, but it does not send "
+    "messages through an external provider in this prototype."
+)
 INVITE_DELIVERY_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
     "local_outbox": {
         "attempt_status": "sent",
@@ -681,6 +689,11 @@ def _staff_invite_delivery_attempt_response(
         "delivery_url_base": attempt.get("delivery_url_base"),
         "note": attempt.get("note"),
         "error": attempt.get("error"),
+        "worker_status": attempt.get("worker_status", "completed"),
+        "worker_attempt_count": attempt.get("worker_attempt_count", 0),
+        "next_worker_run_at": attempt.get("next_worker_run_at"),
+        "dead_letter_at": attempt.get("dead_letter_at"),
+        "last_worker_error": attempt.get("last_worker_error"),
     }
 
 
@@ -904,6 +917,14 @@ def _record_staff_invite_delivery_webhook_event(
         attempt_id,
         status=mapped_status,
         error=payload.error,
+        worker_status="retry_scheduled" if mapped_status == "queued" else "completed",
+        next_worker_run_at=(
+            datetime.now(timezone.utc) + timedelta(minutes=5)
+        ).isoformat()
+        if mapped_status == "queued"
+        else None,
+        dead_letter_at=None,
+        last_worker_error=payload.error if mapped_status == "queued" else None,
     )
     if updated_attempt is None:
         raise HTTPException(
@@ -973,6 +994,263 @@ def _record_staff_invite_delivery_webhook_event(
         event,
         delivery_recorded=delivery_recorded,
     )
+
+
+def _staff_invite_delivery_outbox_item(
+    attempt: dict[str, Any],
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    active_pending = (
+        not attempt.get("accepted_at")
+        and not attempt.get("revoked_at")
+        and _parse_utc_datetime(attempt["expires_at"]) > now
+    )
+    worker_status = attempt.get("worker_status", "completed")
+    next_worker_run_at = attempt.get("next_worker_run_at")
+    due_at = _parse_utc_datetime(next_worker_run_at) if next_worker_run_at else None
+    due = (
+        attempt["status"] == "queued"
+        and worker_status in {"queued", "retry_scheduled"}
+        and not attempt.get("dead_letter_at")
+        and (due_at is None or due_at <= now)
+    )
+    return {
+        "attempt_id": attempt["attempt_id"],
+        "invite_token_id": attempt["invite_token"],
+        "token_preview": _staff_invite_token_preview(attempt["invite_token"]),
+        "email": attempt["email"],
+        "provider": attempt["provider"],
+        "attempt_status": attempt["status"],
+        "worker_status": worker_status,
+        "worker_attempt_count": attempt.get("worker_attempt_count", 0),
+        "next_worker_run_at": next_worker_run_at,
+        "dead_letter_at": attempt.get("dead_letter_at"),
+        "last_worker_error": attempt.get("last_worker_error"),
+        "due": due,
+        "invite_active_pending": active_pending,
+        "last_delivery_event_type": attempt.get("last_delivery_event_type"),
+    }
+
+
+def _staff_invite_delivery_outbox_response(
+    repository: MicroScoreRepository,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    items = [
+        _staff_invite_delivery_outbox_item(attempt, now=now)
+        for attempt in repository.list_staff_invite_delivery_outbox_attempts()
+    ]
+    queued_count = sum(
+        1
+        for item in items
+        if item["attempt_status"] == "queued"
+        and item["worker_status"] in {"queued", "retry_scheduled"}
+    )
+    due_count = sum(1 for item in items if item["due"])
+    retry_scheduled_count = sum(
+        1 for item in items if item["worker_status"] == "retry_scheduled"
+    )
+    dead_letter_count = sum(1 for item in items if item["worker_status"] == "dead_letter")
+    completed_count = sum(1 for item in items if item["worker_status"] == "completed")
+    if dead_letter_count:
+        recommended_action = (
+            "Review dead-lettered invite delivery attempts, rotate stale links, "
+            "or configure a real transactional provider before onboarding."
+        )
+    elif due_count:
+        recommended_action = (
+            "Run the invite delivery outbox worker or connect an external delivery provider."
+        )
+    else:
+        recommended_action = "No invite delivery worker action is due."
+    return {
+        "status": "attention" if due_count or dead_letter_count else "ok",
+        "generated_at": now.isoformat(),
+        "queued_count": queued_count,
+        "due_count": due_count,
+        "retry_scheduled_count": retry_scheduled_count,
+        "dead_letter_count": dead_letter_count,
+        "completed_count": completed_count,
+        "items": items,
+        "recommended_action": recommended_action,
+        "limitation": INVITE_DELIVERY_WORKER_LIMITATION,
+    }
+
+
+def _staff_invite_delivery_worker_error(provider: str) -> str:
+    return (
+        "Invite delivery worker cannot send through provider "
+        f"'{provider}' in this prototype."
+    )
+
+
+def _run_staff_invite_delivery_outbox(
+    repository: MicroScoreRepository,
+    *,
+    payload: StaffInviteDeliveryOutboxRunCreate,
+    actor_email: str,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    generated_at = now.isoformat()
+    attempts = repository.list_staff_invite_delivery_outbox_attempts()
+    due_attempts = [
+        attempt
+        for attempt in attempts
+        if _staff_invite_delivery_outbox_item(attempt, now=now)["due"]
+    ][: payload.limit]
+    results: list[dict[str, Any]] = []
+    retry_scheduled_count = 0
+    dead_lettered_count = 0
+    completed_count = 0
+    skipped_count = 0
+
+    for attempt in due_attempts:
+        item = _staff_invite_delivery_outbox_item(attempt, now=now)
+        previous_worker_status = item["worker_status"]
+        worker_attempt_count = int(item["worker_attempt_count"])
+        result: dict[str, Any] = {
+            "attempt_id": attempt["attempt_id"],
+            "invite_token_id": attempt["invite_token"],
+            "provider": attempt["provider"],
+            "action": "dry_run" if payload.dry_run else "skipped",
+            "previous_worker_status": previous_worker_status,
+            "worker_status": previous_worker_status,
+            "worker_attempt_count": worker_attempt_count,
+            "next_worker_run_at": item["next_worker_run_at"],
+            "dead_letter_at": item["dead_letter_at"],
+            "error": item["last_worker_error"],
+        }
+        if payload.dry_run:
+            skipped_count += 1
+            results.append(result)
+            continue
+
+        if not item["invite_active_pending"]:
+            updated = repository.update_staff_invite_delivery_worker_state(
+                attempt["attempt_id"],
+                status=attempt["status"],
+                error=attempt.get("error"),
+                worker_status="completed",
+                worker_attempt_count=worker_attempt_count,
+                next_worker_run_at=None,
+                dead_letter_at=None,
+                last_worker_error=None,
+            )
+            if updated is None:
+                skipped_count += 1
+                results.append(result)
+                continue
+            result.update(
+                {
+                    "action": "completed",
+                    "worker_status": "completed",
+                    "next_worker_run_at": None,
+                    "dead_letter_at": None,
+                    "error": None,
+                }
+            )
+            completed_count += 1
+            results.append(result)
+            continue
+
+        worker_attempt_count += 1
+        worker_error = _staff_invite_delivery_worker_error(attempt["provider"])
+        if worker_attempt_count >= payload.max_attempts:
+            updated = repository.update_staff_invite_delivery_worker_state(
+                attempt["attempt_id"],
+                status="failed",
+                error=worker_error,
+                worker_status="dead_letter",
+                worker_attempt_count=worker_attempt_count,
+                next_worker_run_at=None,
+                dead_letter_at=generated_at,
+                last_worker_error=worker_error,
+            )
+            if updated is None:
+                skipped_count += 1
+                results.append(result)
+                continue
+            result.update(
+                {
+                    "action": "dead_lettered",
+                    "worker_status": "dead_letter",
+                    "worker_attempt_count": worker_attempt_count,
+                    "next_worker_run_at": None,
+                    "dead_letter_at": generated_at,
+                    "error": worker_error,
+                }
+            )
+            dead_lettered_count += 1
+        else:
+            next_worker_run_at = (
+                now
+                + timedelta(
+                    seconds=payload.backoff_seconds
+                    * (2 ** max(0, worker_attempt_count - 1)),
+                )
+            ).isoformat()
+            updated = repository.update_staff_invite_delivery_worker_state(
+                attempt["attempt_id"],
+                status="queued",
+                error=worker_error,
+                worker_status="retry_scheduled",
+                worker_attempt_count=worker_attempt_count,
+                next_worker_run_at=next_worker_run_at,
+                dead_letter_at=None,
+                last_worker_error=worker_error,
+            )
+            if updated is None:
+                skipped_count += 1
+                results.append(result)
+                continue
+            result.update(
+                {
+                    "action": "scheduled_retry",
+                    "worker_status": "retry_scheduled",
+                    "worker_attempt_count": worker_attempt_count,
+                    "next_worker_run_at": next_worker_run_at,
+                    "dead_letter_at": None,
+                    "error": worker_error,
+                }
+            )
+            retry_scheduled_count += 1
+        results.append(result)
+
+    if not payload.dry_run:
+        repository.record_audit_event(
+            actor_email=actor_email,
+            action="staff_invite_delivery_worker_run",
+            entity_type="staff_invite_delivery_outbox",
+            entity_id=str(uuid4()),
+            details={
+                "processed_count": len(results),
+                "retry_scheduled_count": retry_scheduled_count,
+                "dead_lettered_count": dead_lettered_count,
+                "completed_count": completed_count,
+                "skipped_count": skipped_count,
+                "limit": payload.limit,
+                "max_attempts": payload.max_attempts,
+                "backoff_seconds": payload.backoff_seconds,
+                "dry_run": payload.dry_run,
+                "attempt_previews": [
+                    _staff_invite_token_preview(result["invite_token_id"])
+                    for result in results
+                ],
+            },
+        )
+
+    return {
+        "generated_at": generated_at,
+        "dry_run": payload.dry_run,
+        "processed_count": len(results),
+        "retry_scheduled_count": retry_scheduled_count,
+        "dead_lettered_count": dead_lettered_count,
+        "completed_count": completed_count,
+        "skipped_count": skipped_count,
+        "results": results,
+        "limitation": INVITE_DELIVERY_WORKER_LIMITATION,
+    }
 
 
 def _staff_invite_health_response(
@@ -3149,6 +3427,33 @@ def staff_invite_delivery_readiness(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return _staff_invite_delivery_readiness_response(repository)
+
+
+@app.get(
+    "/admin/staff-invites/delivery-outbox",
+    response_model=StaffInviteDeliveryOutboxResponse,
+)
+def staff_invite_delivery_outbox(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _staff_invite_delivery_outbox_response(repository)
+
+
+@app.post(
+    "/admin/staff-invites/delivery-outbox/run",
+    response_model=StaffInviteDeliveryOutboxRunResponse,
+)
+def run_staff_invite_delivery_outbox(
+    payload: StaffInviteDeliveryOutboxRunCreate,
+    user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return _run_staff_invite_delivery_outbox(
+        repository,
+        payload=payload,
+        actor_email=user["email"],
+    )
 
 
 @app.post(

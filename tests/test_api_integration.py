@@ -536,6 +536,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("StaffInviteDeliveryAttemptResponse", schemas)
         self.assertIn("StaffInviteDeliveryWebhookCreate", schemas)
         self.assertIn("StaffInviteDeliveryWebhookEventResponse", schemas)
+        self.assertIn("StaffInviteDeliveryOutboxResponse", schemas)
+        self.assertIn("StaffInviteDeliveryOutboxRunCreate", schemas)
+        self.assertIn("StaffInviteDeliveryOutboxRunResponse", schemas)
         self.assertIn("StaffInviteDeliveryResponse", schemas)
         self.assertIn("StaffInviteRotateCreate", schemas)
         self.assertIn("StaffInviteHealthResponse", schemas)
@@ -650,6 +653,21 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("delivery_attempt", schemas["StaffInviteDeliveryResponse"]["properties"])
         self.assertIn("provider", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
         self.assertIn("invite_token_id", schemas["StaffInviteDeliveryAttemptResponse"]["properties"])
+        attempt_properties = schemas["StaffInviteDeliveryAttemptResponse"]["properties"]
+        self.assertIn("worker_status", attempt_properties)
+        self.assertIn("worker_attempt_count", attempt_properties)
+        self.assertIn("next_worker_run_at", attempt_properties)
+        self.assertIn("dead_letter_at", attempt_properties)
+        self.assertIn("last_worker_error", attempt_properties)
+        outbox_properties = schemas["StaffInviteDeliveryOutboxResponse"]["properties"]
+        self.assertIn("due_count", outbox_properties)
+        self.assertIn("dead_letter_count", outbox_properties)
+        self.assertIn("items", outbox_properties)
+        self.assertIn("limitation", outbox_properties)
+        outbox_run_properties = schemas["StaffInviteDeliveryOutboxRunResponse"]["properties"]
+        self.assertIn("processed_count", outbox_run_properties)
+        self.assertIn("dead_lettered_count", outbox_run_properties)
+        self.assertIn("results", outbox_run_properties)
         webhook_properties = schemas["StaffInviteDeliveryWebhookEventResponse"][
             "properties"
         ]
@@ -680,6 +698,8 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/staff-invites", paths)
         self.assertIn("/admin/staff-invites/health", paths)
         self.assertIn("/admin/staff-invites/delivery-readiness", paths)
+        self.assertIn("/admin/staff-invites/delivery-outbox", paths)
+        self.assertIn("/admin/staff-invites/delivery-outbox/run", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-attempts", paths)
         self.assertIn("/admin/staff-invites/{token_id}/delivery-events", paths)
@@ -1310,6 +1330,99 @@ class ApiIntegrationTests(unittest.TestCase):
         serialized_audit = json.dumps(audit.json())
         self.assertIn("staff_invite_delivery_webhook_received", serialized_audit)
         self.assertNotIn(raw_token, serialized_audit)
+
+    def test_staff_invite_delivery_outbox_worker_dead_letters_exhausted_attempts(self) -> None:
+        admin_token = self._register("delivery-worker-admin@example.com", "admin")
+        invite = self.client.post(
+            "/admin/staff-invites",
+            headers=self._headers(admin_token),
+            json={
+                "email": "delivery-worker-analyst@example.com",
+                "role": "mfi_analyst",
+                "organization_id": TEST_ORGANIZATION_ID,
+                "expires_in_hours": 72,
+                "queue_delivery": True,
+                "delivery_channel": "email",
+                "delivery_recipient": "delivery-worker-analyst@example.com",
+                "delivery_provider": "local_queue",
+            },
+        )
+        self.assertEqual(invite.status_code, 201, invite.text)
+        invite_payload = invite.json()
+        attempt_id = invite_payload["delivery_attempt"]["attempt_id"]
+        self.assertEqual(invite_payload["delivery_attempt"]["status"], "queued")
+        self.assertEqual(invite_payload["delivery_attempt"]["worker_status"], "queued")
+        self.assertEqual(invite_payload["delivery_attempt"]["worker_attempt_count"], 0)
+        self.assertIsNotNone(invite_payload["delivery_attempt"]["next_worker_run_at"])
+
+        outbox = self.client.get(
+            "/admin/staff-invites/delivery-outbox",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(outbox.status_code, 200, outbox.text)
+        self.assertEqual(outbox.json()["status"], "attention")
+        self.assertEqual(outbox.json()["queued_count"], 1)
+        self.assertEqual(outbox.json()["due_count"], 1)
+        self.assertEqual(outbox.json()["dead_letter_count"], 0)
+        self.assertIn("does not send messages", outbox.json()["limitation"])
+        self.assertTrue(outbox.json()["items"][0]["due"])
+        self.assertTrue(outbox.json()["items"][0]["invite_active_pending"])
+
+        dry_run = self.client.post(
+            "/admin/staff-invites/delivery-outbox/run",
+            headers=self._headers(admin_token),
+            json={"limit": 10, "max_attempts": 1, "backoff_seconds": 60, "dry_run": True},
+        )
+        self.assertEqual(dry_run.status_code, 200, dry_run.text)
+        self.assertTrue(dry_run.json()["dry_run"])
+        self.assertEqual(dry_run.json()["processed_count"], 1)
+        self.assertEqual(dry_run.json()["results"][0]["action"], "dry_run")
+
+        run = self.client.post(
+            "/admin/staff-invites/delivery-outbox/run",
+            headers=self._headers(admin_token),
+            json={"limit": 10, "max_attempts": 1, "backoff_seconds": 60},
+        )
+        self.assertEqual(run.status_code, 200, run.text)
+        run_payload = run.json()
+        self.assertFalse(run_payload["dry_run"])
+        self.assertEqual(run_payload["processed_count"], 1)
+        self.assertEqual(run_payload["dead_lettered_count"], 1)
+        self.assertEqual(run_payload["retry_scheduled_count"], 0)
+        self.assertEqual(run_payload["results"][0]["action"], "dead_lettered")
+        self.assertEqual(run_payload["results"][0]["worker_status"], "dead_letter")
+        self.assertEqual(run_payload["results"][0]["worker_attempt_count"], 1)
+        self.assertIn("cannot send", run_payload["results"][0]["error"])
+
+        attempts = self.client.get(
+            f"/admin/staff-invites/{invite_payload['token_id']}/delivery-attempts",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(attempts.status_code, 200, attempts.text)
+        stored_attempt = attempts.json()[0]
+        self.assertEqual(stored_attempt["attempt_id"], attempt_id)
+        self.assertEqual(stored_attempt["status"], "failed")
+        self.assertEqual(stored_attempt["worker_status"], "dead_letter")
+        self.assertEqual(stored_attempt["worker_attempt_count"], 1)
+        self.assertIsNotNone(stored_attempt["dead_letter_at"])
+        self.assertIsNone(stored_attempt["next_worker_run_at"])
+
+        refreshed_outbox = self.client.get(
+            "/admin/staff-invites/delivery-outbox",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(refreshed_outbox.status_code, 200, refreshed_outbox.text)
+        self.assertEqual(refreshed_outbox.json()["dead_letter_count"], 1)
+        self.assertEqual(refreshed_outbox.json()["due_count"], 0)
+
+        audit = self.client.get(
+            "/admin/audit-events",
+            headers=self._headers(admin_token),
+        )
+        self.assertEqual(audit.status_code, 200, audit.text)
+        serialized_audit = json.dumps(audit.json())
+        self.assertIn("staff_invite_delivery_worker_run", serialized_audit)
+        self.assertNotIn(invite_payload["token"], serialized_audit)
 
     def test_admin_can_provision_audited_mfi_analyst(self) -> None:
         borrower_token = self._register("regular@example.com", "borrower")

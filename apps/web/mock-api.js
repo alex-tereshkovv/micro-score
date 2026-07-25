@@ -36,6 +36,7 @@
   const TRANSACTIONAL_EMAIL_OPTIONAL_ENVIRONMENT = [
     "MICROSCORE_TRANSACTIONAL_EMAIL_API_BASE_URL",
   ];
+  const INVITE_DELIVERY_WORKER_LIMITATION = "Invite Delivery Worker v1 is an audited local outbox runner. It can classify queued attempts, schedule retries, and dead-letter exhausted items, but it does not send messages through an external provider in this prototype.";
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -381,6 +382,11 @@
       delivery_url_base: attempt.delivery_url_base,
       note: attempt.note,
       error: attempt.error,
+      worker_status: attempt.worker_status || "completed",
+      worker_attempt_count: Number(attempt.worker_attempt_count || 0),
+      next_worker_run_at: attempt.next_worker_run_at || null,
+      dead_letter_at: attempt.dead_letter_at || null,
+      last_worker_error: attempt.last_worker_error || null,
     };
   }
 
@@ -469,6 +475,10 @@
     demo.staffInviteDeliveryEvents.push(event);
     attempt.status = mappedStatus;
     attempt.error = payload.error || null;
+    attempt.worker_status = mappedStatus === "queued" ? "retry_scheduled" : "completed";
+    attempt.next_worker_run_at = mappedStatus === "queued" ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : null;
+    attempt.dead_letter_at = null;
+    attempt.last_worker_error = mappedStatus === "queued" ? (payload.error || null) : null;
 
     let deliveryRecorded = false;
     if (mappedStatus === "sent" && !invite.delivered_at) {
@@ -641,11 +651,12 @@
     const normalizedRecipient = String(recipient || invite.email).trim() || invite.email;
     const normalizedNote = note ? String(note).trim() : null;
     const providerResult = staffInviteDeliveryProviderResult(provider);
+    const attemptedAt = nowIso();
     const attempt = {
       attempt_id: `invite-delivery-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       attempt_sequence: demo.staffInviteDeliveryAttempts.length + 1,
       invite_token: invite.token_id,
-      attempted_at: nowIso(),
+      attempted_at: attemptedAt,
       attempted_by: actorEmail,
       provider: providerResult.provider,
       status: providerResult.status,
@@ -654,6 +665,11 @@
       delivery_url_base: DEMO_INVITE_URL_BASE,
       note: normalizedNote,
       error: providerResult.error,
+      worker_status: providerResult.status === "queued" ? "queued" : "completed",
+      worker_attempt_count: 0,
+      next_worker_run_at: providerResult.status === "queued" ? attemptedAt : null,
+      dead_letter_at: null,
+      last_worker_error: null,
     };
     demo.staffInviteDeliveryAttempts.push(attempt);
     addAudit("staff_invite_delivery_attempted", "staff_invite_delivery_attempt", attempt.attempt_id, actorEmail, {
@@ -898,6 +914,199 @@
       warnings,
       next_required_controls: blockers.concat(warnings),
       limitation: "Staff Invite Delivery Readiness v2 validates provider contract, HTTPS origin, secret/configuration presence, and audited delivery evidence. It does not expose secret values and the static transactional email adapter records attempts without sending external email.",
+    };
+  }
+
+  function staffInviteDeliveryWorkerError(provider) {
+    return `Invite delivery worker cannot send through provider '${provider}' in this prototype.`;
+  }
+
+  function staffInviteDeliveryOutboxItem(attempt, now = new Date()) {
+    const invite = demo.staffInvites[attempt.invite_token] || {};
+    const activePending = Boolean(
+      invite.token_id
+      && !invite.accepted_at
+      && !invite.revoked_at
+      && Date.parse(invite.expires_at) > now.getTime(),
+    );
+    const workerStatus = attempt.worker_status || "completed";
+    const nextWorkerRunAt = attempt.next_worker_run_at || null;
+    const dueAt = nextWorkerRunAt ? Date.parse(nextWorkerRunAt) : null;
+    const lastEvent = demo.staffInviteDeliveryEvents
+      .filter((event) => event.attempt_id === attempt.attempt_id)
+      .sort((left, right) => (
+        right.received_at.localeCompare(left.received_at)
+        || right.event_id.localeCompare(left.event_id)
+      ))[0];
+    return {
+      attempt_id: attempt.attempt_id,
+      invite_token_id: attempt.invite_token,
+      token_preview: invite.token_preview || staffInviteTokenPreview(attempt.invite_token),
+      email: invite.email || "",
+      provider: attempt.provider,
+      attempt_status: attempt.status,
+      worker_status: workerStatus,
+      worker_attempt_count: Number(attempt.worker_attempt_count || 0),
+      next_worker_run_at: nextWorkerRunAt,
+      dead_letter_at: attempt.dead_letter_at || null,
+      last_worker_error: attempt.last_worker_error || null,
+      due: (
+        attempt.status === "queued"
+        && ["queued", "retry_scheduled"].includes(workerStatus)
+        && !attempt.dead_letter_at
+        && (dueAt === null || dueAt <= now.getTime())
+      ),
+      invite_active_pending: activePending,
+      last_delivery_event_type: lastEvent?.event_type || null,
+    };
+  }
+
+  function inviteDeliveryOutbox() {
+    const now = new Date();
+    const items = demo.staffInviteDeliveryAttempts
+      .map((attempt) => staffInviteDeliveryOutboxItem(attempt, now))
+      .sort((left, right) => (
+        String(left.next_worker_run_at || "z").localeCompare(String(right.next_worker_run_at || "z"))
+        || right.attempt_id.localeCompare(left.attempt_id)
+      ));
+    const queuedCount = items.filter((item) => (
+      item.attempt_status === "queued"
+      && ["queued", "retry_scheduled"].includes(item.worker_status)
+    )).length;
+    const dueCount = items.filter((item) => item.due).length;
+    const retryScheduledCount = items.filter((item) => item.worker_status === "retry_scheduled").length;
+    const deadLetterCount = items.filter((item) => item.worker_status === "dead_letter").length;
+    const completedCount = items.filter((item) => item.worker_status === "completed").length;
+    return {
+      status: dueCount || deadLetterCount ? "attention" : "ok",
+      generated_at: now.toISOString(),
+      queued_count: queuedCount,
+      due_count: dueCount,
+      retry_scheduled_count: retryScheduledCount,
+      dead_letter_count: deadLetterCount,
+      completed_count: completedCount,
+      items,
+      recommended_action: deadLetterCount
+        ? "Review dead-lettered invite delivery attempts, rotate stale links, or configure a real transactional provider before onboarding."
+        : dueCount
+          ? "Run the invite delivery outbox worker or connect an external delivery provider."
+          : "No invite delivery worker action is due.",
+      limitation: INVITE_DELIVERY_WORKER_LIMITATION,
+    };
+  }
+
+  function runInviteDeliveryOutbox(payload = {}, actorEmail = null) {
+    const limit = clamp(number(payload.limit, 50), 1, 500);
+    const maxAttempts = clamp(number(payload.max_attempts, 3), 1, 10);
+    const backoffSeconds = clamp(number(payload.backoff_seconds, 300), 1, 86400);
+    const dryRun = Boolean(payload.dry_run);
+    const now = new Date();
+    const generatedAt = now.toISOString();
+    const dueAttempts = demo.staffInviteDeliveryAttempts
+      .filter((attempt) => staffInviteDeliveryOutboxItem(attempt, now).due)
+      .slice(0, limit);
+    const results = [];
+    let retryScheduledCount = 0;
+    let deadLetteredCount = 0;
+    let completedCount = 0;
+    let skippedCount = 0;
+    dueAttempts.forEach((attempt) => {
+      const item = staffInviteDeliveryOutboxItem(attempt, now);
+      const previousWorkerStatus = item.worker_status;
+      let workerAttemptCount = item.worker_attempt_count;
+      const result = {
+        attempt_id: attempt.attempt_id,
+        invite_token_id: attempt.invite_token,
+        provider: attempt.provider,
+        action: dryRun ? "dry_run" : "skipped",
+        previous_worker_status: previousWorkerStatus,
+        worker_status: previousWorkerStatus,
+        worker_attempt_count: workerAttemptCount,
+        next_worker_run_at: item.next_worker_run_at,
+        dead_letter_at: item.dead_letter_at,
+        error: item.last_worker_error,
+      };
+      if (dryRun) {
+        skippedCount += 1;
+        results.push(result);
+        return;
+      }
+      if (!item.invite_active_pending) {
+        attempt.worker_status = "completed";
+        attempt.next_worker_run_at = null;
+        attempt.dead_letter_at = null;
+        attempt.last_worker_error = null;
+        result.action = "completed";
+        result.worker_status = "completed";
+        result.next_worker_run_at = null;
+        result.dead_letter_at = null;
+        result.error = null;
+        completedCount += 1;
+        results.push(result);
+        return;
+      }
+      workerAttemptCount += 1;
+      const workerError = staffInviteDeliveryWorkerError(attempt.provider);
+      if (workerAttemptCount >= maxAttempts) {
+        attempt.status = "failed";
+        attempt.error = workerError;
+        attempt.worker_status = "dead_letter";
+        attempt.worker_attempt_count = workerAttemptCount;
+        attempt.next_worker_run_at = null;
+        attempt.dead_letter_at = generatedAt;
+        attempt.last_worker_error = workerError;
+        result.action = "dead_lettered";
+        result.worker_status = "dead_letter";
+        result.worker_attempt_count = workerAttemptCount;
+        result.next_worker_run_at = null;
+        result.dead_letter_at = generatedAt;
+        result.error = workerError;
+        deadLetteredCount += 1;
+      } else {
+        const nextWorkerRunAt = new Date(
+          now.getTime() + backoffSeconds * (2 ** Math.max(0, workerAttemptCount - 1)) * 1000,
+        ).toISOString();
+        attempt.status = "queued";
+        attempt.error = workerError;
+        attempt.worker_status = "retry_scheduled";
+        attempt.worker_attempt_count = workerAttemptCount;
+        attempt.next_worker_run_at = nextWorkerRunAt;
+        attempt.dead_letter_at = null;
+        attempt.last_worker_error = workerError;
+        result.action = "scheduled_retry";
+        result.worker_status = "retry_scheduled";
+        result.worker_attempt_count = workerAttemptCount;
+        result.next_worker_run_at = nextWorkerRunAt;
+        result.dead_letter_at = null;
+        result.error = workerError;
+        retryScheduledCount += 1;
+      }
+      results.push(result);
+    });
+    if (!dryRun) {
+      addAudit("staff_invite_delivery_worker_run", "staff_invite_delivery_outbox", `invite-delivery-worker-${Date.now()}`, actorEmail, {
+        processed_count: results.length,
+        retry_scheduled_count: retryScheduledCount,
+        dead_lettered_count: deadLetteredCount,
+        completed_count: completedCount,
+        skipped_count: skippedCount,
+        limit,
+        max_attempts: maxAttempts,
+        backoff_seconds: backoffSeconds,
+        dry_run: dryRun,
+        attempt_previews: results.map((result) => staffInviteTokenPreview(result.invite_token_id)),
+      });
+    }
+    return {
+      generated_at: generatedAt,
+      dry_run: dryRun,
+      processed_count: results.length,
+      retry_scheduled_count: retryScheduledCount,
+      dead_lettered_count: deadLetteredCount,
+      completed_count: completedCount,
+      skipped_count: skippedCount,
+      results,
+      limitation: INVITE_DELIVERY_WORKER_LIMITATION,
     };
   }
 
@@ -2986,6 +3195,16 @@
     if (cleanPath === "/admin/staff-invites/delivery-readiness" && method === "GET") {
       requireAdmin(session);
       return clone(inviteDeliveryReadiness());
+    }
+
+    if (cleanPath === "/admin/staff-invites/delivery-outbox" && method === "GET") {
+      requireAdmin(session);
+      return clone(inviteDeliveryOutbox());
+    }
+
+    if (cleanPath === "/admin/staff-invites/delivery-outbox/run" && method === "POST") {
+      const user = requireAdmin(session);
+      return clone(runInviteDeliveryOutbox(body, user.email));
     }
 
     if (cleanPath === "/webhooks/staff-invite-delivery" && method === "POST") {

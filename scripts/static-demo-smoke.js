@@ -836,6 +836,84 @@ async function main() {
   ) {
     throw new Error("Expected webhook delivery event to be visible in invite admin telemetry");
   }
+  const workerDeliveryInvite = await api.request(
+    "/admin/staff-invites",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "worker-delivery-analyst@test.com",
+        role: "mfi_analyst",
+        organization_id: "pavlodar-demo-mfi",
+        expires_in_hours: 72,
+        queue_delivery: true,
+        delivery_channel: "email",
+        delivery_recipient: "worker-delivery-analyst@test.com",
+        delivery_provider: "local_queue",
+      }),
+    },
+    adminSession,
+  );
+  if (
+    workerDeliveryInvite.delivered_at
+    || workerDeliveryInvite.delivery_attempt?.status !== "queued"
+    || workerDeliveryInvite.delivery_attempt?.worker_status !== "queued"
+    || !workerDeliveryInvite.delivery_attempt?.next_worker_run_at
+  ) {
+    throw new Error("Expected local_queue invite to enter delivery worker outbox");
+  }
+  const deliveryOutbox = await api.request("/admin/staff-invites/delivery-outbox", {}, adminSession);
+  if (
+    deliveryOutbox.status !== "attention"
+    || deliveryOutbox.queued_count < 1
+    || deliveryOutbox.due_count < 1
+    || !deliveryOutbox.items.some((item) => item.attempt_id === workerDeliveryInvite.delivery_attempt.attempt_id && item.due)
+    || !String(deliveryOutbox.limitation || "").includes("does not send messages")
+  ) {
+    throw new Error("Expected invite delivery outbox to surface due queued worker attempts");
+  }
+  const deliveryWorkerRun = await api.request(
+    "/admin/staff-invites/delivery-outbox/run",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        limit: 10,
+        max_attempts: 1,
+        backoff_seconds: 60,
+      }),
+    },
+    adminSession,
+  );
+  if (
+    deliveryWorkerRun.processed_count < 1
+    || deliveryWorkerRun.dead_lettered_count < 1
+    || !deliveryWorkerRun.results.some((result) => (
+      result.attempt_id === workerDeliveryInvite.delivery_attempt.attempt_id
+      && result.action === "dead_lettered"
+      && result.worker_status === "dead_letter"
+      && result.worker_attempt_count === 1
+    ))
+  ) {
+    throw new Error("Expected invite delivery worker run to dead-letter exhausted local queue attempts");
+  }
+  const workerDeliveryAttempts = await api.request(
+    `/admin/staff-invites/${encodeURIComponent(workerDeliveryInvite.token_id)}/delivery-attempts`,
+    {},
+    adminSession,
+  );
+  if (
+    workerDeliveryAttempts.length !== 1
+    || workerDeliveryAttempts[0].status !== "failed"
+    || workerDeliveryAttempts[0].worker_status !== "dead_letter"
+    || workerDeliveryAttempts[0].worker_attempt_count !== 1
+    || workerDeliveryAttempts.some((attempt) => Object.values(attempt).includes(workerDeliveryInvite.token))
+  ) {
+    throw new Error("Expected worker delivery attempts to preserve dead-letter telemetry without raw tokens");
+  }
+  await api.request(
+    `/admin/staff-invites/${encodeURIComponent(workerDeliveryInvite.token_id)}`,
+    { method: "DELETE" },
+    adminSession,
+  );
   let weakInvitePasswordRejected = false;
   try {
     await api.request("/auth/accept-staff-invite", {
@@ -1084,6 +1162,9 @@ async function main() {
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_delivery_webhook_received")) {
     throw new Error("Expected staff invite delivery webhook audit event");
+  }
+  if (!adminAudit.some((event) => event.action === "staff_invite_delivery_worker_run")) {
+    throw new Error("Expected staff invite delivery worker run audit event");
   }
   if (!adminAudit.some((event) => event.action === "staff_invite_rotated")) {
     throw new Error("Expected staff invite rotation audit event");
@@ -1361,6 +1442,8 @@ async function main() {
       staff_invite_delivery: true,
       staff_invite_delivery_readiness: true,
       staff_invite_delivery_outbox: true,
+      staff_invite_delivery_worker: true,
+      staff_invite_delivery_dead_letter: true,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
       staff_invite_delivery_webhook: true,

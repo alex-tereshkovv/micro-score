@@ -405,6 +405,46 @@ delivery evidence, and transactional email secrets/configuration are present.
 The prototype transactional adapter records safe audited attempts without
 sending external email.
 
+Summarize the invite delivery worker outbox:
+
+```http
+GET /admin/staff-invites/delivery-outbox
+```
+
+The outbox endpoint requires an `admin` bearer token and returns local worker
+telemetry for queued delivery attempts: `queued_count`, `due_count`,
+`retry_scheduled_count`, `dead_letter_count`, `completed_count`, safe `items`,
+`recommended_action`, and `limitation`. Item rows include `attempt_id`,
+`invite_token_id`, `token_preview`, `email`, `provider`, `attempt_status`,
+`worker_status`, `worker_attempt_count`, `next_worker_run_at`,
+`dead_letter_at`, `last_worker_error`, `due`, `invite_active_pending`, and
+`last_delivery_event_type`. They never include raw invite tokens, full invite
+URLs, provider secrets, or webhook secrets.
+
+Run the local invite delivery worker:
+
+```http
+POST /admin/staff-invites/delivery-outbox/run
+```
+
+```json
+{
+  "limit": 50,
+  "max_attempts": 3,
+  "backoff_seconds": 300,
+  "dry_run": false
+}
+```
+
+Invite Delivery Worker v1 is an audited local outbox runner. It can classify
+queued attempts, schedule retries, and dead-letter exhausted items, but it does
+not send messages through an external provider in this prototype. A dry run
+returns due work without mutating state. A normal run increments
+`worker_attempt_count`, returns `scheduled_retry` while attempts remain below
+`max_attempts`, and returns `dead_lettered` with `worker_status:
+dead_letter` when retries are exhausted. Each non-dry run records
+`staff_invite_delivery_worker_run` with safe token previews only.
+
 Create an expiring MFI analyst invite:
 
 ```http
@@ -442,7 +482,9 @@ pending staff invite; rotate the existing invite instead.
 When `queue_delivery` is `true`, creation records a local delivery attempt while
 the raw token is still available in process and returns a `delivery_attempt`
 object with `attempt_id`, `provider`, `status`, `channel`, `recipient`,
-`delivery_url_base`, timestamps, and optional `error`. The default provider is
+`delivery_url_base`, timestamps, `worker_status`, `worker_attempt_count`,
+`next_worker_run_at`, `dead_letter_at`, `last_worker_error`, and optional
+`error`. The default provider is
 `local_outbox`; override it per request with `delivery_provider`, or globally
 with `MICROSCORE_INVITE_DELIVERY_PROVIDER` for deployment experiments. Local
 provider semantics are explicit: `local_outbox` and `manual_receipt` record
@@ -489,7 +531,8 @@ GET /admin/staff-invites/{token_id}/delivery-attempts
 
 This returns newest-first `StaffInviteDeliveryAttemptResponse` rows. Attempts
 contain the invite `token_id`, provider, status, channel, recipient, URL base,
-and optional note/error; they never contain raw tokens.
+worker status, worker attempt count, next worker run time, dead-letter time,
+last worker error, and optional note/error; they never contain raw tokens.
 
 List delivery webhook events for an invite:
 
@@ -529,7 +572,7 @@ Metadata keys containing `token`, `secret`, `password`, `authorization`, or
 Webhook events are idempotent by `(provider, provider_event_id)`. `delivered`
 maps the linked attempt to `sent` and marks the invite delivered without a staff
 actor; `bounced` and `failed` map the attempt to `failed`; `deferred` leaves the
-attempt `queued`. Every accepted first-time event records
+attempt `queued` and schedules worker retry visibility. Every accepted first-time event records
 `staff_invite_delivery_webhook_received`, and delivery events also emit
 `staff_invite_delivered` with `source: delivery_webhook`.
 
@@ -1120,6 +1163,7 @@ Current audited actions:
 - `staff_invite_created`
 - `staff_invite_delivery_attempted`
 - `staff_invite_delivery_webhook_received`
+- `staff_invite_delivery_worker_run`
 - `staff_invite_delivered`
 - `staff_invite_rotated`
 - `staff_invite_accepted`

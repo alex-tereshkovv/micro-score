@@ -261,6 +261,9 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(attempt["provider"], "local_outbox")
         self.assertEqual(attempt["status"], "sent")
         self.assertEqual(attempt["invite_token"], "staff-invite-token")
+        self.assertEqual(attempt["worker_status"], "completed")
+        self.assertEqual(attempt["worker_attempt_count"], 0)
+        self.assertIsNone(attempt["next_worker_run_at"])
         attempts = self.repository.list_staff_invite_delivery_attempts("staff-invite-token")
         self.assertEqual(len(attempts), 1)
         self.assertEqual(attempts[0]["attempt_id"], "attempt-1")
@@ -312,6 +315,52 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(updated_attempt["status"], "failed")
         self.assertEqual(updated_attempt["error"], "provider bounce")
+        self.assertEqual(updated_attempt["worker_status"], "completed")
+        queued_attempt = self.repository.record_staff_invite_delivery_attempt(
+            attempt_id="attempt-queued",
+            token="staff-invite-token",
+            attempted_by="admin@example.com",
+            provider="transactional_email",
+            status="queued",
+            channel="email",
+            recipient="invited@example.com",
+            url_base="http://127.0.0.1:5173",
+            note="queued for worker",
+        )
+        self.assertEqual(queued_attempt["worker_status"], "queued")
+        self.assertEqual(queued_attempt["worker_attempt_count"], 0)
+        self.assertIsNotNone(queued_attempt["next_worker_run_at"])
+        outbox_attempts = self.repository.list_staff_invite_delivery_outbox_attempts()
+        self.assertIn(
+            "attempt-queued",
+            {outbox_attempt["attempt_id"] for outbox_attempt in outbox_attempts},
+        )
+        worker_retry = self.repository.update_staff_invite_delivery_worker_state(
+            "attempt-queued",
+            status="queued",
+            error="transient provider unavailable",
+            worker_status="retry_scheduled",
+            worker_attempt_count=1,
+            next_worker_run_at="2026-06-25T12:05:00+00:00",
+            dead_letter_at=None,
+            last_worker_error="transient provider unavailable",
+        )
+        self.assertEqual(worker_retry["worker_status"], "retry_scheduled")
+        self.assertEqual(worker_retry["worker_attempt_count"], 1)
+        self.assertEqual(worker_retry["next_worker_run_at"], "2026-06-25T12:05:00+00:00")
+        worker_dead_letter = self.repository.update_staff_invite_delivery_worker_state(
+            "attempt-queued",
+            status="failed",
+            error="exhausted provider retries",
+            worker_status="dead_letter",
+            worker_attempt_count=2,
+            next_worker_run_at=None,
+            dead_letter_at="2026-06-25T12:10:00+00:00",
+            last_worker_error="exhausted provider retries",
+        )
+        self.assertEqual(worker_dead_letter["status"], "failed")
+        self.assertEqual(worker_dead_letter["worker_status"], "dead_letter")
+        self.assertEqual(worker_dead_letter["dead_letter_at"], "2026-06-25T12:10:00+00:00")
         delivered = self.repository.mark_staff_invite_delivered(
             "staff-invite-token",
             delivered_by="admin@example.com",

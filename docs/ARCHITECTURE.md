@@ -90,7 +90,8 @@ Main local components:
   invite status listings, invite rotation health, audited invite delivery,
   persistent delivery attempts, delivery provider readiness reporting,
   transactional email secret/config readiness checks, signed delivery webhook
-  event ingestion with provider-event idempotency, safe invite rotation for
+  event ingestion with provider-event idempotency, audited invite delivery
+  worker outbox telemetry with retry/dead-letter states, safe invite rotation for
   resend without re-exposing old secrets, staff MFA readiness attestation,
   production identity readiness reporting, aggregated security readiness,
   analyst disable/reactivation, session revocation, and audit events;

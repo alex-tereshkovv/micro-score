@@ -263,6 +263,7 @@ InviteDeliveryChannel = Literal["email", "secure_message", "manual_copy", "local
 InviteDeliveryAttemptStatus = Literal["queued", "sent", "failed"]
 InviteDeliveryConfigurationStatus = Literal["not_required", "missing", "invalid", "ready"]
 InviteDeliveryWebhookEventType = Literal["delivered", "bounced", "failed", "deferred"]
+InviteDeliveryWorkerStatus = Literal["queued", "retry_scheduled", "completed", "dead_letter"]
 
 
 class StaffInviteDeliveryOptions(BaseModel):
@@ -301,6 +302,13 @@ class StaffInviteDeliveryRetryCreate(BaseModel):
     recipient: str | None = Field(default=None, max_length=200)
     note: str | None = Field(default=None, max_length=500)
     provider: str | None = Field(default=None, max_length=100)
+
+
+class StaffInviteDeliveryOutboxRunCreate(BaseModel):
+    limit: int = Field(default=50, ge=1, le=500)
+    max_attempts: int = Field(default=3, ge=1, le=10)
+    backoff_seconds: int = Field(default=300, ge=1, le=86_400)
+    dry_run: bool = False
 
 
 class StaffInviteDeliveryWebhookCreate(BaseModel):
@@ -380,6 +388,11 @@ class StaffInviteDeliveryAttemptResponse(BaseModel):
     delivery_url_base: str | None = None
     note: str | None = None
     error: str | None = None
+    worker_status: InviteDeliveryWorkerStatus = "completed"
+    worker_attempt_count: int = Field(default=0, ge=0)
+    next_worker_run_at: str | None = None
+    dead_letter_at: str | None = None
+    last_worker_error: str | None = None
 
 
 class StaffInviteDeliveryWebhookEventResponse(BaseModel):
@@ -396,6 +409,61 @@ class StaffInviteDeliveryWebhookEventResponse(BaseModel):
     error: str | None = None
     was_duplicate: bool = False
     delivery_recorded: bool = False
+
+
+class StaffInviteDeliveryOutboxItemResponse(BaseModel):
+    attempt_id: str
+    invite_token_id: str
+    token_preview: str
+    email: str
+    provider: str
+    attempt_status: InviteDeliveryAttemptStatus
+    worker_status: InviteDeliveryWorkerStatus
+    worker_attempt_count: int = Field(ge=0)
+    next_worker_run_at: str | None = None
+    dead_letter_at: str | None = None
+    last_worker_error: str | None = None
+    due: bool = False
+    invite_active_pending: bool = False
+    last_delivery_event_type: InviteDeliveryWebhookEventType | None = None
+
+
+class StaffInviteDeliveryOutboxResponse(BaseModel):
+    status: Literal["ok", "attention"]
+    generated_at: str
+    queued_count: int = Field(ge=0)
+    due_count: int = Field(ge=0)
+    retry_scheduled_count: int = Field(ge=0)
+    dead_letter_count: int = Field(ge=0)
+    completed_count: int = Field(ge=0)
+    items: list[StaffInviteDeliveryOutboxItemResponse] = Field(default_factory=list)
+    recommended_action: str
+    limitation: str
+
+
+class StaffInviteDeliveryOutboxRunItemResponse(BaseModel):
+    attempt_id: str
+    invite_token_id: str
+    provider: str
+    action: Literal["scheduled_retry", "dead_lettered", "completed", "skipped", "dry_run"]
+    previous_worker_status: InviteDeliveryWorkerStatus
+    worker_status: InviteDeliveryWorkerStatus
+    worker_attempt_count: int = Field(ge=0)
+    next_worker_run_at: str | None = None
+    dead_letter_at: str | None = None
+    error: str | None = None
+
+
+class StaffInviteDeliveryOutboxRunResponse(BaseModel):
+    generated_at: str
+    dry_run: bool
+    processed_count: int = Field(ge=0)
+    retry_scheduled_count: int = Field(ge=0)
+    dead_lettered_count: int = Field(ge=0)
+    completed_count: int = Field(ge=0)
+    skipped_count: int = Field(ge=0)
+    results: list[StaffInviteDeliveryOutboxRunItemResponse] = Field(default_factory=list)
+    limitation: str
 
 
 class StaffInviteDeliveryProviderProfile(BaseModel):

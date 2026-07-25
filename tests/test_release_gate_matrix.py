@@ -217,12 +217,16 @@ SECURITY_MATRIX_ROWS = [
         ],
         "markers": [
             "/admin/staff-invites/delivery-readiness",
+            "/admin/staff-invites/delivery-outbox",
+            "/admin/staff-invites/delivery-outbox/run",
             "/webhooks/staff-invite-delivery",
             "staff_invite_delivery_webhook_received",
+            "staff_invite_delivery_worker_run",
             "delivery_provider_not_production_ready",
             "delivery_provider_configuration_missing",
             "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY",
             "transactional_email_contract",
+            "dead_letter",
             "local_outbox",
             "staff_invite_delivery_retry",
         ],
@@ -380,6 +384,8 @@ class ReleaseGateMatrixTests(unittest.TestCase):
             "security_readiness",
             "mfa_challenge_monitoring",
             "staff_invite_delivery_retry",
+            "staff_invite_delivery_worker",
+            "/admin/staff-invites/delivery-outbox/run",
         ]:
             self.assertIn(marker, workflow_test)
 

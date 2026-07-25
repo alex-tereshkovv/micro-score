@@ -135,6 +135,24 @@ def session_expiry_metadata(
     }
 
 
+def _initial_delivery_worker_state(status: str, attempted_at: str) -> dict[str, Any]:
+    if status == "queued":
+        return {
+            "worker_status": "queued",
+            "worker_attempt_count": 0,
+            "next_worker_run_at": attempted_at,
+            "dead_letter_at": None,
+            "last_worker_error": None,
+        }
+    return {
+        "worker_status": "completed",
+        "worker_attempt_count": 0,
+        "next_worker_run_at": None,
+        "dead_letter_at": None,
+        "last_worker_error": None,
+    }
+
+
 def _parse_utc_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -337,7 +355,12 @@ class MicroScoreRepository:
                     recipient TEXT,
                     delivery_url_base TEXT,
                     note TEXT,
-                    error TEXT
+                    error TEXT,
+                    worker_status TEXT NOT NULL DEFAULT 'completed',
+                    worker_attempt_count INTEGER NOT NULL DEFAULT 0,
+                    next_worker_run_at TEXT,
+                    dead_letter_at TEXT,
+                    last_worker_error TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS staff_invite_delivery_events (
@@ -485,6 +508,36 @@ class MicroScoreRepository:
             _ensure_column(connection, "staff_invites", "delivery_recipient", "TEXT")
             _ensure_column(connection, "staff_invites", "delivery_url_base", "TEXT")
             _ensure_column(connection, "staff_invites", "delivery_note", "TEXT")
+            _ensure_column(
+                connection,
+                "staff_invite_delivery_attempts",
+                "worker_status",
+                "TEXT NOT NULL DEFAULT 'completed'",
+            )
+            _ensure_column(
+                connection,
+                "staff_invite_delivery_attempts",
+                "worker_attempt_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            _ensure_column(
+                connection,
+                "staff_invite_delivery_attempts",
+                "next_worker_run_at",
+                "TEXT",
+            )
+            _ensure_column(
+                connection,
+                "staff_invite_delivery_attempts",
+                "dead_letter_at",
+                "TEXT",
+            )
+            _ensure_column(
+                connection,
+                "staff_invite_delivery_attempts",
+                "last_worker_error",
+                "TEXT",
+            )
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_applications_organization
@@ -1234,6 +1287,7 @@ class MicroScoreRepository:
         error: str | None = None,
     ) -> dict[str, Any]:
         attempted_at = _now_iso()
+        worker_state = _initial_delivery_worker_state(status, attempted_at)
         with self._connection() as connection:
             connection.execute(
                 """
@@ -1248,9 +1302,14 @@ class MicroScoreRepository:
                     recipient,
                     delivery_url_base,
                     note,
-                    error
+                    error,
+                    worker_status,
+                    worker_attempt_count,
+                    next_worker_run_at,
+                    dead_letter_at,
+                    last_worker_error
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     attempt_id,
@@ -1264,6 +1323,11 @@ class MicroScoreRepository:
                     url_base,
                     note,
                     error,
+                    worker_state["worker_status"],
+                    worker_state["worker_attempt_count"],
+                    worker_state["next_worker_run_at"],
+                    worker_state["dead_letter_at"],
+                    worker_state["last_worker_error"],
                 ),
             )
         return self.get_staff_invite_delivery_attempt(attempt_id) or {}
@@ -1286,7 +1350,12 @@ class MicroScoreRepository:
                     recipient,
                     delivery_url_base,
                     note,
-                    error
+                    error,
+                    worker_status,
+                    worker_attempt_count,
+                    next_worker_run_at,
+                    dead_letter_at,
+                    last_worker_error
                 FROM staff_invite_delivery_attempts
                 WHERE attempt_id = ?
                 """,
@@ -1312,7 +1381,12 @@ class MicroScoreRepository:
                     recipient,
                     delivery_url_base,
                     note,
-                    error
+                    error,
+                    worker_status,
+                    worker_attempt_count,
+                    next_worker_run_at,
+                    dead_letter_at,
+                    last_worker_error
                 FROM staff_invite_delivery_attempts
                 WHERE invite_token = ?
                 ORDER BY attempted_at DESC, attempt_id DESC
@@ -1327,19 +1401,131 @@ class MicroScoreRepository:
         *,
         status: str,
         error: str | None,
+        worker_status: str | None = None,
+        next_worker_run_at: str | None = None,
+        dead_letter_at: str | None = None,
+        last_worker_error: str | None = None,
+    ) -> dict[str, Any] | None:
+        worker_status_value = worker_status
+        if worker_status_value is None:
+            worker_status_value = "retry_scheduled" if status == "queued" else "completed"
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE staff_invite_delivery_attempts
+                SET
+                    status = ?,
+                    error = ?,
+                    worker_status = ?,
+                    next_worker_run_at = ?,
+                    dead_letter_at = ?,
+                    last_worker_error = ?
+                WHERE attempt_id = ?
+                """,
+                (
+                    status,
+                    error,
+                    worker_status_value,
+                    next_worker_run_at,
+                    dead_letter_at,
+                    last_worker_error,
+                    attempt_id,
+                ),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_staff_invite_delivery_attempt(attempt_id)
+
+    def update_staff_invite_delivery_worker_state(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        error: str | None,
+        worker_status: str,
+        worker_attempt_count: int,
+        next_worker_run_at: str | None,
+        dead_letter_at: str | None,
+        last_worker_error: str | None,
     ) -> dict[str, Any] | None:
         with self._connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE staff_invite_delivery_attempts
-                SET status = ?, error = ?
+                SET
+                    status = ?,
+                    error = ?,
+                    worker_status = ?,
+                    worker_attempt_count = ?,
+                    next_worker_run_at = ?,
+                    dead_letter_at = ?,
+                    last_worker_error = ?
                 WHERE attempt_id = ?
                 """,
-                (status, error, attempt_id),
+                (
+                    status,
+                    error,
+                    worker_status,
+                    worker_attempt_count,
+                    next_worker_run_at,
+                    dead_letter_at,
+                    last_worker_error,
+                    attempt_id,
+                ),
             )
         if cursor.rowcount == 0:
             return None
         return self.get_staff_invite_delivery_attempt(attempt_id)
+
+    def list_staff_invite_delivery_outbox_attempts(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    attempts.attempt_id,
+                    attempts.invite_token,
+                    attempts.attempted_at,
+                    attempts.attempted_by,
+                    attempts.provider,
+                    attempts.status,
+                    attempts.channel,
+                    attempts.recipient,
+                    attempts.delivery_url_base,
+                    attempts.note,
+                    attempts.error,
+                    attempts.worker_status,
+                    attempts.worker_attempt_count,
+                    attempts.next_worker_run_at,
+                    attempts.dead_letter_at,
+                    attempts.last_worker_error,
+                    invites.email,
+                    invites.role,
+                    invites.organization_id,
+                    invites.expires_at,
+                    invites.accepted_at,
+                    invites.revoked_at,
+                    invites.delivered_at,
+                    (
+                        SELECT events.event_type
+                        FROM staff_invite_delivery_events AS events
+                        WHERE events.attempt_id = attempts.attempt_id
+                        ORDER BY events.received_at DESC, events.event_id DESC
+                        LIMIT 1
+                    ) AS last_delivery_event_type
+                FROM staff_invite_delivery_attempts AS attempts
+                JOIN staff_invites AS invites
+                    ON invites.token = attempts.invite_token
+                ORDER BY
+                    CASE
+                        WHEN attempts.next_worker_run_at IS NULL THEN 1
+                        ELSE 0
+                    END,
+                    attempts.next_worker_run_at ASC,
+                    attempts.attempted_at DESC,
+                    attempts.attempt_id DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def record_staff_invite_delivery_event(
         self,

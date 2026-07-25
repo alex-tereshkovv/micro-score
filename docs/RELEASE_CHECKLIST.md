@@ -127,6 +127,13 @@ git diff --check
   provider-event idempotency, admin-visible `/delivery-events`, delivery/bounce
   status mapping, and `staff_invite_delivery_webhook_received` audit evidence
   without exposing raw invite tokens or webhook secrets.
+- Invite Delivery Worker v1 exposes
+  `/admin/staff-invites/delivery-outbox` and
+  `/admin/staff-invites/delivery-outbox/run`, persists worker status on
+  attempts (`queued`, `retry_scheduled`, `completed`, `dead_letter`),
+  supports dry-run/retry/dead-letter handling, emits
+  `staff_invite_delivery_worker_run`, and clearly states that the prototype
+  worker does not send messages through an external provider.
 - MFA Enforcement v1 exposes active staff MFA posture, supports admin
   attestation, requires the prototype second-factor code for staff sessions,
   records `staff_mfa_attested` and `staff_mfa_login_verified`, and clearly

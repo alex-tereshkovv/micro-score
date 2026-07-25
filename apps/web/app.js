@@ -104,6 +104,7 @@ const els = {
   staffUsers: document.querySelector("#staffUsers"),
   staffSessions: document.querySelector("#staffSessions"),
   staffInviteDeliveryReadiness: document.querySelector("#staffInviteDeliveryReadiness"),
+  staffInviteDeliveryOutbox: document.querySelector("#staffInviteDeliveryOutbox"),
   staffInviteHealth: document.querySelector("#staffInviteHealth"),
   staffInvites: document.querySelector("#staffInvites"),
   refreshUsers: document.querySelector("#refreshUsers"),
@@ -985,6 +986,8 @@ function resetPrivilegedViews() {
   els.staffInviteHealth.textContent = "Invite health not loaded.";
   els.staffInviteDeliveryReadiness.className = "metric-grid invite-delivery-readiness empty";
   els.staffInviteDeliveryReadiness.textContent = "Invite delivery readiness not loaded.";
+  els.staffInviteDeliveryOutbox.className = "metric-grid invite-delivery-outbox empty";
+  els.staffInviteDeliveryOutbox.textContent = "Invite delivery outbox not loaded.";
   els.modelStatusPill.className = "pill muted";
   els.modelStatusPill.textContent = "Model status unavailable";
 }
@@ -3044,6 +3047,49 @@ function renderStaffInviteDeliveryReadiness(readiness) {
   `;
 }
 
+function renderStaffInviteDeliveryOutbox(outbox) {
+  if (!els.staffInviteDeliveryOutbox) return;
+  const statusClass = outbox.status === "attention" ? "risk-high" : "risk-low";
+  const dueItems = (outbox.items || []).filter((item) => item.due);
+  const deadLetterItems = (outbox.items || []).filter((item) => item.worker_status === "dead_letter");
+  const headline = dueItems[0]
+    ? `Next due: ${dueItems[0].email || dueItems[0].token_preview || dueItems[0].attempt_id}`
+    : deadLetterItems[0]
+      ? `Dead-letter: ${deadLetterItems[0].email || deadLetterItems[0].token_preview || deadLetterItems[0].attempt_id}`
+      : "No due delivery worker items.";
+  els.staffInviteDeliveryOutbox.className = "metric-grid invite-delivery-outbox";
+  els.staffInviteDeliveryOutbox.innerHTML = `
+    <div class="metric">
+      <span>Delivery outbox</span>
+      <strong class="${statusClass}">${escapeHtml(formatPolicyName(outbox.status || "unknown"))}</strong>
+    </div>
+    <div class="metric">
+      <span>Queued</span>
+      <strong>${Number(outbox.queued_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Due now</span>
+      <strong>${Number(outbox.due_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Retries scheduled</span>
+      <strong>${Number(outbox.retry_scheduled_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Dead-letter</span>
+      <strong>${Number(outbox.dead_letter_count || 0)}</strong>
+    </div>
+    <div class="metric">
+      <span>Completed</span>
+      <strong>${Number(outbox.completed_count || 0)}</strong>
+    </div>
+    <p class="tiny-text full-width">
+      ${escapeHtml(headline)} ${escapeHtml(outbox.recommended_action || "")}
+      ${escapeHtml(outbox.limitation || "")}
+    </p>
+  `;
+}
+
 function renderStaffInviteHealth(health) {
   if (!els.staffInviteHealth) return;
   const statusClass = health.status === "attention" ? "risk-high" : "risk-low";
@@ -3155,13 +3201,15 @@ function renderStaffInvites(rows) {
 }
 
 async function refreshStaffInvites() {
-  const [health, deliveryReadiness, rows] = await Promise.all([
+  const [health, deliveryReadiness, deliveryOutbox, rows] = await Promise.all([
     apiFetch("/admin/staff-invites/health"),
     apiFetch("/admin/staff-invites/delivery-readiness"),
+    apiFetch("/admin/staff-invites/delivery-outbox"),
     apiFetch("/admin/staff-invites"),
   ]);
   renderStaffInviteHealth(health);
   renderStaffInviteDeliveryReadiness(deliveryReadiness);
+  renderStaffInviteDeliveryOutbox(deliveryOutbox);
   renderStaffInvites(rows);
 }
 

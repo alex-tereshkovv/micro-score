@@ -416,6 +416,78 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "Webhook delivery should update invite delivery telemetry",
     )
 
+    worker_invite = client.request(
+        "POST",
+        "/admin/staff-invites",
+        token=admin_token,
+        payload={
+            "email": f"live-worker-{unique}@example.com",
+            "role": "mfi_analyst",
+            "organization_id": DEMO_ORGANIZATION_ID,
+            "expires_in_hours": 72,
+            "queue_delivery": True,
+            "delivery_channel": "email",
+            "delivery_provider": "local_queue",
+        },
+        expected_status=201,
+    )
+    assert_true(
+        worker_invite["delivery_attempt"]["status"] == "queued"
+        and worker_invite["delivery_attempt"]["worker_status"] == "queued"
+        and worker_invite["delivery_attempt"]["next_worker_run_at"],
+        "Local queue attempt should enter invite delivery worker outbox",
+    )
+    delivery_outbox = client.request(
+        "GET",
+        "/admin/staff-invites/delivery-outbox",
+        token=admin_token,
+    )
+    assert_true(
+        delivery_outbox["status"] == "attention"
+        and delivery_outbox["queued_count"] >= 1
+        and delivery_outbox["due_count"] >= 1
+        and any(
+            row["attempt_id"] == worker_invite["delivery_attempt"]["attempt_id"]
+            and row["due"]
+            for row in delivery_outbox["items"]
+        ),
+        "Invite delivery outbox should surface due queued worker attempts",
+    )
+    delivery_worker_run = client.request(
+        "POST",
+        "/admin/staff-invites/delivery-outbox/run",
+        token=admin_token,
+        payload={"limit": 10, "max_attempts": 1, "backoff_seconds": 60},
+    )
+    assert_true(
+        delivery_worker_run["processed_count"] >= 1
+        and delivery_worker_run["dead_lettered_count"] >= 1
+        and any(
+            row["attempt_id"] == worker_invite["delivery_attempt"]["attempt_id"]
+            and row["action"] == "dead_lettered"
+            and row["worker_status"] == "dead_letter"
+            for row in delivery_worker_run["results"]
+        ),
+        "Invite delivery worker should dead-letter exhausted local queue attempts",
+    )
+    worker_attempts = client.request(
+        "GET",
+        f"/admin/staff-invites/{urllib.parse.quote(worker_invite['token_id'], safe='')}/delivery-attempts",
+        token=admin_token,
+    )
+    assert_true(
+        len(worker_attempts) == 1
+        and worker_attempts[0]["status"] == "failed"
+        and worker_attempts[0]["worker_status"] == "dead_letter"
+        and worker_attempts[0]["worker_attempt_count"] == 1,
+        "Worker delivery attempts should expose dead-letter telemetry",
+    )
+    client.request(
+        "DELETE",
+        f"/admin/staff-invites/{urllib.parse.quote(worker_invite['token_id'], safe='')}",
+        token=admin_token,
+    )
+
     accepted = client.request(
         "POST",
         "/auth/accept-staff-invite",
@@ -531,6 +603,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "staff_invite_created",
         "staff_invite_delivery_attempted",
         "staff_invite_delivery_webhook_received",
+        "staff_invite_delivery_worker_run",
         "staff_invite_accepted",
         "staff_session_revoked",
         "staff_user_disabled",
@@ -551,8 +624,9 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         "delivery_provider": delivery_readiness["configured_provider"],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
         "delivery_webhook_events": len(webhook_events),
+        "delivery_worker_dead_lettered": delivery_worker_run["dead_lettered_count"],
         "final_security_status": final_readiness["status"],
-        "audit_actions_checked": 8,
+        "audit_actions_checked": 9,
     }
 
 
