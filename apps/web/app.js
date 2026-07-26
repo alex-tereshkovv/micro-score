@@ -96,6 +96,7 @@ const els = {
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
   prePilotReadiness: document.querySelector("#prePilotReadiness"),
+  postgresqlReadiness: document.querySelector("#postgresqlReadiness"),
   auditTrail: document.querySelector("#auditTrail"),
   identityReadiness: document.querySelector("#identityReadiness"),
   securityReadiness: document.querySelector("#securityReadiness"),
@@ -984,6 +985,8 @@ function resetPrivilegedViews() {
   els.identityReadiness.textContent = "Identity readiness evidence not loaded.";
   els.prePilotReadiness.className = "pre-pilot-readiness empty";
   els.prePilotReadiness.textContent = "Pre-pilot readiness gate not loaded.";
+  els.postgresqlReadiness.className = "postgresql-readiness empty";
+  els.postgresqlReadiness.textContent = "PostgreSQL readiness not loaded.";
   els.mfaReadiness.className = "metric-grid mfa-readiness empty";
   els.mfaReadiness.textContent = "MFA readiness not loaded.";
   els.staffInviteHealth.className = "metric-grid invite-health empty";
@@ -2715,6 +2718,101 @@ function renderPrePilotReadiness(payload) {
   `;
 }
 
+function renderPostgresqlReadiness(payload) {
+  if (!els.postgresqlReadiness) return;
+  if (!payload) {
+    setPanelState(
+      els.postgresqlReadiness,
+      "postgresql-readiness",
+      "empty",
+      "No PostgreSQL readiness loaded",
+      "Refresh the admin workspace to load storage migration evidence.",
+    );
+    return;
+  }
+
+  const statusClass = payload.status === "blocked"
+    ? "risk-high"
+    : payload.status === "planned"
+      ? "risk-medium"
+      : "risk-low";
+  const checks = payload.parity_checks || [];
+  const checkRows = checks.map((row) => `
+    <article class="evidence-row ${severityClass(row.status === "planned" ? "warning" : row.status)}">
+      <div>
+        <span>${escapeHtml(severityLabel(row.status === "planned" ? "warning" : row.status))}</span>
+        <strong>${escapeHtml(formatPolicyName(row.key))}</strong>
+      </div>
+      <p>${escapeHtml(row.sqlite_evidence || "SQLite evidence not reported.")} ${escapeHtml(row.postgres_requirement || "")}</p>
+      <em>${escapeHtml(row.action || "Keep this parity check in migration planning.")}</em>
+    </article>
+  `).join("");
+  const tableRows = (payload.schema_inventory || [])
+    .slice(0, 8)
+    .map((table) => `
+      <tr>
+        <td>${escapeHtml(table.table)}</td>
+        <td>${table.present_in_sqlite ? "Yes" : "No"}</td>
+        <td>${Number(table.column_count || 0)}</td>
+        <td>${escapeHtml((table.primary_key_columns || []).join(", ") || "-")}</td>
+        <td>${escapeHtml((table.json_columns || []).join(", ") || "-")}</td>
+        <td>${escapeHtml((table.tenant_scope_columns || []).join(", ") || "-")}</td>
+      </tr>
+    `)
+    .join("");
+  const nextControls = (payload.next_required_controls || []).length
+    ? payload.next_required_controls
+      .slice(0, 5)
+      .map((item) => `<li><strong>${escapeHtml(formatPolicyName(item.key))}:</strong> ${escapeHtml(item.action || item.summary || "Resolve this storage control.")}</li>`)
+      .join("")
+    : "<li>PostgreSQL migration controls are ready for implementation.</li>";
+
+  els.postgresqlReadiness.className = "postgresql-readiness";
+  els.postgresqlReadiness.innerHTML = `
+    <section class="evidence-hero postgresql-hero">
+      <div>
+        <span>Storage migration status</span>
+        <strong class="${statusClass}">${escapeHtml(formatPolicyName(payload.status || "blocked"))}</strong>
+        <p>${escapeHtml(payload.limitation || "PostgreSQL readiness is a migration planning contract.")}</p>
+      </div>
+      <dl>
+        <div><dt>Runtime</dt><dd>${escapeHtml(payload.runtime_backend || "sqlite")}</dd></div>
+        <div><dt>Target</dt><dd>${escapeHtml(payload.target_backend || "postgresql")}</dd></div>
+        <div><dt>Tables</dt><dd>${Number(payload.present_table_count || 0)}/${Number(payload.required_table_count || 0)}</dd></div>
+        <div><dt>JSON cols</dt><dd>${Number(payload.json_column_count || 0)}</dd></div>
+        <div><dt>Tenant cols</dt><dd>${Number(payload.tenant_scope_count || 0)}</dd></div>
+        <div><dt>Live PG</dt><dd>${payload.live_connection_tested ? "Tested" : "Not tested"}</dd></div>
+      </dl>
+    </section>
+    <section class="evidence-section">
+      <h4>Parity checks</h4>
+      <div class="evidence-row-list">${checkRows || "<p class=\"tiny-text\">No parity checks returned.</p>"}</div>
+    </section>
+    <section class="evidence-section">
+      <h4>Schema inventory preview</h4>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>SQLite</th>
+              <th>Columns</th>
+              <th>PK</th>
+              <th>JSON</th>
+              <th>Tenant scope</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="evidence-section">
+      <h4>Next storage controls</h4>
+      <ul class="evidence-next-controls">${nextControls}</ul>
+    </section>
+  `;
+}
+
 function renderSecurityReadiness(readiness) {
   if (!els.securityReadiness) return;
   const statusClass = readiness.status === "blocked"
@@ -2869,6 +2967,13 @@ async function refreshSecurityReadiness() {
     "Aggregating security, identity, delivery, storage, model, simulation, privacy, and tenant evidence.",
   );
   setPanelState(
+    els.postgresqlReadiness,
+    "postgresql-readiness",
+    "loading",
+    "Loading PostgreSQL readiness",
+    "Inspecting schema inventory, JSON columns, tenant scope, and parity blockers.",
+  );
+  setPanelState(
     els.identityReadiness,
     "identity-readiness",
     "loading",
@@ -2882,8 +2987,9 @@ async function refreshSecurityReadiness() {
     "Loading security readiness",
     "Checking current pre-pilot security controls.",
   );
-  const [prePilotResult, readinessResult, identityResult] = await Promise.allSettled([
+  const [prePilotResult, postgresqlResult, readinessResult, identityResult] = await Promise.allSettled([
     apiFetch("/admin/governance/pre-pilot-readiness"),
+    apiFetch("/admin/storage/postgresql-readiness"),
     apiFetch("/admin/security/readiness"),
     apiFetch("/admin/security/identity-readiness"),
   ]);
@@ -2897,6 +3003,18 @@ async function refreshSecurityReadiness() {
       "error",
       "Pre-Pilot Gate unavailable",
       prePilotResult.reason?.message || "The release readiness gate could not be loaded.",
+    );
+  }
+
+  if (postgresqlResult.status === "fulfilled") {
+    renderPostgresqlReadiness(postgresqlResult.value);
+  } else {
+    setPanelState(
+      els.postgresqlReadiness,
+      "postgresql-readiness",
+      "error",
+      "PostgreSQL readiness unavailable",
+      postgresqlResult.reason?.message || "The storage migration readiness endpoint could not be loaded.",
     );
   }
 
@@ -2926,6 +3044,7 @@ async function refreshSecurityReadiness() {
 
   if (
     prePilotResult.status === "rejected"
+    && postgresqlResult.status === "rejected"
     && readinessResult.status === "rejected"
     && identityResult.status === "rejected"
   ) {
@@ -2933,6 +3052,7 @@ async function refreshSecurityReadiness() {
   }
   return {
     pre_pilot_readiness: prePilotResult.status === "fulfilled" ? prePilotResult.value : null,
+    postgresql_readiness: postgresqlResult.status === "fulfilled" ? postgresqlResult.value : null,
     readiness: readinessResult.status === "fulfilled" ? readinessResult.value : null,
     identity_readiness: identityResult.status === "fulfilled" ? identityResult.value : null,
   };

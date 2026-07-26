@@ -1985,14 +1985,16 @@ label {
 }
 
 .identity-readiness,
-.pre-pilot-readiness {
+.pre-pilot-readiness,
+.postgresql-readiness {
   display: grid;
   gap: 12px;
   min-height: 140px;
 }
 
 .identity-readiness.empty,
-.pre-pilot-readiness.empty {
+.pre-pilot-readiness.empty,
+.postgresql-readiness.empty {
   border: 1px dashed var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
@@ -2002,6 +2004,10 @@ label {
 
 .pre-pilot-hero {
   border-left-color: var(--red);
+}
+
+.postgresql-hero {
+  border-left-color: var(--amber);
 }
 
 .evidence-hero,

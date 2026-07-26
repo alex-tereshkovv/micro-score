@@ -71,6 +71,7 @@ from .schemas import (
     PilotReadinessResponse,
     PolicyAnalyticsResponse,
     PrePilotReadinessResponse,
+    PostgresMigrationReadinessResponse,
     PortfolioSimulationRequest,
     PortfolioSimulationResponse,
     PortfolioSimulationSummary,
@@ -2119,6 +2120,7 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
     delivery_readiness = _staff_invite_delivery_readiness_response(repository)
     adapter_readiness = _staff_invite_delivery_adapter_readiness_response()
     storage_readiness = repository.storage_readiness()
+    postgresql_readiness = repository.postgresql_migration_readiness()
     active_model = repository.get_active_model_version()
     model_versions = repository.list_model_versions()
     applications = repository.list_applications()
@@ -2251,21 +2253,39 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
             "key": "storage_backend",
             "label": "Production storage backend",
             "category": "storage",
-            "status": "pass" if storage_readiness["production_ready"] else "blocker",
+            "status": "pass" if postgresql_readiness["production_ready"] else "blocker",
             "summary": (
                 f"Storage backend is {storage_readiness['backend']!r}; "
-                f"production_ready={storage_readiness['production_ready']}."
+                f"PostgreSQL readiness is {postgresql_readiness['status']} with "
+                f"{len(postgresql_readiness['blockers'])} blocker(s)."
             ),
             "action": (
                 "Keep managed storage checks in release validation."
-                if storage_readiness["production_ready"]
-                else "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests."
+                if postgresql_readiness["production_ready"]
+                else (
+                    postgresql_readiness["next_required_controls"][0]["action"]
+                    if postgresql_readiness["next_required_controls"]
+                    else "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests."
+                )
             ),
             "evidence": {
                 "backend": storage_readiness["backend"],
                 "production_ready": storage_readiness["production_ready"],
                 "postgresql_migration_status": storage_readiness[
                     "postgresql_migration_status"
+                ],
+                "postgresql_readiness_status": postgresql_readiness["status"],
+                "postgresql_repository_backend_status": postgresql_readiness[
+                    "repository_backend_status"
+                ],
+                "postgresql_schema_inventory_table_count": postgresql_readiness[
+                    "present_table_count"
+                ],
+                "postgresql_parity_check_count": len(
+                    postgresql_readiness["parity_checks"]
+                ),
+                "postgresql_blocker_keys": [
+                    item["key"] for item in postgresql_readiness["blockers"]
                 ],
                 "tenant_scoped_tables": storage_readiness["tenant_scoped_tables"],
             },
@@ -3702,6 +3722,17 @@ def admin_pre_pilot_readiness(
     repository: MicroScoreRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return _pre_pilot_readiness_response(repository)
+
+
+@app.get(
+    "/admin/storage/postgresql-readiness",
+    response_model=PostgresMigrationReadinessResponse,
+)
+def admin_postgresql_migration_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+    repository: MicroScoreRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    return repository.postgresql_migration_readiness()
 
 
 @app.get("/admin/users", response_model=list[UserPublic])

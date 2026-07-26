@@ -112,8 +112,9 @@ Main local components:
   portfolio outcomes with audited assumptions, snapshot fingerprints, numerical
   precision diagnostics, and an immutable run registry;
 - SQLite demo database generated under `data/app/`, with explicit storage
-  readiness metadata and a PostgreSQL migration checklist exposed through
-  `/health`;
+  readiness metadata exposed through `/health`, plus
+  `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
+  JSON-column mapping, tenant-scope parity checks, and migration blockers;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 
@@ -192,7 +193,8 @@ while the research is still pre-pilot.
 ## Known Architecture Gaps
 
 - No production authentication provider yet.
-- No PostgreSQL deployment yet.
+- No PostgreSQL repository backend, versioned migrations, managed database
+  secret, deployment, or disposable PostgreSQL parity CI yet.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
 - Monte Carlo stress shifts and financial assumptions are transparent defaults,

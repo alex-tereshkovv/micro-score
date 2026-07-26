@@ -37,7 +37,7 @@ class WebStaticTests(unittest.TestCase):
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
 
-        self.assertIn('href="./styles.css?v=20260725-pre-pilot-gate-v1"', html)
+        self.assertIn('href="./styles.css?v=20260726-postgres-readiness-v1"', html)
         self.assertIn('href="./assets/favicon.svg"', html)
         self.assertIn('href="./assets/favicon-32.png"', html)
         self.assertIn('href="./assets/apple-touch-icon.png"', html)
@@ -46,9 +46,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260717-pilot-readiness-v1"', html)
-        self.assertIn('src="./mock-api.js?v=20260725-pre-pilot-gate-v1"', html)
+        self.assertIn('src="./mock-api.js?v=20260726-postgres-readiness-v1"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260725-pre-pilot-gate-v1"', html)
+        self.assertIn('src="./app.js?v=20260726-postgres-readiness-v1"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('name="requested_amount" type="number" min="1000" max="100000000" step="1"', html)
@@ -90,6 +90,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('id="adminView"', html)
         self.assertIn('id="prePilotReadiness"', html)
         self.assertIn("Pre-Pilot Gate v1", html)
+        self.assertIn('id="postgresqlReadiness"', html)
+        self.assertIn("PostgreSQL Readiness v1", html)
         self.assertIn('id="identityReadiness"', html)
         self.assertIn("Security Evidence Room v1", html)
         self.assertIn("Identity and access evidence", html)
@@ -157,6 +159,7 @@ class WebStaticTests(unittest.TestCase):
             "/admin/audit-events",
             "/admin/users",
             "/admin/governance/pre-pilot-readiness",
+            "/admin/storage/postgresql-readiness",
             "/admin/security/readiness",
             "/admin/security/identity-readiness",
             "/admin/security/mfa-readiness",
@@ -244,8 +247,11 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("renderStateBlock", script)
         self.assertIn("setPanelState", script)
         self.assertIn("renderPrePilotReadiness", script)
+        self.assertIn("renderPostgresqlReadiness", script)
         self.assertIn("pre_pilot_readiness", script)
+        self.assertIn("postgresql_readiness", script)
         self.assertIn("Pre-Pilot Gate", script)
+        self.assertIn("PostgreSQL readiness", script)
         self.assertIn("withButtonBusy", script)
         self.assertIn("Loading application queue", script)
         self.assertIn("Queue unavailable", script)
@@ -295,6 +301,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn(".state-block", styles)
         self.assertIn(".pre-pilot-readiness", styles)
         self.assertIn(".pre-pilot-hero", styles)
+        self.assertIn(".postgresql-readiness", styles)
+        self.assertIn(".postgresql-hero", styles)
         self.assertIn(".state-spinner", styles)
         self.assertIn(".checkbox-label", styles)
         self.assertIn("@keyframes stateSpin", styles)
@@ -329,8 +337,13 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Public registration is limited to borrower accounts", mock_script)
         self.assertIn('"/admin/users"', mock_script)
         self.assertIn('"/admin/governance/pre-pilot-readiness"', mock_script)
+        self.assertIn('"/admin/storage/postgresql-readiness"', mock_script)
         self.assertIn("prePilotReadiness", mock_script)
+        self.assertIn("postgresqlMigrationReadiness", mock_script)
         self.assertIn("PRE_PILOT_READINESS_LIMITATION", mock_script)
+        self.assertIn("POSTGRESQL_READINESS_LIMITATION", mock_script)
+        self.assertIn("postgresql_schema_inventory", mock_script)
+        self.assertIn("postgresql_disposable_ci", mock_script)
         self.assertIn("production_data_allowed", mock_script)
         self.assertIn("public_demo_allowed", mock_script)
         self.assertIn("monte_carlo_evidence", mock_script)

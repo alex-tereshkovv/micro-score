@@ -592,6 +592,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PilotDataClassRow", schemas)
         self.assertIn("PrePilotReadinessCheck", schemas)
         self.assertIn("PrePilotReadinessResponse", schemas)
+        self.assertIn("PostgresSchemaTableResponse", schemas)
+        self.assertIn("PostgresParityCheckResponse", schemas)
+        self.assertIn("PostgresMigrationControlResponse", schemas)
+        self.assertIn("PostgresMigrationReadinessResponse", schemas)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("storage", schemas["HealthResponse"]["properties"])
@@ -702,6 +706,7 @@ class ApiIntegrationTests(unittest.TestCase):
         paths = response.json()["paths"]
         self.assertIn("/admin/security/readiness", paths)
         self.assertIn("/admin/governance/pre-pilot-readiness", paths)
+        self.assertIn("/admin/storage/postgresql-readiness", paths)
         self.assertIn("/admin/security/identity-readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)
@@ -810,6 +815,14 @@ class ApiIntegrationTests(unittest.TestCase):
             checks["storage_backend"]["evidence"]["postgresql_migration_status"],
             "planned",
         )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"]["postgresql_readiness_status"],
+            "blocked",
+        )
+        self.assertIn(
+            "postgresql_repository_backend_not_implemented",
+            checks["storage_backend"]["evidence"]["postgresql_blocker_keys"],
+        )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
             "Production identity and access",
@@ -822,6 +835,57 @@ class ApiIntegrationTests(unittest.TestCase):
         serialized = json.dumps(payload)
         self.assertNotIn(TEST_PASSWORD, serialized)
         self.assertNotIn("webhook-secret", serialized)
+
+    def test_admin_postgresql_readiness_exposes_migration_parity_contract(self) -> None:
+        borrower_token = self._register("postgres-readiness-borrower@example.com", "borrower")
+        forbidden = self.client.get(
+            "/admin/storage/postgresql-readiness",
+            headers=self._headers(borrower_token),
+        )
+        self.assertEqual(forbidden.status_code, 403, forbidden.text)
+
+        admin_token = self._register("postgres-readiness-admin@example.com", "admin")
+        response = self.client.get(
+            "/admin/storage/postgresql-readiness",
+            headers=self._headers(admin_token),
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["runtime_backend"], "sqlite")
+        self.assertEqual(payload["target_backend"], "postgresql")
+        self.assertEqual(payload["repository_backend_status"], "not_implemented")
+        self.assertFalse(payload["migration_ready"])
+        self.assertFalse(payload["production_ready"])
+        self.assertFalse(payload["live_connection_tested"])
+        self.assertIn("MICROSCORE_DATABASE_URL", payload["missing_environment"])
+        self.assertEqual(payload["present_table_count"], payload["required_table_count"])
+        self.assertGreaterEqual(payload["json_column_count"], 1)
+        self.assertGreaterEqual(payload["tenant_scope_count"], 1)
+        inventory_by_table = {row["table"]: row for row in payload["schema_inventory"]}
+        self.assertIn("loan_applications", inventory_by_table)
+        self.assertIn(
+            "behavioral_signals_json",
+            inventory_by_table["loan_applications"]["json_columns"],
+        )
+        self.assertIn(
+            "organization_id",
+            inventory_by_table["loan_applications"]["tenant_scope_columns"],
+        )
+        parity = {row["key"]: row for row in payload["parity_checks"]}
+        self.assertEqual(parity["postgresql_schema_inventory"]["status"], "pass")
+        self.assertEqual(parity["postgresql_repository_backend"]["status"], "blocker")
+        self.assertEqual(parity["postgresql_disposable_ci"]["status"], "blocker")
+        blockers = {row["key"] for row in payload["blockers"]}
+        self.assertIn("postgresql_repository_backend_not_implemented", blockers)
+        self.assertIn("postgresql_versioned_migrations_missing", blockers)
+        self.assertIn("postgresql_disposable_parity_ci_missing", blockers)
+        self.assertIn("postgresql_database_url_missing", blockers)
+        self.assertIn("schema and parity contract", payload["limitation"])
+        serialized = json.dumps(payload)
+        self.assertNotIn("postgres://", serialized)
+        self.assertNotIn("password=", serialized)
 
     def test_application_boundary_enforces_consent_and_rejects_sensitive_fields(self) -> None:
         borrower_token = self._register("privacy-borrower@example.com", "borrower")

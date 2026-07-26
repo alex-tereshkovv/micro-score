@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260725-pre-pilot-gate-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260726-postgres-readiness-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -570,6 +570,16 @@
           <section class="panel wide-panel">
             <div class="panel-heading">
               <div>
+                <p class="eyebrow">PostgreSQL Readiness v1</p>
+                <h3>Storage migration contract</h3>
+              </div>
+            </div>
+            <div id="postgresqlReadiness" class="postgresql-readiness empty">PostgreSQL readiness not loaded.</div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="panel-heading">
+              <div>
                 <p class="eyebrow">Security Evidence Room v1</p>
                 <h3>Identity and access evidence</h3>
               </div>
@@ -701,8 +711,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260725-pre-pilot-gate-v1"></script>
+    <script src="./mock-api.js?v=20260726-postgres-readiness-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260725-pre-pilot-gate-v1"></script>
+    <script src="./app.js?v=20260726-postgres-readiness-v1"></script>
   </body>
 </html>

@@ -67,6 +67,114 @@
   ];
   const PRE_PILOT_RELEASE_TARGET = "public portfolio demo and controlled MFI validation planning, not real borrower onboarding";
   const PRE_PILOT_READINESS_LIMITATION = "Pre-Pilot Readiness Gate v1 aggregates live prototype evidence for release planning. It does not grant permission to collect real borrower data; production IdP/TOTP/WebAuthn, managed PostgreSQL, real KZT calibration, legal/privacy sign-off, and transactional invite delivery must be completed before a real pilot.";
+  const POSTGRESQL_READINESS_LIMITATION = "PostgreSQL Migration Readiness v1 is a schema and parity contract. It does not connect to PostgreSQL, does not run production migrations, and does not make the prototype storage production-ready.";
+  const POSTGRESQL_SCHEMA_INVENTORY = [
+    {
+      table: "mfi_organizations",
+      present_in_sqlite: true,
+      column_count: 4,
+      primary_key_columns: ["id"],
+      json_columns: [],
+      tenant_scope_columns: [],
+      migration_notes: [],
+    },
+    {
+      table: "users",
+      present_in_sqlite: true,
+      column_count: 10,
+      primary_key_columns: ["email"],
+      json_columns: [],
+      tenant_scope_columns: ["organization_id"],
+      migration_notes: ["Preserve tenant scope in indexes, query filters, and optional row-level security."],
+    },
+    {
+      table: "sessions",
+      present_in_sqlite: true,
+      column_count: 3,
+      primary_key_columns: ["token"],
+      json_columns: [],
+      tenant_scope_columns: [],
+      migration_notes: [],
+    },
+    {
+      table: "staff_invites",
+      present_in_sqlite: true,
+      column_count: 18,
+      primary_key_columns: ["token"],
+      json_columns: [],
+      tenant_scope_columns: ["organization_id"],
+      migration_notes: ["Preserve tenant scope in indexes, query filters, and optional row-level security."],
+    },
+    {
+      table: "staff_invite_delivery_attempts",
+      present_in_sqlite: true,
+      column_count: 16,
+      primary_key_columns: ["attempt_id"],
+      json_columns: [],
+      tenant_scope_columns: [],
+      migration_notes: [],
+    },
+    {
+      table: "staff_invite_delivery_events",
+      present_in_sqlite: true,
+      column_count: 11,
+      primary_key_columns: ["event_id"],
+      json_columns: ["metadata_json"],
+      tenant_scope_columns: [],
+      migration_notes: ["Map JSON text columns to jsonb or a versioned JSON text strategy."],
+    },
+    {
+      table: "loan_applications",
+      present_in_sqlite: true,
+      column_count: 10,
+      primary_key_columns: ["id"],
+      json_columns: ["behavioral_signals_json", "score_result_json"],
+      tenant_scope_columns: ["organization_id"],
+      migration_notes: [
+        "Map JSON text columns to jsonb or a versioned JSON text strategy.",
+        "Preserve tenant scope in indexes, query filters, and optional row-level security.",
+      ],
+    },
+    {
+      table: "application_decisions",
+      present_in_sqlite: true,
+      column_count: 7,
+      primary_key_columns: ["id"],
+      json_columns: [],
+      tenant_scope_columns: [],
+      migration_notes: [],
+    },
+    {
+      table: "audit_events",
+      present_in_sqlite: true,
+      column_count: 6,
+      primary_key_columns: ["id"],
+      json_columns: ["details_json"],
+      tenant_scope_columns: [],
+      migration_notes: ["Map JSON text columns to jsonb or a versioned JSON text strategy."],
+    },
+    {
+      table: "model_versions",
+      present_in_sqlite: true,
+      column_count: 13,
+      primary_key_columns: ["version"],
+      json_columns: ["metrics_json", "limitations_json"],
+      tenant_scope_columns: [],
+      migration_notes: ["Map JSON text columns to jsonb or a versioned JSON text strategy."],
+    },
+    {
+      table: "portfolio_simulations",
+      present_in_sqlite: true,
+      column_count: 7,
+      primary_key_columns: ["id"],
+      json_columns: ["request_json", "result_json"],
+      tenant_scope_columns: ["organization_id"],
+      migration_notes: [
+        "Map JSON text columns to jsonb or a versioned JSON text strategy.",
+        "Preserve tenant scope in indexes, query filters, and optional row-level security.",
+      ],
+    },
+  ];
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -1540,11 +1648,103 @@
     return "pass";
   }
 
+  function postgresqlMigrationReadiness() {
+    const jsonColumnCount = POSTGRESQL_SCHEMA_INVENTORY
+      .reduce((total, table) => total + table.json_columns.length, 0);
+    const tenantScopeCount = POSTGRESQL_SCHEMA_INVENTORY
+      .reduce((total, table) => total + table.tenant_scope_columns.length, 0);
+    const blockers = [
+      {
+        key: "postgresql_repository_backend_not_implemented",
+        severity: "blocker",
+        summary: "The runtime repository backend is still SQLite-only.",
+        action: "Implement and test a PostgreSQL repository backend before real pilot data.",
+      },
+      {
+        key: "postgresql_versioned_migrations_missing",
+        severity: "blocker",
+        summary: "No versioned PostgreSQL schema migrations are present.",
+        action: "Create explicit schema migrations for every table, JSON column, index, and tenant boundary.",
+      },
+      {
+        key: "postgresql_disposable_parity_ci_missing",
+        severity: "blocker",
+        summary: "CI does not run repository parity tests against PostgreSQL.",
+        action: "Add disposable PostgreSQL integration tests before enabling the backend.",
+      },
+      {
+        key: "postgresql_database_url_missing",
+        severity: "blocker",
+        summary: "PostgreSQL connection environment is not configured (MICROSCORE_DATABASE_URL).",
+        action: "Configure managed database connection secrets without exposing their values.",
+      },
+    ];
+    return {
+      status: "blocked",
+      generated_at: nowIso(),
+      runtime_backend: "sqlite",
+      target_backend: "postgresql",
+      repository_backend_status: "not_implemented",
+      migration_ready: false,
+      production_ready: false,
+      live_connection_tested: false,
+      required_environment: ["MICROSCORE_DATABASE_URL"],
+      configured_environment: [],
+      missing_environment: ["MICROSCORE_DATABASE_URL"],
+      required_table_count: POSTGRESQL_SCHEMA_INVENTORY.length,
+      present_table_count: POSTGRESQL_SCHEMA_INVENTORY.filter((table) => table.present_in_sqlite).length,
+      json_column_count: jsonColumnCount,
+      tenant_scope_count: tenantScopeCount,
+      schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
+      parity_checks: [
+        {
+          key: "postgresql_schema_inventory",
+          status: "pass",
+          sqlite_evidence: `${POSTGRESQL_SCHEMA_INVENTORY.length}/${POSTGRESQL_SCHEMA_INVENTORY.length} required SQLite tables are present.`,
+          postgres_requirement: "Every required table has an explicit PostgreSQL migration.",
+          action: "Keep generated migration inventory in review.",
+        },
+        {
+          key: "postgresql_jsonb_mapping",
+          status: "planned",
+          sqlite_evidence: `${jsonColumnCount} JSON text column(s) are used by SQLite.`,
+          postgres_requirement: "Map JSON text columns to jsonb or a versioned text strategy.",
+          action: "Write explicit jsonb/text mapping decisions before enabling PostgreSQL.",
+        },
+        {
+          key: "postgresql_tenant_scope_parity",
+          status: "planned",
+          sqlite_evidence: `${tenantScopeCount} tenant-scope column(s) are tracked.`,
+          postgres_requirement: "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
+          action: "Add PostgreSQL tenant-scope parity tests for MFI queues, analytics, review packets, invites, and simulations.",
+        },
+        {
+          key: "postgresql_repository_backend",
+          status: "blocker",
+          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup.",
+          postgres_requirement: "Implement a PostgreSQL repository backend behind the same API contract.",
+          action: "Build a repository adapter and keep existing API tests backend-parametrized.",
+        },
+        {
+          key: "postgresql_disposable_ci",
+          status: "blocker",
+          sqlite_evidence: "Current CI uses SQLite plus local live-smoke temporary databases.",
+          postgres_requirement: "Run parity tests against a disposable PostgreSQL database in CI.",
+          action: "Add disposable PostgreSQL service tests before claiming storage production readiness.",
+        },
+      ],
+      blockers,
+      next_required_controls: blockers,
+      limitation: POSTGRESQL_READINESS_LIMITATION,
+    };
+  }
+
   function prePilotReadiness(session = {}) {
     const security = securityReadiness();
     const identity = identityReadiness(session);
     const delivery = inviteDeliveryReadiness();
     const adapter = inviteDeliveryAdapterReadiness();
+    const postgresql = postgresqlMigrationReadiness();
     const activeModel = activeModelVersion();
     const scored = demo.applications.filter((app) => app.score_result);
     const decided = demo.applications.filter((app) => app.decision_result);
@@ -1621,12 +1821,17 @@
         label: "Production storage backend",
         category: "storage",
         status: "blocker",
-        summary: "Storage backend is 'sqlite_static_demo'; production_ready=false.",
-        action: "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests.",
+        summary: `Storage backend is 'sqlite_static_demo'; PostgreSQL readiness is ${postgresql.status} with ${postgresql.blockers.length} blocker(s).`,
+        action: postgresql.next_required_controls[0]?.action || "Complete PostgreSQL migration readiness, backups, retention, and disposable integration tests.",
         evidence: {
           backend: "sqlite_static_demo",
           production_ready: false,
           postgresql_migration_status: "planned",
+          postgresql_readiness_status: postgresql.status,
+          postgresql_repository_backend_status: postgresql.repository_backend_status,
+          postgresql_schema_inventory_table_count: postgresql.present_table_count,
+          postgresql_parity_check_count: postgresql.parity_checks.length,
+          postgresql_blocker_keys: postgresql.blockers.map((item) => item.key),
           tenant_scoped_tables: [
             "users.organization_id",
             "loan_applications.organization_id",
@@ -3321,6 +3526,11 @@
     if (cleanPath === "/admin/governance/pre-pilot-readiness" && method === "GET") {
       requireAdmin(session);
       return clone(prePilotReadiness(session));
+    }
+
+    if (cleanPath === "/admin/storage/postgresql-readiness" && method === "GET") {
+      requireAdmin(session);
+      return clone(postgresqlMigrationReadiness());
     }
 
     if (cleanPath === "/admin/security/identity-readiness" && method === "GET") {

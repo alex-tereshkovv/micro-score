@@ -156,9 +156,14 @@ git diff --check
   and tenant-isolation evidence, keeps `production_data_allowed=false` while
   blockers or warnings remain, and separates public demo readiness from real
   borrower pilot permission.
+- PostgreSQL Migration Readiness v1 exposes
+  `/admin/storage/postgresql-readiness`, schema inventory, JSON-column mapping
+  needs, tenant-scope parity checks, missing `MICROSCORE_DATABASE_URL`, and
+  blockers for the unimplemented PostgreSQL repository backend, versioned
+  migrations, and disposable PostgreSQL CI.
 - Storage readiness remains explicit: SQLite is the prototype backend,
-  PostgreSQL migration remains planned, and no release should imply production
-  storage readiness until that gate changes.
+  PostgreSQL migration remains blocked/planned, and no release should imply
+  production storage readiness until that gate changes.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

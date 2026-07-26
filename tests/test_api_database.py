@@ -136,6 +136,47 @@ class ApiDatabaseTests(unittest.TestCase):
             any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
         )
 
+    def test_postgresql_migration_readiness_exposes_schema_inventory_and_blockers(self) -> None:
+        readiness = self.repository.postgresql_migration_readiness()
+
+        self.assertEqual(readiness["status"], "blocked")
+        self.assertEqual(readiness["runtime_backend"], "sqlite")
+        self.assertEqual(readiness["target_backend"], "postgresql")
+        self.assertEqual(readiness["repository_backend_status"], "not_implemented")
+        self.assertFalse(readiness["migration_ready"])
+        self.assertFalse(readiness["production_ready"])
+        self.assertFalse(readiness["live_connection_tested"])
+        self.assertIn("MICROSCORE_DATABASE_URL", readiness["required_environment"])
+        self.assertIn("MICROSCORE_DATABASE_URL", readiness["missing_environment"])
+        self.assertEqual(
+            readiness["present_table_count"],
+            readiness["required_table_count"],
+        )
+        self.assertGreaterEqual(readiness["json_column_count"], 1)
+        self.assertGreaterEqual(readiness["tenant_scope_count"], 1)
+        inventory_by_table = {
+            row["table"]: row for row in readiness["schema_inventory"]
+        }
+        self.assertIn("loan_applications", inventory_by_table)
+        self.assertIn(
+            "behavioral_signals_json",
+            inventory_by_table["loan_applications"]["json_columns"],
+        )
+        self.assertIn(
+            "organization_id",
+            inventory_by_table["loan_applications"]["tenant_scope_columns"],
+        )
+        parity_keys = {row["key"]: row for row in readiness["parity_checks"]}
+        self.assertEqual(parity_keys["postgresql_schema_inventory"]["status"], "pass")
+        self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")
+        self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "blocker")
+        blocker_keys = {row["key"] for row in readiness["blockers"]}
+        self.assertIn("postgresql_repository_backend_not_implemented", blocker_keys)
+        self.assertIn("postgresql_versioned_migrations_missing", blocker_keys)
+        self.assertIn("postgresql_disposable_parity_ci_missing", blocker_keys)
+        self.assertIn("postgresql_database_url_missing", blocker_keys)
+        self.assertIn("schema and parity contract", readiness["limitation"])
+
     def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
         configured = os.environ.copy()
         configured["MICROSCORE_STORAGE_BACKEND"] = "postgresql"

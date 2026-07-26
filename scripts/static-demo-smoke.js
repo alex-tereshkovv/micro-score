@@ -452,6 +452,24 @@ async function main() {
   ) {
     throw new Error("Expected pre-pilot readiness gate to aggregate blocked real-data controls and passing demo evidence");
   }
+  const postgresqlReadinessInitial = await api.request("/admin/storage/postgresql-readiness", {}, adminSession);
+  const postgresqlParityChecks = new Map(
+    (postgresqlReadinessInitial.parity_checks || []).map((check) => [check.key, check]),
+  );
+  if (
+    postgresqlReadinessInitial.status !== "blocked"
+    || postgresqlReadinessInitial.runtime_backend !== "sqlite"
+    || postgresqlReadinessInitial.target_backend !== "postgresql"
+    || postgresqlReadinessInitial.repository_backend_status !== "not_implemented"
+    || postgresqlReadinessInitial.production_ready
+    || !postgresqlReadinessInitial.missing_environment?.includes("MICROSCORE_DATABASE_URL")
+    || postgresqlParityChecks.get("postgresql_schema_inventory")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "blocker"
+    || !postgresqlReadinessInitial.schema_inventory?.some((row) => row.table === "loan_applications" && row.json_columns?.includes("behavioral_signals_json"))
+    || !String(postgresqlReadinessInitial.limitation || "").includes("schema and parity contract")
+  ) {
+    throw new Error("Expected PostgreSQL readiness to expose schema inventory and migration blockers");
+  }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
     "/admin/users",
@@ -1485,6 +1503,9 @@ async function main() {
       pre_pilot_readiness_gate: true,
       pre_pilot_public_demo_allowed: prePilotReadinessInitial.public_demo_allowed,
       pre_pilot_production_data_allowed: prePilotReadinessInitial.production_data_allowed,
+      postgresql_readiness: true,
+      postgresql_schema_inventory: postgresqlReadinessInitial.present_table_count,
+      postgresql_production_ready: postgresqlReadinessInitial.production_ready,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,
       staff_invite_delivery_webhook: true,

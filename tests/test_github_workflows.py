@@ -68,6 +68,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("security_readiness", script)
         self.assertIn("pre_pilot_readiness_gate", script)
         self.assertIn("/admin/governance/pre-pilot-readiness", script)
+        self.assertIn("postgresql_readiness", script)
+        self.assertIn("/admin/storage/postgresql-readiness", script)
         self.assertIn("staff_session_control", script)
         self.assertIn("mfa_challenge_failures", script)
         self.assertIn("staff_mfa_challenge_failed", script)

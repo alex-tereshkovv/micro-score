@@ -1266,6 +1266,29 @@ tables, JSON text columns, tenant-scoped columns, capability statuses, and the
 PostgreSQL migration checklist. This is migration metadata only; it does not
 require or connect to a live PostgreSQL server.
 
+Admin PostgreSQL migration readiness:
+
+```http
+GET /admin/storage/postgresql-readiness
+```
+
+This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
+
+- `schema_inventory`: required SQLite tables, primary keys, JSON text columns,
+  and tenant-scope columns that must be mapped into PostgreSQL;
+- `parity_checks`: `postgresql_schema_inventory`,
+  `postgresql_jsonb_mapping`, `postgresql_tenant_scope_parity`,
+  `postgresql_repository_backend`, and `postgresql_disposable_ci`;
+- `required_environment`/`missing_environment` such as
+  `MICROSCORE_DATABASE_URL` without exposing secret values;
+- migration blockers including `postgresql_repository_backend_not_implemented`,
+  `postgresql_versioned_migrations_missing`, and
+  `postgresql_disposable_parity_ci_missing`.
+
+The response is intentionally `blocked` until a versioned PostgreSQL migration
+set, repository backend, managed connection secret, and disposable parity CI are
+implemented.
+
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring
 sessions, applications, analyst decisions, audit events, and `model_versions`.

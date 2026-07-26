@@ -109,6 +109,54 @@ class StorageReadinessResponse(BaseModel):
     limitation: str
 
 
+class PostgresSchemaTableResponse(BaseModel):
+    table: str
+    present_in_sqlite: bool
+    column_count: int = Field(ge=0)
+    primary_key_columns: list[str] = Field(default_factory=list)
+    json_columns: list[str] = Field(default_factory=list)
+    tenant_scope_columns: list[str] = Field(default_factory=list)
+    migration_notes: list[str] = Field(default_factory=list)
+
+
+class PostgresParityCheckResponse(BaseModel):
+    key: str
+    status: Literal["pass", "planned", "blocker"]
+    sqlite_evidence: str
+    postgres_requirement: str
+    action: str
+
+
+class PostgresMigrationControlResponse(BaseModel):
+    key: str
+    severity: Literal["blocker", "warning"]
+    summary: str
+    action: str
+
+
+class PostgresMigrationReadinessResponse(BaseModel):
+    status: Literal["ready", "planned", "blocked"]
+    generated_at: str
+    runtime_backend: Literal["sqlite"]
+    target_backend: Literal["postgresql"]
+    repository_backend_status: Literal["not_implemented", "implemented"]
+    migration_ready: bool = False
+    production_ready: bool = False
+    live_connection_tested: bool = False
+    required_environment: list[str] = Field(default_factory=list)
+    configured_environment: list[str] = Field(default_factory=list)
+    missing_environment: list[str] = Field(default_factory=list)
+    required_table_count: int = Field(ge=0)
+    present_table_count: int = Field(ge=0)
+    json_column_count: int = Field(ge=0)
+    tenant_scope_count: int = Field(ge=0)
+    schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)
+    parity_checks: list[PostgresParityCheckResponse] = Field(default_factory=list)
+    blockers: list[PostgresMigrationControlResponse] = Field(default_factory=list)
+    next_required_controls: list[PostgresMigrationControlResponse] = Field(default_factory=list)
+    limitation: str
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str

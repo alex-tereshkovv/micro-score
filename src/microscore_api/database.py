@@ -24,6 +24,7 @@ DEFAULT_MODEL_RANDOM_STATE = 42
 DEFAULT_STORAGE_BACKEND = "sqlite"
 SUPPORTED_STORAGE_BACKENDS = {DEFAULT_STORAGE_BACKEND}
 POSTGRESQL_STORAGE_ALIASES = {"postgres", "postgresql"}
+POSTGRESQL_REQUIRED_ENVIRONMENT = ("MICROSCORE_DATABASE_URL",)
 REQUIRED_SCHEMA_TABLES = (
     "mfi_organizations",
     "users",
@@ -61,6 +62,11 @@ POSTGRESQL_MIGRATION_CHECKLIST = (
     "Port session, staff invite, audit, model registry, and simulation "
     "repositories behind the same API.",
     "Run SQLite parity tests plus PostgreSQL integration tests against a disposable database.",
+)
+POSTGRESQL_READINESS_LIMITATION = (
+    "PostgreSQL Migration Readiness v1 is a schema and parity contract. It "
+    "does not connect to PostgreSQL, does not run production migrations, and "
+    "does not make the prototype storage production-ready."
 )
 
 
@@ -648,6 +654,196 @@ class MicroScoreRepository:
                 "PostgreSQL Readiness v1 documents the storage contract and startup "
                 "validation while the runtime repository remains SQLite-only."
             ),
+        }
+
+    def sqlite_schema_inventory(self) -> list[dict[str, Any]]:
+        """Return required SQLite table metadata for PostgreSQL migration planning."""
+
+        inventory: list[dict[str, Any]] = []
+        json_by_table: dict[str, list[str]] = {}
+        for item in JSON_TEXT_COLUMNS:
+            table, column = item.split(".", 1)
+            json_by_table.setdefault(table, []).append(column)
+        tenant_by_table: dict[str, list[str]] = {}
+        for item in TENANT_SCOPED_TABLES:
+            table, column = item.split(".", 1)
+            tenant_by_table.setdefault(table, []).append(column)
+
+        with self._connection() as connection:
+            for table in REQUIRED_SCHEMA_TABLES:
+                rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+                present = bool(rows)
+                columns = [dict(row) for row in rows]
+                column_names = {str(column["name"]) for column in columns}
+                primary_key_columns = [
+                    str(column["name"])
+                    for column in sorted(columns, key=lambda row: int(row["pk"] or 0))
+                    if int(column["pk"] or 0) > 0
+                ]
+                json_columns = [
+                    column
+                    for column in json_by_table.get(table, [])
+                    if column in column_names
+                ]
+                tenant_scope_columns = [
+                    column
+                    for column in tenant_by_table.get(table, [])
+                    if column in column_names
+                ]
+                notes: list[str] = []
+                if json_columns:
+                    notes.append("Map JSON text columns to jsonb or a versioned JSON text strategy.")
+                if tenant_scope_columns:
+                    notes.append("Preserve tenant scope in indexes, query filters, and optional row-level security.")
+                if not present:
+                    notes.append("Required SQLite table is missing from the current development database.")
+                inventory.append(
+                    {
+                        "table": table,
+                        "present_in_sqlite": present,
+                        "column_count": len(columns),
+                        "primary_key_columns": primary_key_columns,
+                        "json_columns": json_columns,
+                        "tenant_scope_columns": tenant_scope_columns,
+                        "migration_notes": notes,
+                    }
+                )
+        return inventory
+
+    def postgresql_migration_readiness(self) -> dict[str, Any]:
+        """Return the PostgreSQL migration contract without opening a PG connection."""
+
+        schema_inventory = self.sqlite_schema_inventory()
+        present_table_count = sum(
+            1 for table in schema_inventory if table["present_in_sqlite"]
+        )
+        json_column_count = sum(len(table["json_columns"]) for table in schema_inventory)
+        tenant_scope_count = sum(
+            len(table["tenant_scope_columns"]) for table in schema_inventory
+        )
+        configured_environment = [
+            name for name in POSTGRESQL_REQUIRED_ENVIRONMENT if os.environ.get(name)
+        ]
+        missing_environment = [
+            name for name in POSTGRESQL_REQUIRED_ENVIRONMENT if name not in configured_environment
+        ]
+        missing_tables = [
+            table["table"]
+            for table in schema_inventory
+            if not table["present_in_sqlite"]
+        ]
+        parity_checks = [
+            {
+                "key": "postgresql_schema_inventory",
+                "status": "pass" if not missing_tables else "blocker",
+                "sqlite_evidence": (
+                    f"{present_table_count}/{len(REQUIRED_SCHEMA_TABLES)} required "
+                    "SQLite tables are present."
+                ),
+                "postgres_requirement": "Every required table has an explicit PostgreSQL migration.",
+                "action": (
+                    "Keep generated migration inventory in review."
+                    if not missing_tables
+                    else f"Create missing SQLite tables before migration planning: {', '.join(missing_tables)}."
+                ),
+            },
+            {
+                "key": "postgresql_jsonb_mapping",
+                "status": "planned",
+                "sqlite_evidence": f"{json_column_count} JSON text column(s) are used by SQLite.",
+                "postgres_requirement": "Map JSON text columns to jsonb or a versioned text strategy.",
+                "action": "Write explicit jsonb/text mapping decisions before enabling PostgreSQL.",
+            },
+            {
+                "key": "postgresql_tenant_scope_parity",
+                "status": "planned",
+                "sqlite_evidence": f"{tenant_scope_count} tenant-scope column(s) are tracked.",
+                "postgres_requirement": "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
+                "action": "Add PostgreSQL tenant-scope parity tests for MFI queues, analytics, review packets, invites, and simulations.",
+            },
+            {
+                "key": "postgresql_repository_backend",
+                "status": "blocker",
+                "sqlite_evidence": "Runtime repository supports sqlite only and rejects postgresql at startup.",
+                "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
+                "action": "Build a repository adapter and keep existing API tests backend-parametrized.",
+            },
+            {
+                "key": "postgresql_disposable_ci",
+                "status": "blocker",
+                "sqlite_evidence": "Current CI uses SQLite plus local live-smoke temporary databases.",
+                "postgres_requirement": "Run parity tests against a disposable PostgreSQL database in CI.",
+                "action": "Add disposable PostgreSQL service tests before claiming storage production readiness.",
+            },
+        ]
+
+        blockers = [
+            {
+                "key": "postgresql_repository_backend_not_implemented",
+                "severity": "blocker",
+                "summary": "The runtime repository backend is still SQLite-only.",
+                "action": "Implement and test a PostgreSQL repository backend before real pilot data.",
+            },
+            {
+                "key": "postgresql_versioned_migrations_missing",
+                "severity": "blocker",
+                "summary": "No versioned PostgreSQL schema migrations are present.",
+                "action": "Create explicit schema migrations for every table, JSON column, index, and tenant boundary.",
+            },
+            {
+                "key": "postgresql_disposable_parity_ci_missing",
+                "severity": "blocker",
+                "summary": "CI does not run repository parity tests against PostgreSQL.",
+                "action": "Add disposable PostgreSQL integration tests before enabling the backend.",
+            },
+        ]
+        if missing_environment:
+            blockers.append(
+                {
+                    "key": "postgresql_database_url_missing",
+                    "severity": "blocker",
+                    "summary": (
+                        "PostgreSQL connection environment is not configured "
+                        f"({', '.join(missing_environment)})."
+                    ),
+                    "action": "Configure managed database connection secrets without exposing their values.",
+                }
+            )
+        if missing_tables:
+            blockers.append(
+                {
+                    "key": "sqlite_schema_inventory_incomplete",
+                    "severity": "blocker",
+                    "summary": (
+                        f"{len(missing_tables)} required SQLite table(s) are missing "
+                        "from the current schema inventory."
+                    ),
+                    "action": "Repair SQLite startup migrations before generating PostgreSQL migrations.",
+                }
+            )
+
+        status_value = "blocked" if blockers else "planned"
+        return {
+            "status": status_value,
+            "generated_at": _now_iso(),
+            "runtime_backend": self.storage_backend,
+            "target_backend": "postgresql",
+            "repository_backend_status": "not_implemented",
+            "migration_ready": False,
+            "production_ready": False,
+            "live_connection_tested": False,
+            "required_environment": list(POSTGRESQL_REQUIRED_ENVIRONMENT),
+            "configured_environment": configured_environment,
+            "missing_environment": missing_environment,
+            "required_table_count": len(REQUIRED_SCHEMA_TABLES),
+            "present_table_count": present_table_count,
+            "json_column_count": json_column_count,
+            "tenant_scope_count": tenant_scope_count,
+            "schema_inventory": schema_inventory,
+            "parity_checks": parity_checks,
+            "blockers": blockers,
+            "next_required_controls": blockers,
+            "limitation": POSTGRESQL_READINESS_LIMITATION,
         }
 
     def create_model_version(
