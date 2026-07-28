@@ -841,6 +841,11 @@ class ApiIntegrationTests(unittest.TestCase):
                 "postgresql_versioned_migration_contract_present"
             ]
         )
+        self.assertTrue(
+            checks["storage_backend"]["evidence"][
+                "postgresql_disposable_migration_ci_present"
+            ]
+        )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
             "Production identity and access",
@@ -884,6 +889,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["migration_artifact_count"], 1)
         self.assertEqual(payload["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(payload["versioned_migration_contract_present"])
+        self.assertTrue(payload["disposable_migration_ci_present"])
         artifact = payload["migration_artifacts"][0]
         self.assertEqual(
             artifact["path"],
@@ -912,11 +918,16 @@ class ApiIntegrationTests(unittest.TestCase):
             "pass",
         )
         self.assertEqual(parity["postgresql_jsonb_mapping"]["status"], "pass")
+        self.assertEqual(
+            parity["postgresql_disposable_migration_ci"]["status"],
+            "pass",
+        )
         self.assertEqual(parity["postgresql_repository_backend"]["status"], "blocker")
         self.assertEqual(parity["postgresql_disposable_ci"]["status"], "blocker")
         blockers = {row["key"] for row in payload["blockers"]}
         self.assertIn("postgresql_repository_backend_not_implemented", blockers)
         self.assertNotIn("postgresql_versioned_migrations_missing", blockers)
+        self.assertNotIn("postgresql_disposable_migration_ci_missing", blockers)
         self.assertIn("postgresql_disposable_parity_ci_missing", blockers)
         self.assertIn("postgresql_database_url_missing", blockers)
         self.assertIn("schema and parity contract", payload["limitation"])

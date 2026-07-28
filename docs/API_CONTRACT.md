@@ -1282,18 +1282,22 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   versioned migration contract is present;
 - `parity_checks`: `postgresql_schema_inventory`,
   `postgresql_versioned_migration_artifacts`, `postgresql_jsonb_mapping`,
-  `postgresql_tenant_scope_parity`, `postgresql_repository_backend`, and
-  `postgresql_disposable_ci`;
+  `postgresql_tenant_scope_parity`, `postgresql_disposable_migration_ci`,
+  `postgresql_repository_backend`, and `postgresql_disposable_ci`;
+- `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
+  `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
+  service and applies `0001_initial_schema.sql`;
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,
   `postgresql_disposable_parity_ci_missing`.
 
 The response is intentionally `blocked` even when the versioned migration draft
-is present. `0001_initial_schema.sql` is a reviewed DDL contract, not a runtime
-migration runner. The gate remains blocked until the PostgreSQL repository
-backend, managed connection secret, disposable parity CI, backup/retention
-controls, and live migration execution are implemented.
+is present and applied in disposable CI. `0001_initial_schema.sql` is a reviewed
+DDL contract and CI smoke target, not a production migration runner. The gate
+remains blocked until the PostgreSQL repository backend, managed connection
+secret, repository-level disposable parity CI, backup/retention controls, and
+live migration execution are implemented.
 
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring

@@ -274,8 +274,10 @@ SECURITY_MATRIX_ROWS = [
             "tests/test_api_database.py",
             "scripts/live-api-workflow-smoke.py",
             "scripts/live-security-workflow-smoke.py",
+            "scripts/postgresql-migration-smoke.py",
             "scripts/static-demo-smoke.js",
             "tests/test_web_static.py",
+            ".github/workflows/ci.yml",
             "migrations/postgresql/0001_initial_schema.sql",
             "docs/RELEASE_CHECKLIST.md",
         ],
@@ -285,8 +287,11 @@ SECURITY_MATRIX_ROWS = [
             "storage_readiness",
             "postgresql_schema_inventory",
             "postgresql_versioned_migration_artifacts",
+            "postgresql_disposable_migration_ci",
+            "disposable_migration_ci_present",
             "0001_initial_schema",
             "migration_artifact_count",
+            "postgres:16",
             "postgresql_disposable_ci",
             "MICROSCORE_STORAGE_BACKEND",
             "production_ready",
@@ -385,6 +390,7 @@ class ReleaseGateMatrixTests(unittest.TestCase):
         required_smokes = [
             "scripts\\static-demo-smoke.js",
             "scripts\\frontend-workflow-smoke.js",
+            "scripts\\postgresql-migration-smoke.py",
             "scripts\\live-api-workflow-smoke.py",
             "scripts\\live-security-workflow-smoke.py",
         ]
@@ -394,6 +400,7 @@ class ReleaseGateMatrixTests(unittest.TestCase):
                 self.assertIn(smoke, checklist)
 
         for marker in [
+            "PostgreSQL migration smoke dry run",
             "Live API workflow smoke test",
             "Live security workflow smoke test",
             "Security Readiness Gate Matrix v1",
@@ -430,6 +437,8 @@ class ReleaseGateMatrixTests(unittest.TestCase):
             "scripts\\portfolio-dashboard-smoke.js",
             "scripts\\static-demo-smoke.js",
             "scripts\\frontend-workflow-smoke.js",
+            "scripts\\postgresql-migration-smoke.py",
+            "PostgreSQL migration smoke dry run",
             "scripts\\live-api-workflow-smoke.py",
             "Live API workflow smoke test",
             "scripts\\live-security-workflow-smoke.py",

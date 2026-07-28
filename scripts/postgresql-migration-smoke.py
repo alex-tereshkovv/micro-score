@@ -1,0 +1,357 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+from typing import Sequence
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from microscore_api.database import (  # noqa: E402
+    JSON_TEXT_COLUMNS,
+    POSTGRESQL_TENANT_SCOPE_INDEXES,
+    REQUIRED_SCHEMA_TABLES,
+)
+
+
+DEFAULT_MIGRATION_PATH = (
+    PROJECT_ROOT / "migrations" / "postgresql" / "0001_initial_schema.sql"
+)
+SCHEMA_MIGRATION_VERSION = "0001_initial_schema"
+EXPECTED_TABLES = (*REQUIRED_SCHEMA_TABLES, "schema_migrations")
+
+
+def _load_migration(path: Path) -> str:
+    if not path.exists():
+        raise RuntimeError(f"Migration file does not exist: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def validate_migration_text(path: Path) -> dict[str, object]:
+    sql = _load_migration(path)
+    missing_tables = [
+        table
+        for table in EXPECTED_TABLES
+        if f"CREATE TABLE IF NOT EXISTS {table}" not in sql
+    ]
+    missing_jsonb_columns = [
+        item
+        for item in JSON_TEXT_COLUMNS
+        if f"{item.split('.', 1)[1]} JSONB" not in sql
+    ]
+    missing_tenant_indexes = [
+        index_name
+        for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES
+        if f"CREATE INDEX IF NOT EXISTS {index_name}" not in sql
+    ]
+    if SCHEMA_MIGRATION_VERSION not in sql:
+        raise RuntimeError(f"{SCHEMA_MIGRATION_VERSION} is not recorded in migration SQL")
+    if missing_tables or missing_jsonb_columns or missing_tenant_indexes:
+        raise RuntimeError(
+            "PostgreSQL migration draft is incomplete: "
+            + json.dumps(
+                {
+                    "missing_tables": missing_tables,
+                    "missing_jsonb_columns": missing_jsonb_columns,
+                    "missing_tenant_indexes": missing_tenant_indexes,
+                },
+                sort_keys=True,
+            )
+        )
+    return {
+        "migration": path.relative_to(PROJECT_ROOT).as_posix(),
+        "version": SCHEMA_MIGRATION_VERSION,
+        "expected_tables": len(EXPECTED_TABLES),
+        "expected_jsonb_columns": len(JSON_TEXT_COLUMNS),
+        "expected_tenant_indexes": len(POSTGRESQL_TENANT_SCOPE_INDEXES),
+    }
+
+
+def run_psql(
+    *,
+    psql_bin: str,
+    database_url: str,
+    arguments: Sequence[str],
+) -> str:
+    command = [
+        psql_bin,
+        "--no-psqlrc",
+        "--set",
+        "ON_ERROR_STOP=1",
+        "--dbname",
+        database_url,
+        *arguments,
+    ]
+    completed = subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def query_rows(*, psql_bin: str, database_url: str, sql: str) -> list[str]:
+    output = run_psql(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        arguments=[
+            "--tuples-only",
+            "--no-align",
+            "--field-separator",
+            "\t",
+            "--command",
+            sql,
+        ],
+    )
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def assert_catalog_subset(
+    *,
+    expected: Sequence[str],
+    actual: Sequence[str],
+    label: str,
+) -> None:
+    missing = sorted(set(expected) - set(actual))
+    if missing:
+        raise RuntimeError(f"Missing PostgreSQL {label}: {', '.join(missing)}")
+
+
+def apply_migration_and_verify(
+    *,
+    migration_path: Path,
+    database_url: str,
+    psql_bin: str,
+) -> dict[str, object]:
+    if not database_url:
+        raise RuntimeError("MICROSCORE_DATABASE_URL is required for live PostgreSQL smoke")
+    if shutil.which(psql_bin) is None:
+        raise RuntimeError(f"psql binary was not found: {psql_bin}")
+
+    run_psql(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        arguments=["--file", str(migration_path)],
+    )
+    run_psql(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        arguments=[
+            "--command",
+            """
+            INSERT INTO mfi_organizations (id, name, region, created_at)
+            VALUES ('ci-smoke-mfi', 'CI Smoke MFI', 'Pavlodar', NOW())
+            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+
+            INSERT INTO users (email, password_hash, role, organization_id, created_at)
+            VALUES
+                ('ci-smoke-borrower@example.com', 'hash', 'borrower', NULL, NOW()),
+                ('ci-smoke-analyst@example.com', 'hash', 'mfi_analyst', 'ci-smoke-mfi', NOW())
+            ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role;
+
+            INSERT INTO loan_applications (
+                id,
+                borrower_email,
+                status,
+                requested_amount,
+                purpose,
+                district,
+                settlement_type,
+                organization_id,
+                behavioral_signals_json,
+                score_result_json,
+                created_at,
+                scored_at
+            )
+            VALUES (
+                'ci-smoke-application',
+                'ci-smoke-borrower@example.com',
+                'scored',
+                125000.00,
+                'postgresql migration smoke',
+                'Pavlodar city',
+                'urban',
+                'ci-smoke-mfi',
+                '{"mobile_logins": 4, "late_payment_count": 0}'::jsonb,
+                '{"risk_band": "low", "score": 0.82}'::jsonb,
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET score_result_json = EXCLUDED.score_result_json;
+
+            INSERT INTO model_versions (
+                version,
+                model_name,
+                model_type,
+                lifecycle_status,
+                is_active,
+                feature_schema_version,
+                training_data_label,
+                random_state,
+                metrics_json,
+                limitations_json,
+                created_by,
+                created_at,
+                activated_at
+            )
+            VALUES (
+                'ci-smoke-model',
+                'CI Smoke Model',
+                'logistic_regression',
+                'active',
+                TRUE,
+                'behavioral-v1',
+                'ci-smoke',
+                42,
+                '{"roc_auc": 0.81}'::jsonb,
+                '["disposable CI smoke only"]'::jsonb,
+                'ci',
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (version) DO UPDATE
+            SET metrics_json = EXCLUDED.metrics_json;
+            """,
+        ],
+    )
+
+    tables = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name;
+        """,
+    )
+    jsonb_columns = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT table_name || '.' || column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND data_type = 'jsonb'
+            ORDER BY 1;
+        """,
+    )
+    indexes = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+            ORDER BY indexname;
+        """,
+    )
+    schema_version = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT version
+            FROM schema_migrations
+            WHERE version = '0001_initial_schema';
+        """,
+    )
+    jsonb_value = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT score_result_json->>'risk_band'
+            FROM loan_applications
+            WHERE id = 'ci-smoke-application';
+        """,
+    )
+
+    assert_catalog_subset(expected=EXPECTED_TABLES, actual=tables, label="tables")
+    assert_catalog_subset(
+        expected=JSON_TEXT_COLUMNS,
+        actual=jsonb_columns,
+        label="jsonb columns",
+    )
+    assert_catalog_subset(
+        expected=POSTGRESQL_TENANT_SCOPE_INDEXES,
+        actual=indexes,
+        label="tenant-scope indexes",
+    )
+    assert_catalog_subset(
+        expected=[SCHEMA_MIGRATION_VERSION],
+        actual=schema_version,
+        label="schema migration version",
+    )
+    assert_catalog_subset(expected=["low"], actual=jsonb_value, label="JSONB smoke row")
+
+    return {
+        "migration": migration_path.relative_to(PROJECT_ROOT).as_posix(),
+        "version": SCHEMA_MIGRATION_VERSION,
+        "tables": len(tables),
+        "required_tables": len(EXPECTED_TABLES),
+        "jsonb_columns": len(jsonb_columns),
+        "required_jsonb_columns": len(JSON_TEXT_COLUMNS),
+        "tenant_indexes": len(
+            set(indexes).intersection(POSTGRESQL_TENANT_SCOPE_INDEXES)
+        ),
+        "required_tenant_indexes": len(POSTGRESQL_TENANT_SCOPE_INDEXES),
+        "jsonb_smoke_row": jsonb_value[0],
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Apply and verify the MicroScore PostgreSQL migration draft.",
+    )
+    parser.add_argument(
+        "--migration",
+        type=Path,
+        default=DEFAULT_MIGRATION_PATH,
+        help="Path to the PostgreSQL migration SQL file.",
+    )
+    parser.add_argument(
+        "--database-url",
+        default=os.environ.get("MICROSCORE_DATABASE_URL", ""),
+        help="PostgreSQL connection URL. Defaults to MICROSCORE_DATABASE_URL.",
+    )
+    parser.add_argument(
+        "--psql-bin",
+        default=os.environ.get("PSQL_BIN", "psql"),
+        help="psql executable name or path.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate migration text only; do not connect to PostgreSQL.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    migration_path = args.migration.resolve()
+    text_summary = validate_migration_text(migration_path)
+    if args.dry_run:
+        result = {"mode": "postgresql-migration-smoke-dry-run", **text_summary}
+    else:
+        result = {
+            "mode": "postgresql-migration-smoke",
+            **apply_migration_and_verify(
+                migration_path=migration_path,
+                database_url=args.database_url,
+                psql_bin=args.psql_bin,
+            ),
+        }
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

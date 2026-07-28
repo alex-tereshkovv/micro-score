@@ -1693,8 +1693,8 @@
       {
         key: "postgresql_disposable_parity_ci_missing",
         severity: "blocker",
-        summary: "CI does not run repository parity tests against PostgreSQL.",
-        action: "Add disposable PostgreSQL integration tests before enabling the backend.",
+        summary: "CI applies the migration draft, but does not run repository parity tests against PostgreSQL yet.",
+        action: "Implement the PostgreSQL repository backend, then run the existing API/database contract tests against disposable PostgreSQL before enabling the backend.",
       },
       {
         key: "postgresql_database_url_missing",
@@ -1727,6 +1727,7 @@
       migration_artifact_count: presentArtifacts.length,
       latest_migration_version: presentArtifacts[0]?.version || null,
       versioned_migration_contract_present: versionedMigrationContractPresent,
+      disposable_migration_ci_present: true,
       migration_artifacts: POSTGRESQL_MIGRATION_ARTIFACTS,
       schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
       parity_checks: [
@@ -1761,6 +1762,13 @@
           action: "Review tenant indexes in the draft migration and add repository parity tests for MFI queues, analytics, review packets, invites, and simulations.",
         },
         {
+          key: "postgresql_disposable_migration_ci",
+          status: "pass",
+          sqlite_evidence: "CI applies the draft migration to a disposable PostgreSQL service.",
+          postgres_requirement: "Every versioned migration must be executed against a fresh PostgreSQL database before pilot storage work proceeds.",
+          action: "Keep scripts/postgresql-migration-smoke.py and the postgres:16 CI service as the migration smoke gate.",
+        },
+        {
           key: "postgresql_repository_backend",
           status: "blocker",
           sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup.",
@@ -1770,9 +1778,9 @@
         {
           key: "postgresql_disposable_ci",
           status: "blocker",
-          sqlite_evidence: "Current CI uses SQLite plus local live-smoke temporary databases.",
+          sqlite_evidence: "CI applies the migration draft to disposable PostgreSQL, but repository parity cannot run until a PostgreSQL backend exists.",
           postgres_requirement: "Run parity tests against a disposable PostgreSQL database in CI.",
-          action: "Add disposable PostgreSQL service tests before claiming storage production readiness.",
+          action: "Implement the PostgreSQL repository backend, then promote this migration smoke into backend parity tests.",
         },
       ],
       blockers,
@@ -1876,6 +1884,7 @@
           postgresql_migration_artifact_count: postgresql.migration_artifact_count,
           postgresql_latest_migration_version: postgresql.latest_migration_version,
           postgresql_versioned_migration_contract_present: postgresql.versioned_migration_contract_present,
+          postgresql_disposable_migration_ci_present: postgresql.disposable_migration_ci_present,
           postgresql_blocker_keys: postgresql.blockers.map((item) => item.key),
           tenant_scoped_tables: [
             "users.organization_id",

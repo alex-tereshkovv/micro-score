@@ -71,3 +71,40 @@ jobs:
 
       - name: Run frontend workflow smoke test
         run: node scripts/frontend-workflow-smoke.js
+
+  postgresql-migration:
+    name: Disposable PostgreSQL migration smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: microscore_ci
+          POSTGRES_USER: microscore
+          POSTGRES_PASSWORD: microscore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U microscore -d microscore_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MICROSCORE_DATABASE_URL: postgresql://microscore:microscore@localhost:5432/microscore_ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Validate and apply PostgreSQL migration draft
+        run: python scripts/postgresql-migration-smoke.py

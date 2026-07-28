@@ -166,6 +166,7 @@ class PostgresMigrationReadinessResponse(BaseModel):
     migration_artifact_count: int = Field(ge=0)
     latest_migration_version: str | None = None
     versioned_migration_contract_present: bool = False
+    disposable_migration_ci_present: bool = False
     migration_artifacts: list[PostgresMigrationArtifactResponse] = Field(default_factory=list)
     schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)
     parity_checks: list[PostgresParityCheckResponse] = Field(default_factory=list)

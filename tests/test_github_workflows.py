@@ -31,6 +31,13 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("node scripts/portfolio-dashboard-smoke.js", workflow)
         self.assertIn("node scripts/static-demo-smoke.js", workflow)
         self.assertIn("node scripts/frontend-workflow-smoke.js", workflow)
+        self.assertIn("postgresql-migration", workflow)
+        self.assertIn("Disposable PostgreSQL migration smoke", workflow)
+        self.assertIn("postgres:16", workflow)
+        self.assertIn("pg_isready", workflow)
+        self.assertIn("MICROSCORE_DATABASE_URL", workflow)
+        self.assertIn("postgresql-client", workflow)
+        self.assertIn("python scripts/postgresql-migration-smoke.py", workflow)
 
     def test_static_demo_smoke_script_exercises_reviewer_flow(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "static-demo-smoke.js").read_text(
@@ -119,6 +126,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("Live API workflow smoke test", script)
         self.assertIn("scripts\\live-security-workflow-smoke.py", script)
         self.assertIn("Live security workflow smoke test", script)
+        self.assertIn("scripts\\postgresql-migration-smoke.py --dry-run", script)
+        self.assertIn("PostgreSQL migration smoke dry run", script)
         self.assertIn("apps\\web\\risk-detail.js", script)
         self.assertIn("git diff --check", script)
         self.assertIn("Assert-LastExitCode", script)

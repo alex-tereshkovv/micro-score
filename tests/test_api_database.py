@@ -160,6 +160,7 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(readiness["migration_artifact_count"], 1)
         self.assertEqual(readiness["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(readiness["versioned_migration_contract_present"])
+        self.assertTrue(readiness["disposable_migration_ci_present"])
         self.assertEqual(len(readiness["migration_artifacts"]), 1)
         artifact = readiness["migration_artifacts"][0]
         self.assertEqual(
@@ -197,11 +198,16 @@ class ApiDatabaseTests(unittest.TestCase):
             "pass",
         )
         self.assertEqual(parity_keys["postgresql_jsonb_mapping"]["status"], "pass")
+        self.assertEqual(
+            parity_keys["postgresql_disposable_migration_ci"]["status"],
+            "pass",
+        )
         self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")
         self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "blocker")
         blocker_keys = {row["key"] for row in readiness["blockers"]}
         self.assertIn("postgresql_repository_backend_not_implemented", blocker_keys)
         self.assertNotIn("postgresql_versioned_migrations_missing", blocker_keys)
+        self.assertNotIn("postgresql_disposable_migration_ci_missing", blocker_keys)
         self.assertIn("postgresql_disposable_parity_ci_missing", blocker_keys)
         self.assertIn("postgresql_database_url_missing", blocker_keys)
         self.assertIn("schema and parity contract", readiness["limitation"])
@@ -221,6 +227,9 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS schema_migrations", sql)
         self.assertIn("0001_initial_schema", sql)
         self.assertIn("WHERE is_active IS TRUE", sql)
+
+    def test_postgresql_disposable_migration_ci_is_tracked(self) -> None:
+        self.assertTrue(self.repository.postgresql_disposable_migration_ci_present())
 
     def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
         configured = os.environ.copy()

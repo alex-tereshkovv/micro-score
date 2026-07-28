@@ -28,6 +28,13 @@ POSTGRESQL_STORAGE_ALIASES = {"postgres", "postgresql"}
 POSTGRESQL_REQUIRED_ENVIRONMENT = ("MICROSCORE_DATABASE_URL",)
 POSTGRESQL_MIGRATION_DIRECTORY = PROJECT_ROOT / "migrations" / "postgresql"
 POSTGRESQL_EXPECTED_MIGRATIONS = ("0001_initial_schema.sql",)
+POSTGRESQL_CI_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+POSTGRESQL_DISPOSABLE_MIGRATION_CI_MARKERS = (
+    "postgres:16",
+    "pg_isready",
+    "MICROSCORE_DATABASE_URL",
+    "scripts/postgresql-migration-smoke.py",
+)
 REQUIRED_SCHEMA_TABLES = (
     "mfi_organizations",
     "users",
@@ -826,11 +833,25 @@ class MicroScoreRepository:
             )
         return artifacts
 
+    def postgresql_disposable_migration_ci_present(self) -> bool:
+        """Return whether CI applies the draft migration to disposable PostgreSQL."""
+
+        if not POSTGRESQL_CI_WORKFLOW_PATH.exists():
+            return False
+        workflow = POSTGRESQL_CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        return all(
+            marker in workflow
+            for marker in POSTGRESQL_DISPOSABLE_MIGRATION_CI_MARKERS
+        )
+
     def postgresql_migration_readiness(self) -> dict[str, Any]:
         """Return the PostgreSQL migration contract without opening a PG connection."""
 
         schema_inventory = self.sqlite_schema_inventory()
         migration_artifacts = self.postgresql_migration_artifacts()
+        disposable_migration_ci_present = (
+            self.postgresql_disposable_migration_ci_present()
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -949,6 +970,25 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_disposable_migration_ci",
+                "status": "pass" if disposable_migration_ci_present else "blocker",
+                "sqlite_evidence": (
+                    "CI applies the draft migration to a disposable PostgreSQL service."
+                    if disposable_migration_ci_present
+                    else "CI does not apply the draft migration to disposable PostgreSQL."
+                ),
+                "postgres_requirement": (
+                    "Every versioned migration must be executed against a fresh PostgreSQL "
+                    "database before pilot storage work proceeds."
+                ),
+                "action": (
+                    "Keep scripts/postgresql-migration-smoke.py and the postgres:16 CI "
+                    "service as the migration smoke gate."
+                    if disposable_migration_ci_present
+                    else "Add a postgres:16 CI service and run scripts/postgresql-migration-smoke.py."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
                 "sqlite_evidence": "Runtime repository supports sqlite only and rejects postgresql at startup.",
@@ -958,9 +998,19 @@ class MicroScoreRepository:
             {
                 "key": "postgresql_disposable_ci",
                 "status": "blocker",
-                "sqlite_evidence": "Current CI uses SQLite plus local live-smoke temporary databases.",
+                "sqlite_evidence": (
+                    "CI applies the migration draft to disposable PostgreSQL, but "
+                    "repository parity cannot run until a PostgreSQL backend exists."
+                    if disposable_migration_ci_present
+                    else "Current CI uses SQLite plus local live-smoke temporary databases."
+                ),
                 "postgres_requirement": "Run parity tests against a disposable PostgreSQL database in CI.",
-                "action": "Add disposable PostgreSQL service tests before claiming storage production readiness.",
+                "action": (
+                    "Implement the PostgreSQL repository backend, then promote this "
+                    "migration smoke into backend parity tests."
+                    if disposable_migration_ci_present
+                    else "Add disposable PostgreSQL service tests before claiming storage production readiness."
+                ),
             },
         ]
 
@@ -974,8 +1024,15 @@ class MicroScoreRepository:
             {
                 "key": "postgresql_disposable_parity_ci_missing",
                 "severity": "blocker",
-                "summary": "CI does not run repository parity tests against PostgreSQL.",
-                "action": "Add disposable PostgreSQL integration tests before enabling the backend.",
+                "summary": (
+                    "CI applies the migration draft, but does not run repository parity "
+                    "tests against PostgreSQL yet."
+                ),
+                "action": (
+                    "Implement the PostgreSQL repository backend, then run the existing "
+                    "API/database contract tests against disposable PostgreSQL before "
+                    "enabling the backend."
+                ),
             },
         ]
         if not versioned_migration_contract_present:
@@ -987,6 +1044,20 @@ class MicroScoreRepository:
                     "action": (
                         "Create explicit schema migrations for every table, JSON column, "
                         "index, and tenant boundary."
+                    ),
+                }
+            )
+        if not disposable_migration_ci_present:
+            blockers.append(
+                {
+                    "key": "postgresql_disposable_migration_ci_missing",
+                    "severity": "blocker",
+                    "summary": (
+                        "CI does not apply the PostgreSQL migration draft to a disposable database."
+                    ),
+                    "action": (
+                        "Run scripts/postgresql-migration-smoke.py against a postgres:16 "
+                        "service before adding repository parity tests."
                     ),
                 }
             )
@@ -1037,6 +1108,7 @@ class MicroScoreRepository:
                 present_artifacts[-1]["version"] if present_artifacts else None
             ),
             "versioned_migration_contract_present": versioned_migration_contract_present,
+            "disposable_migration_ci_present": disposable_migration_ci_present,
             "migration_artifacts": migration_artifacts,
             "schema_inventory": schema_inventory,
             "parity_checks": parity_checks,

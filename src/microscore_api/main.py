@@ -2293,6 +2293,9 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_versioned_migration_contract_present": postgresql_readiness[
                     "versioned_migration_contract_present"
                 ],
+                "postgresql_disposable_migration_ci_present": postgresql_readiness[
+                    "disposable_migration_ci_present"
+                ],
                 "postgresql_blocker_keys": [
                     item["key"] for item in postgresql_readiness["blockers"]
                 ],
