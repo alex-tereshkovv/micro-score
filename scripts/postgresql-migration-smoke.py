@@ -90,12 +90,20 @@ def run_psql(
         database_url,
         *arguments,
     ]
-    completed = subprocess.run(
-        command,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stdout = (exc.stdout or "").strip()
+        stderr = (exc.stderr or "").strip()
+        raise RuntimeError(
+            "psql failed with exit code "
+            f"{exc.returncode}. stdout={stdout!r} stderr={stderr!r}"
+        ) from None
     return completed.stdout.strip()
 
 
@@ -336,21 +344,26 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    args = parse_args()
-    migration_path = args.migration.resolve()
-    text_summary = validate_migration_text(migration_path)
-    if args.dry_run:
-        result = {"mode": "postgresql-migration-smoke-dry-run", **text_summary}
-    else:
-        result = {
-            "mode": "postgresql-migration-smoke",
-            **apply_migration_and_verify(
-                migration_path=migration_path,
-                database_url=args.database_url,
-                psql_bin=args.psql_bin,
-            ),
-        }
-    print(json.dumps(result, sort_keys=True))
+    try:
+        args = parse_args()
+        migration_path = args.migration.resolve()
+        text_summary = validate_migration_text(migration_path)
+        if args.dry_run:
+            result = {"mode": "postgresql-migration-smoke-dry-run", **text_summary}
+        else:
+            result = {
+                "mode": "postgresql-migration-smoke",
+                **apply_migration_and_verify(
+                    migration_path=migration_path,
+                    database_url=args.database_url,
+                    psql_bin=args.psql_bin,
+                ),
+            }
+        print(json.dumps(result, sort_keys=True))
+    except Exception as exc:
+        message = str(exc).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=PostgreSQL migration smoke failed::{message}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

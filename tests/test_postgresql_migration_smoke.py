@@ -48,6 +48,8 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertIn("information_schema.columns", script)
         self.assertIn("pg_indexes", script)
         self.assertIn("score_result_json->>'risk_band'", script)
+        self.assertIn("::error title=PostgreSQL migration smoke failed::", script)
+        self.assertIn("psql failed with exit code", script)
         self.assertNotIn("print(database_url", script)
 
 

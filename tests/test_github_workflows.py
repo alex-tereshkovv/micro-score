@@ -37,6 +37,9 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("pg_isready", workflow)
         self.assertIn("MICROSCORE_DATABASE_URL", workflow)
         self.assertIn("postgresql-client", workflow)
+        self.assertIn("python -m pip install -r requirements.txt", workflow)
+        self.assertIn("psql --version", workflow)
+        self.assertIn("python scripts/postgresql-migration-smoke.py --dry-run", workflow)
         self.assertIn("python scripts/postgresql-migration-smoke.py", workflow)
 
     def test_static_demo_smoke_script_exercises_reviewer_flow(self) -> None:
