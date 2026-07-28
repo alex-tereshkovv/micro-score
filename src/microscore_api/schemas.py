@@ -134,6 +134,19 @@ class PostgresMigrationControlResponse(BaseModel):
     action: str
 
 
+class PostgresMigrationArtifactResponse(BaseModel):
+    version: str
+    path: str
+    present: bool
+    table_count: int = Field(ge=0)
+    jsonb_column_count: int = Field(ge=0)
+    tenant_scope_index_count: int = Field(ge=0)
+    tables: list[str] = Field(default_factory=list)
+    jsonb_columns: list[str] = Field(default_factory=list)
+    tenant_scope_indexes: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
 class PostgresMigrationReadinessResponse(BaseModel):
     status: Literal["ready", "planned", "blocked"]
     generated_at: str
@@ -150,6 +163,10 @@ class PostgresMigrationReadinessResponse(BaseModel):
     present_table_count: int = Field(ge=0)
     json_column_count: int = Field(ge=0)
     tenant_scope_count: int = Field(ge=0)
+    migration_artifact_count: int = Field(ge=0)
+    latest_migration_version: str | None = None
+    versioned_migration_contract_present: bool = False
+    migration_artifacts: list[PostgresMigrationArtifactResponse] = Field(default_factory=list)
     schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)
     parity_checks: list[PostgresParityCheckResponse] = Field(default_factory=list)
     blockers: list[PostgresMigrationControlResponse] = Field(default_factory=list)

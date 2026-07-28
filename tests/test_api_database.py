@@ -17,7 +17,10 @@ from microscore_api.database import (
     DuplicateModelVersionError,
     DuplicateUserError,
     InvalidApplicationTransitionError,
+    JSON_TEXT_COLUMNS,
     MicroScoreRepository,
+    POSTGRESQL_TENANT_SCOPE_INDEXES,
+    REQUIRED_SCHEMA_TABLES,
     UnsupportedStorageBackendError,
 )
 
@@ -154,6 +157,27 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertGreaterEqual(readiness["json_column_count"], 1)
         self.assertGreaterEqual(readiness["tenant_scope_count"], 1)
+        self.assertEqual(readiness["migration_artifact_count"], 1)
+        self.assertEqual(readiness["latest_migration_version"], "0001_initial_schema")
+        self.assertTrue(readiness["versioned_migration_contract_present"])
+        self.assertEqual(len(readiness["migration_artifacts"]), 1)
+        artifact = readiness["migration_artifacts"][0]
+        self.assertEqual(
+            artifact["path"],
+            "migrations/postgresql/0001_initial_schema.sql",
+        )
+        self.assertEqual(artifact["table_count"], len(REQUIRED_SCHEMA_TABLES))
+        self.assertEqual(artifact["jsonb_column_count"], len(JSON_TEXT_COLUMNS))
+        self.assertEqual(
+            artifact["tenant_scope_index_count"],
+            len(POSTGRESQL_TENANT_SCOPE_INDEXES),
+        )
+        self.assertIn("loan_applications", artifact["tables"])
+        self.assertIn(
+            "loan_applications.behavioral_signals_json",
+            artifact["jsonb_columns"],
+        )
+        self.assertIn("idx_staff_invites_organization", artifact["tenant_scope_indexes"])
         inventory_by_table = {
             row["table"]: row for row in readiness["schema_inventory"]
         }
@@ -168,14 +192,35 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         parity_keys = {row["key"]: row for row in readiness["parity_checks"]}
         self.assertEqual(parity_keys["postgresql_schema_inventory"]["status"], "pass")
+        self.assertEqual(
+            parity_keys["postgresql_versioned_migration_artifacts"]["status"],
+            "pass",
+        )
+        self.assertEqual(parity_keys["postgresql_jsonb_mapping"]["status"], "pass")
         self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")
         self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "blocker")
         blocker_keys = {row["key"] for row in readiness["blockers"]}
         self.assertIn("postgresql_repository_backend_not_implemented", blocker_keys)
-        self.assertIn("postgresql_versioned_migrations_missing", blocker_keys)
+        self.assertNotIn("postgresql_versioned_migrations_missing", blocker_keys)
         self.assertIn("postgresql_disposable_parity_ci_missing", blocker_keys)
         self.assertIn("postgresql_database_url_missing", blocker_keys)
         self.assertIn("schema and parity contract", readiness["limitation"])
+
+    def test_postgresql_initial_migration_draft_covers_sqlite_contract(self) -> None:
+        sql = (
+            PROJECT_ROOT / "migrations" / "postgresql" / "0001_initial_schema.sql"
+        ).read_text(encoding="utf-8")
+
+        for table in REQUIRED_SCHEMA_TABLES:
+            self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", sql)
+        for column in JSON_TEXT_COLUMNS:
+            _, column_name = column.split(".", 1)
+            self.assertIn(f"{column_name} JSONB", sql)
+        for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES:
+            self.assertIn(f"CREATE INDEX IF NOT EXISTS {index_name}", sql)
+        self.assertIn("CREATE TABLE IF NOT EXISTS schema_migrations", sql)
+        self.assertIn("0001_initial_schema", sql)
+        self.assertIn("WHERE is_active IS TRUE", sql)
 
     def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
         configured = os.environ.copy()

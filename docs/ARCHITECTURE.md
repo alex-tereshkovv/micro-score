@@ -114,7 +114,9 @@ Main local components:
 - SQLite demo database generated under `data/app/`, with explicit storage
   readiness metadata exposed through `/health`, plus
   `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
-  JSON-column mapping, tenant-scope parity checks, and migration blockers;
+  the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
+  JSONB mapping coverage, tenant-scope parity checks, and remaining migration
+  blockers;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 

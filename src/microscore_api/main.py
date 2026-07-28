@@ -2284,6 +2284,15 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_parity_check_count": len(
                     postgresql_readiness["parity_checks"]
                 ),
+                "postgresql_migration_artifact_count": postgresql_readiness[
+                    "migration_artifact_count"
+                ],
+                "postgresql_latest_migration_version": postgresql_readiness[
+                    "latest_migration_version"
+                ],
+                "postgresql_versioned_migration_contract_present": postgresql_readiness[
+                    "versioned_migration_contract_present"
+                ],
                 "postgresql_blocker_keys": [
                     item["key"] for item in postgresql_readiness["blockers"]
                 ],

@@ -326,6 +326,9 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
     postgresql_parity = {
         check["key"]: check for check in postgresql_readiness.get("parity_checks", [])
     }
+    postgresql_blockers = {
+        blocker["key"] for blocker in postgresql_readiness.get("blockers", [])
+    }
     assert_true(
         postgresql_readiness["status"] == "blocked"
         and postgresql_readiness["runtime_backend"] == "sqlite"
@@ -333,9 +336,22 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_readiness["repository_backend_status"] == "not_implemented"
         and not postgresql_readiness["production_ready"]
         and "MICROSCORE_DATABASE_URL" in postgresql_readiness["missing_environment"]
+        and postgresql_readiness["migration_artifact_count"] == 1
+        and postgresql_readiness["latest_migration_version"] == "0001_initial_schema"
+        and postgresql_readiness["versioned_migration_contract_present"]
+        and any(
+            artifact["path"] == "migrations/postgresql/0001_initial_schema.sql"
+            for artifact in postgresql_readiness.get("migration_artifacts", [])
+        )
         and postgresql_parity["postgresql_schema_inventory"]["status"] == "pass"
+        and postgresql_parity["postgresql_versioned_migration_artifacts"]["status"] == "pass"
+        and postgresql_parity["postgresql_jsonb_mapping"]["status"] == "pass"
         and postgresql_parity["postgresql_repository_backend"]["status"] == "blocker",
-        "PostgreSQL readiness should expose blocked migration parity contract",
+        "PostgreSQL readiness should expose the migration draft and remaining blockers",
+    )
+    assert_true(
+        "postgresql_versioned_migrations_missing" not in postgresql_blockers,
+        "Versioned PostgreSQL migration blocker should be cleared by 0001 draft",
     )
 
     mfa_readiness = client.request("GET", "/admin/security/mfa-readiness", token=admin_token)
@@ -692,6 +708,12 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         ],
         "postgresql_readiness": postgresql_readiness["status"],
         "postgresql_schema_inventory": postgresql_readiness["present_table_count"],
+        "postgresql_migration_artifacts": postgresql_readiness[
+            "migration_artifact_count"
+        ],
+        "postgresql_latest_migration": postgresql_readiness[
+            "latest_migration_version"
+        ],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
         "delivery_webhook_events": len(webhook_events),
         "delivery_worker_dead_lettered": delivery_worker_run["dead_lettered_count"],

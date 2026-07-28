@@ -175,6 +175,36 @@
       ],
     },
   ];
+  const POSTGRESQL_MIGRATION_ARTIFACTS = [
+    {
+      version: "0001_initial_schema",
+      path: "migrations/postgresql/0001_initial_schema.sql",
+      present: true,
+      table_count: POSTGRESQL_SCHEMA_INVENTORY.length,
+      jsonb_column_count: 8,
+      tenant_scope_index_count: 4,
+      tables: POSTGRESQL_SCHEMA_INVENTORY.map((table) => table.table),
+      jsonb_columns: [
+        "loan_applications.behavioral_signals_json",
+        "loan_applications.score_result_json",
+        "audit_events.details_json",
+        "model_versions.metrics_json",
+        "model_versions.limitations_json",
+        "portfolio_simulations.request_json",
+        "portfolio_simulations.result_json",
+        "staff_invite_delivery_events.metadata_json",
+      ],
+      tenant_scope_indexes: [
+        "idx_users_organization",
+        "idx_applications_organization",
+        "idx_staff_invites_organization",
+        "idx_portfolio_simulations_organization",
+      ],
+      notes: [
+        "Draft artifact covers required tables, JSONB mappings, and tenant indexes.",
+      ],
+    },
+  ];
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -1661,12 +1691,6 @@
         action: "Implement and test a PostgreSQL repository backend before real pilot data.",
       },
       {
-        key: "postgresql_versioned_migrations_missing",
-        severity: "blocker",
-        summary: "No versioned PostgreSQL schema migrations are present.",
-        action: "Create explicit schema migrations for every table, JSON column, index, and tenant boundary.",
-      },
-      {
         key: "postgresql_disposable_parity_ci_missing",
         severity: "blocker",
         summary: "CI does not run repository parity tests against PostgreSQL.",
@@ -1679,6 +1703,11 @@
         action: "Configure managed database connection secrets without exposing their values.",
       },
     ];
+    const presentArtifacts = POSTGRESQL_MIGRATION_ARTIFACTS.filter((artifact) => artifact.present);
+    const versionedMigrationContractPresent = presentArtifacts.length > 0
+      && presentArtifacts[0].table_count === POSTGRESQL_SCHEMA_INVENTORY.length
+      && presentArtifacts[0].jsonb_column_count === jsonColumnCount
+      && presentArtifacts[0].tenant_scope_index_count === 4;
     return {
       status: "blocked",
       generated_at: nowIso(),
@@ -1695,6 +1724,10 @@
       present_table_count: POSTGRESQL_SCHEMA_INVENTORY.filter((table) => table.present_in_sqlite).length,
       json_column_count: jsonColumnCount,
       tenant_scope_count: tenantScopeCount,
+      migration_artifact_count: presentArtifacts.length,
+      latest_migration_version: presentArtifacts[0]?.version || null,
+      versioned_migration_contract_present: versionedMigrationContractPresent,
+      migration_artifacts: POSTGRESQL_MIGRATION_ARTIFACTS,
       schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
       parity_checks: [
         {
@@ -1705,18 +1738,27 @@
           action: "Keep generated migration inventory in review.",
         },
         {
+          key: "postgresql_versioned_migration_artifacts",
+          status: versionedMigrationContractPresent ? "pass" : "blocker",
+          sqlite_evidence: `${presentArtifacts.length}/1 expected migration artifact(s) are present.`,
+          postgres_requirement: "A versioned SQL migration must cover every required table, JSONB column, and tenant-scope index.",
+          action: versionedMigrationContractPresent
+            ? "Keep migrations/postgresql/0001_initial_schema.sql in review until a live PostgreSQL runner exists."
+            : "Create a complete migrations/postgresql/0001_initial_schema.sql artifact.",
+        },
+        {
           key: "postgresql_jsonb_mapping",
-          status: "planned",
+          status: "pass",
           sqlite_evidence: `${jsonColumnCount} JSON text column(s) are used by SQLite.`,
           postgres_requirement: "Map JSON text columns to jsonb or a versioned text strategy.",
-          action: "Write explicit jsonb/text mapping decisions before enabling PostgreSQL.",
+          action: "The initial PostgreSQL migration draft maps SQLite JSON text columns to JSONB.",
         },
         {
           key: "postgresql_tenant_scope_parity",
           status: "planned",
-          sqlite_evidence: `${tenantScopeCount} tenant-scope column(s) are tracked.`,
+          sqlite_evidence: `${tenantScopeCount} tenant-scope column(s) are tracked; 4/4 tenant index draft(s) are present.`,
           postgres_requirement: "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
-          action: "Add PostgreSQL tenant-scope parity tests for MFI queues, analytics, review packets, invites, and simulations.",
+          action: "Review tenant indexes in the draft migration and add repository parity tests for MFI queues, analytics, review packets, invites, and simulations.",
         },
         {
           key: "postgresql_repository_backend",
@@ -1831,6 +1873,9 @@
           postgresql_repository_backend_status: postgresql.repository_backend_status,
           postgresql_schema_inventory_table_count: postgresql.present_table_count,
           postgresql_parity_check_count: postgresql.parity_checks.length,
+          postgresql_migration_artifact_count: postgresql.migration_artifact_count,
+          postgresql_latest_migration_version: postgresql.latest_migration_version,
+          postgresql_versioned_migration_contract_present: postgresql.versioned_migration_contract_present,
           postgresql_blocker_keys: postgresql.blockers.map((item) => item.key),
           tenant_scoped_tables: [
             "users.organization_id",

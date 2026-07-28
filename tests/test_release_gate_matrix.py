@@ -276,6 +276,7 @@ SECURITY_MATRIX_ROWS = [
             "scripts/live-security-workflow-smoke.py",
             "scripts/static-demo-smoke.js",
             "tests/test_web_static.py",
+            "migrations/postgresql/0001_initial_schema.sql",
             "docs/RELEASE_CHECKLIST.md",
         ],
         "markers": [
@@ -283,6 +284,9 @@ SECURITY_MATRIX_ROWS = [
             "PostgresMigrationReadinessResponse",
             "storage_readiness",
             "postgresql_schema_inventory",
+            "postgresql_versioned_migration_artifacts",
+            "0001_initial_schema",
+            "migration_artifact_count",
             "postgresql_disposable_ci",
             "MICROSCORE_STORAGE_BACKEND",
             "production_ready",

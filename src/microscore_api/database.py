@@ -9,6 +9,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from typing import Any
 
@@ -25,6 +26,8 @@ DEFAULT_STORAGE_BACKEND = "sqlite"
 SUPPORTED_STORAGE_BACKENDS = {DEFAULT_STORAGE_BACKEND}
 POSTGRESQL_STORAGE_ALIASES = {"postgres", "postgresql"}
 POSTGRESQL_REQUIRED_ENVIRONMENT = ("MICROSCORE_DATABASE_URL",)
+POSTGRESQL_MIGRATION_DIRECTORY = PROJECT_ROOT / "migrations" / "postgresql"
+POSTGRESQL_EXPECTED_MIGRATIONS = ("0001_initial_schema.sql",)
 REQUIRED_SCHEMA_TABLES = (
     "mfi_organizations",
     "users",
@@ -53,6 +56,12 @@ TENANT_SCOPED_TABLES = (
     "loan_applications.organization_id",
     "staff_invites.organization_id",
     "portfolio_simulations.organization_id",
+)
+POSTGRESQL_TENANT_SCOPE_INDEXES = (
+    "idx_users_organization",
+    "idx_applications_organization",
+    "idx_staff_invites_organization",
+    "idx_portfolio_simulations_organization",
 )
 POSTGRESQL_MIGRATION_CHECKLIST = (
     "Create managed PostgreSQL schema migrations before enabling a non-SQLite backend.",
@@ -111,6 +120,43 @@ def configured_storage_backend() -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _postgresql_identifier_pattern(identifier: str) -> str:
+    return rf'"?{re.escape(identifier)}"?'
+
+
+def _postgresql_create_table_present(sql: str, table: str) -> bool:
+    return (
+        re.search(
+            rf"\bCREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+{_postgresql_identifier_pattern(table)}\b",
+            sql,
+            re.IGNORECASE,
+        )
+        is not None
+    )
+
+
+def _postgresql_jsonb_column_present(sql: str, table: str, column: str) -> bool:
+    return (
+        re.search(
+            rf"\b{_postgresql_identifier_pattern(table)}\b[\s\S]*?\b{_postgresql_identifier_pattern(column)}\s+JSONB\b",
+            sql,
+            re.IGNORECASE,
+        )
+        is not None
+    )
+
+
+def _postgresql_index_present(sql: str, index_name: str) -> bool:
+    return (
+        re.search(
+            rf"\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+{_postgresql_identifier_pattern(index_name)}\b",
+            sql,
+            re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 def configured_session_ttl_hours() -> float:
@@ -710,10 +756,115 @@ class MicroScoreRepository:
                 )
         return inventory
 
+    def postgresql_migration_artifacts(self) -> list[dict[str, Any]]:
+        """Return local PostgreSQL migration draft artifacts and coverage checks."""
+
+        artifacts: list[dict[str, Any]] = []
+        for filename in POSTGRESQL_EXPECTED_MIGRATIONS:
+            path = POSTGRESQL_MIGRATION_DIRECTORY / filename
+            sql = path.read_text(encoding="utf-8") if path.exists() else ""
+            tables = [
+                table
+                for table in REQUIRED_SCHEMA_TABLES
+                if _postgresql_create_table_present(sql, table)
+            ]
+            jsonb_columns = [
+                item
+                for item in JSON_TEXT_COLUMNS
+                if _postgresql_jsonb_column_present(sql, *item.split(".", 1))
+            ]
+            tenant_scope_indexes = [
+                index_name
+                for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES
+                if _postgresql_index_present(sql, index_name)
+            ]
+            notes: list[str] = []
+            if not path.exists():
+                notes.append("Expected versioned PostgreSQL migration artifact is missing.")
+            missing_tables = [
+                table for table in REQUIRED_SCHEMA_TABLES if table not in tables
+            ]
+            if missing_tables:
+                notes.append(
+                    "Missing required table DDL: " + ", ".join(missing_tables) + "."
+                )
+            missing_jsonb_columns = [
+                column for column in JSON_TEXT_COLUMNS if column not in jsonb_columns
+            ]
+            if missing_jsonb_columns:
+                notes.append(
+                    "Missing jsonb mapping: " + ", ".join(missing_jsonb_columns) + "."
+                )
+            missing_tenant_indexes = [
+                index_name
+                for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES
+                if index_name not in tenant_scope_indexes
+            ]
+            if missing_tenant_indexes:
+                notes.append(
+                    "Missing tenant-scope index DDL: "
+                    + ", ".join(missing_tenant_indexes)
+                    + "."
+                )
+            if path.exists() and not notes:
+                notes.append(
+                    "Draft artifact covers required tables, JSONB mappings, and tenant indexes."
+                )
+            artifacts.append(
+                {
+                    "version": Path(filename).stem,
+                    "path": path.relative_to(PROJECT_ROOT).as_posix(),
+                    "present": path.exists(),
+                    "table_count": len(tables),
+                    "jsonb_column_count": len(jsonb_columns),
+                    "tenant_scope_index_count": len(tenant_scope_indexes),
+                    "tables": tables,
+                    "jsonb_columns": jsonb_columns,
+                    "tenant_scope_indexes": tenant_scope_indexes,
+                    "notes": notes,
+                }
+            )
+        return artifacts
+
     def postgresql_migration_readiness(self) -> dict[str, Any]:
         """Return the PostgreSQL migration contract without opening a PG connection."""
 
         schema_inventory = self.sqlite_schema_inventory()
+        migration_artifacts = self.postgresql_migration_artifacts()
+        present_artifacts = [
+            artifact for artifact in migration_artifacts if artifact["present"]
+        ]
+        artifact_tables = {
+            table
+            for artifact in migration_artifacts
+            for table in artifact["tables"]
+        }
+        artifact_jsonb_columns = {
+            column
+            for artifact in migration_artifacts
+            for column in artifact["jsonb_columns"]
+        }
+        artifact_tenant_scope_indexes = {
+            index_name
+            for artifact in migration_artifacts
+            for index_name in artifact["tenant_scope_indexes"]
+        }
+        versioned_migration_contract_present = (
+            len(present_artifacts) == len(POSTGRESQL_EXPECTED_MIGRATIONS)
+            and all(table in artifact_tables for table in REQUIRED_SCHEMA_TABLES)
+            and all(column in artifact_jsonb_columns for column in JSON_TEXT_COLUMNS)
+            and all(
+                index_name in artifact_tenant_scope_indexes
+                for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES
+            )
+        )
+        jsonb_mapping_covered = all(
+            column in artifact_jsonb_columns for column in JSON_TEXT_COLUMNS
+        )
+        tenant_index_covered = all(
+            index_name in artifact_tenant_scope_indexes
+            for index_name in POSTGRESQL_TENANT_SCOPE_INDEXES
+        )
         present_table_count = sum(
             1 for table in schema_inventory if table["present_in_sqlite"]
         )
@@ -748,18 +899,54 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_versioned_migration_artifacts",
+                "status": (
+                    "pass" if versioned_migration_contract_present else "blocker"
+                ),
+                "sqlite_evidence": (
+                    f"{len(present_artifacts)}/{len(POSTGRESQL_EXPECTED_MIGRATIONS)} "
+                    "expected migration artifact(s) are present."
+                ),
+                "postgres_requirement": (
+                    "A versioned SQL migration must cover every required table, JSONB "
+                    "column, and tenant-scope index."
+                ),
+                "action": (
+                    "Keep migrations/postgresql/0001_initial_schema.sql in review "
+                    "until a live PostgreSQL runner exists."
+                    if versioned_migration_contract_present
+                    else "Create a complete migrations/postgresql/0001_initial_schema.sql artifact."
+                ),
+            },
+            {
                 "key": "postgresql_jsonb_mapping",
-                "status": "planned",
+                "status": "pass" if jsonb_mapping_covered else "planned",
                 "sqlite_evidence": f"{json_column_count} JSON text column(s) are used by SQLite.",
                 "postgres_requirement": "Map JSON text columns to jsonb or a versioned text strategy.",
-                "action": "Write explicit jsonb/text mapping decisions before enabling PostgreSQL.",
+                "action": (
+                    "The initial PostgreSQL migration draft maps SQLite JSON text "
+                    "columns to JSONB."
+                    if jsonb_mapping_covered
+                    else "Write explicit jsonb/text mapping decisions before enabling PostgreSQL."
+                ),
             },
             {
                 "key": "postgresql_tenant_scope_parity",
                 "status": "planned",
-                "sqlite_evidence": f"{tenant_scope_count} tenant-scope column(s) are tracked.",
+                "sqlite_evidence": (
+                    f"{tenant_scope_count} tenant-scope column(s) are tracked; "
+                    f"{len(artifact_tenant_scope_indexes)}/"
+                    f"{len(POSTGRESQL_TENANT_SCOPE_INDEXES)} tenant index draft(s) "
+                    "are present."
+                ),
                 "postgres_requirement": "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
-                "action": "Add PostgreSQL tenant-scope parity tests for MFI queues, analytics, review packets, invites, and simulations.",
+                "action": (
+                    "Review tenant indexes in the draft migration and add repository "
+                    "parity tests for MFI queues, analytics, review packets, invites, "
+                    "and simulations."
+                    if tenant_index_covered
+                    else "Add PostgreSQL tenant-scope index DDL before repository parity tests."
+                ),
             },
             {
                 "key": "postgresql_repository_backend",
@@ -785,18 +972,24 @@ class MicroScoreRepository:
                 "action": "Implement and test a PostgreSQL repository backend before real pilot data.",
             },
             {
-                "key": "postgresql_versioned_migrations_missing",
-                "severity": "blocker",
-                "summary": "No versioned PostgreSQL schema migrations are present.",
-                "action": "Create explicit schema migrations for every table, JSON column, index, and tenant boundary.",
-            },
-            {
                 "key": "postgresql_disposable_parity_ci_missing",
                 "severity": "blocker",
                 "summary": "CI does not run repository parity tests against PostgreSQL.",
                 "action": "Add disposable PostgreSQL integration tests before enabling the backend.",
             },
         ]
+        if not versioned_migration_contract_present:
+            blockers.append(
+                {
+                    "key": "postgresql_versioned_migrations_missing",
+                    "severity": "blocker",
+                    "summary": "No complete versioned PostgreSQL schema migration draft is present.",
+                    "action": (
+                        "Create explicit schema migrations for every table, JSON column, "
+                        "index, and tenant boundary."
+                    ),
+                }
+            )
         if missing_environment:
             blockers.append(
                 {
@@ -839,6 +1032,12 @@ class MicroScoreRepository:
             "present_table_count": present_table_count,
             "json_column_count": json_column_count,
             "tenant_scope_count": tenant_scope_count,
+            "migration_artifact_count": len(present_artifacts),
+            "latest_migration_version": (
+                present_artifacts[-1]["version"] if present_artifacts else None
+            ),
+            "versioned_migration_contract_present": versioned_migration_contract_present,
+            "migration_artifacts": migration_artifacts,
             "schema_inventory": schema_inventory,
             "parity_checks": parity_checks,
             "blockers": blockers,

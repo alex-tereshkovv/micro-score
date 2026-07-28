@@ -1276,18 +1276,24 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 
 - `schema_inventory`: required SQLite tables, primary keys, JSON text columns,
   and tenant-scope columns that must be mapped into PostgreSQL;
+- `migration_artifacts`: the local versioned migration draft inventory,
+  including `migrations/postgresql/0001_initial_schema.sql`,
+  `migration_artifact_count`, `latest_migration_version`, and whether the
+  versioned migration contract is present;
 - `parity_checks`: `postgresql_schema_inventory`,
-  `postgresql_jsonb_mapping`, `postgresql_tenant_scope_parity`,
-  `postgresql_repository_backend`, and `postgresql_disposable_ci`;
+  `postgresql_versioned_migration_artifacts`, `postgresql_jsonb_mapping`,
+  `postgresql_tenant_scope_parity`, `postgresql_repository_backend`, and
+  `postgresql_disposable_ci`;
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,
-  `postgresql_versioned_migrations_missing`, and
   `postgresql_disposable_parity_ci_missing`.
 
-The response is intentionally `blocked` until a versioned PostgreSQL migration
-set, repository backend, managed connection secret, and disposable parity CI are
-implemented.
+The response is intentionally `blocked` even when the versioned migration draft
+is present. `0001_initial_schema.sql` is a reviewed DDL contract, not a runtime
+migration runner. The gate remains blocked until the PostgreSQL repository
+backend, managed connection secret, disposable parity CI, backup/retention
+controls, and live migration execution are implemented.
 
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring

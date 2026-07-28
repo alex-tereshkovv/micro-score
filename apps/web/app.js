@@ -2747,6 +2747,18 @@ function renderPostgresqlReadiness(payload) {
       <em>${escapeHtml(row.action || "Keep this parity check in migration planning.")}</em>
     </article>
   `).join("");
+  const artifactRows = (payload.migration_artifacts || [])
+    .map((artifact) => `
+      <article class="evidence-row ${severityClass(artifact.present ? "pass" : "blocker")}">
+        <div>
+          <span>${artifact.present ? "Present" : "Missing"}</span>
+          <strong>${escapeHtml(artifact.version || "unversioned migration")}</strong>
+        </div>
+        <p>${escapeHtml(artifact.path || "No path reported.")}</p>
+        <em>${Number(artifact.table_count || 0)} table(s), ${Number(artifact.jsonb_column_count || 0)} JSONB column(s), ${Number(artifact.tenant_scope_index_count || 0)} tenant index(es). ${(artifact.notes || []).map(escapeHtml).join(" ")}</em>
+      </article>
+    `)
+    .join("");
   const tableRows = (payload.schema_inventory || [])
     .slice(0, 8)
     .map((table) => `
@@ -2781,8 +2793,13 @@ function renderPostgresqlReadiness(payload) {
         <div><dt>Tables</dt><dd>${Number(payload.present_table_count || 0)}/${Number(payload.required_table_count || 0)}</dd></div>
         <div><dt>JSON cols</dt><dd>${Number(payload.json_column_count || 0)}</dd></div>
         <div><dt>Tenant cols</dt><dd>${Number(payload.tenant_scope_count || 0)}</dd></div>
+        <div><dt>Migrations</dt><dd>${Number(payload.migration_artifact_count || 0)}${payload.latest_migration_version ? ` · ${escapeHtml(payload.latest_migration_version)}` : ""}</dd></div>
         <div><dt>Live PG</dt><dd>${payload.live_connection_tested ? "Tested" : "Not tested"}</dd></div>
       </dl>
+    </section>
+    <section class="evidence-section">
+      <h4>Migration artifacts</h4>
+      <div class="evidence-row-list">${artifactRows || "<p class=\"tiny-text\">No migration artifacts returned.</p>"}</div>
     </section>
     <section class="evidence-section">
       <h4>Parity checks</h4>

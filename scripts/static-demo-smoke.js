@@ -456,6 +456,9 @@ async function main() {
   const postgresqlParityChecks = new Map(
     (postgresqlReadinessInitial.parity_checks || []).map((check) => [check.key, check]),
   );
+  const postgresqlBlockers = new Set(
+    (postgresqlReadinessInitial.blockers || []).map((blocker) => blocker.key),
+  );
   if (
     postgresqlReadinessInitial.status !== "blocked"
     || postgresqlReadinessInitial.runtime_backend !== "sqlite"
@@ -463,12 +466,19 @@ async function main() {
     || postgresqlReadinessInitial.repository_backend_status !== "not_implemented"
     || postgresqlReadinessInitial.production_ready
     || !postgresqlReadinessInitial.missing_environment?.includes("MICROSCORE_DATABASE_URL")
+    || postgresqlReadinessInitial.migration_artifact_count !== 1
+    || postgresqlReadinessInitial.latest_migration_version !== "0001_initial_schema"
+    || !postgresqlReadinessInitial.versioned_migration_contract_present
+    || !postgresqlReadinessInitial.migration_artifacts?.some((artifact) => artifact.path === "migrations/postgresql/0001_initial_schema.sql")
     || postgresqlParityChecks.get("postgresql_schema_inventory")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_versioned_migration_artifacts")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_jsonb_mapping")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "blocker"
+    || postgresqlBlockers.has("postgresql_versioned_migrations_missing")
     || !postgresqlReadinessInitial.schema_inventory?.some((row) => row.table === "loan_applications" && row.json_columns?.includes("behavioral_signals_json"))
     || !String(postgresqlReadinessInitial.limitation || "").includes("schema and parity contract")
   ) {
-    throw new Error("Expected PostgreSQL readiness to expose schema inventory and migration blockers");
+    throw new Error("Expected PostgreSQL readiness to expose the versioned migration draft and remaining storage blockers");
   }
   const usersBeforeProvisioning = await api.request("/admin/users", {}, adminSession);
   const staffUser = await api.request(
@@ -1505,6 +1515,8 @@ async function main() {
       pre_pilot_production_data_allowed: prePilotReadinessInitial.production_data_allowed,
       postgresql_readiness: true,
       postgresql_schema_inventory: postgresqlReadinessInitial.present_table_count,
+      postgresql_migration_artifacts: postgresqlReadinessInitial.migration_artifact_count,
+      postgresql_latest_migration: postgresqlReadinessInitial.latest_migration_version,
       postgresql_production_ready: postgresqlReadinessInitial.production_ready,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,

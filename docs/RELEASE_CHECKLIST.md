@@ -158,12 +158,14 @@ git diff --check
   borrower pilot permission.
 - PostgreSQL Migration Readiness v1 exposes
   `/admin/storage/postgresql-readiness`, schema inventory, JSON-column mapping
-  needs, tenant-scope parity checks, missing `MICROSCORE_DATABASE_URL`, and
-  blockers for the unimplemented PostgreSQL repository backend, versioned
-  migrations, and disposable PostgreSQL CI.
+  coverage, the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
+  tenant-scope parity checks, missing `MICROSCORE_DATABASE_URL`, and blockers
+  for the unimplemented PostgreSQL repository backend and disposable PostgreSQL
+  CI.
 - Storage readiness remains explicit: SQLite is the prototype backend,
-  PostgreSQL migration remains blocked/planned, and no release should imply
-  production storage readiness until that gate changes.
+  PostgreSQL migration remains blocked/planned even with the 0001 draft present,
+  and no release should imply production storage readiness until a real backend,
+  managed database connection, migration runner, and disposable CI gate exist.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.
