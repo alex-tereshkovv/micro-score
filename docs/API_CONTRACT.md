@@ -1283,21 +1283,29 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 - `parity_checks`: `postgresql_schema_inventory`,
   `postgresql_versioned_migration_artifacts`, `postgresql_jsonb_mapping`,
   `postgresql_tenant_scope_parity`, `postgresql_disposable_migration_ci`,
-  `postgresql_repository_backend`, and `postgresql_disposable_ci`;
+  `postgresql_repository_adapter_contract`, `postgresql_repository_backend`,
+  and `postgresql_disposable_ci`;
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
   service and applies `0001_initial_schema.sql`;
+- `repository_adapter_contract_*`: a contract-only adapter skeleton in
+  `microscore_api.postgres_repository`, including
+  `repository_adapter_contract_status=contract_only`, method-family groups, and
+  the number of repository methods that must later be implemented for
+  PostgreSQL;
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,
   `postgresql_disposable_parity_ci_missing`.
 
 The response is intentionally `blocked` even when the versioned migration draft
-is present and applied in disposable CI. `0001_initial_schema.sql` is a reviewed
-DDL contract and CI smoke target, not a production migration runner. The gate
-remains blocked until the PostgreSQL repository backend, managed connection
-secret, repository-level disposable parity CI, backup/retention controls, and
-live migration execution are implemented.
+is present and applied in disposable CI, and even when the PostgreSQL repository
+adapter contract skeleton is present. `0001_initial_schema.sql` is a reviewed
+DDL contract and CI smoke target, not a production migration runner. The
+adapter skeleton defines method families and guardrails, not executable queries.
+The gate remains blocked until the PostgreSQL repository backend, managed
+connection secret, repository-level disposable parity CI, backup/retention
+controls, and live migration execution are implemented.
 
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring

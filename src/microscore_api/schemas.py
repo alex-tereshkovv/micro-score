@@ -147,6 +147,13 @@ class PostgresMigrationArtifactResponse(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class PostgresRepositoryAdapterContractGroupResponse(BaseModel):
+    key: str
+    label: str
+    method_count: int = Field(ge=0)
+    methods: list[str] = Field(default_factory=list)
+
+
 class PostgresMigrationReadinessResponse(BaseModel):
     status: Literal["ready", "planned", "blocked"]
     generated_at: str
@@ -167,6 +174,12 @@ class PostgresMigrationReadinessResponse(BaseModel):
     latest_migration_version: str | None = None
     versioned_migration_contract_present: bool = False
     disposable_migration_ci_present: bool = False
+    repository_adapter_contract_status: Literal["missing", "contract_only", "implemented"] = "missing"
+    repository_adapter_contract_present: bool = False
+    repository_adapter_contract_version: str | None = None
+    repository_adapter_module: str | None = None
+    repository_adapter_contract_method_count: int = Field(ge=0)
+    repository_adapter_contract_groups: list[PostgresRepositoryAdapterContractGroupResponse] = Field(default_factory=list)
     migration_artifacts: list[PostgresMigrationArtifactResponse] = Field(default_factory=list)
     schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)
     parity_checks: list[PostgresParityCheckResponse] = Field(default_factory=list)

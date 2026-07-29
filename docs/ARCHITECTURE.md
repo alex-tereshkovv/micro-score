@@ -116,7 +116,8 @@ Main local components:
   `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
   the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
   JSONB mapping coverage, disposable PostgreSQL migration-smoke CI,
-  tenant-scope parity checks, and remaining migration blockers;
+  a contract-only PostgreSQL adapter skeleton, tenant-scope parity checks, and
+  remaining migration blockers;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 
@@ -197,7 +198,8 @@ while the research is still pre-pilot.
 - No production authentication provider yet.
 - No PostgreSQL repository backend, managed database secret, deployment, or
   repository-level disposable PostgreSQL parity CI yet. A versioned 0001 schema
-  draft exists and is applied in disposable migration-smoke CI.
+  draft exists, is applied in disposable migration-smoke CI, and has a
+  contract-only adapter skeleton that does not execute queries yet.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
 - Monte Carlo stress shifts and financial assumptions are transparent defaults,

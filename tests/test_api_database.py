@@ -134,6 +134,7 @@ class ApiDatabaseTests(unittest.TestCase):
         capability_ids = {item["id"] for item in readiness["capabilities"]}
         self.assertIn("sqlite_idempotent_startup_migrations", capability_ids)
         self.assertIn("postgresql_repository_backend", capability_ids)
+        self.assertIn("postgresql_repository_adapter_contract", capability_ids)
         self.assertEqual(readiness["postgresql_migration_status"], "planned")
         self.assertTrue(
             any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
@@ -161,6 +162,29 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(readiness["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(readiness["versioned_migration_contract_present"])
         self.assertTrue(readiness["disposable_migration_ci_present"])
+        self.assertEqual(
+            readiness["repository_adapter_contract_status"],
+            "contract_only",
+        )
+        self.assertTrue(readiness["repository_adapter_contract_present"])
+        self.assertEqual(
+            readiness["repository_adapter_contract_version"],
+            "postgresql-repository-adapter-v1",
+        )
+        self.assertEqual(
+            readiness["repository_adapter_module"],
+            "microscore_api.postgres_repository",
+        )
+        self.assertEqual(readiness["repository_adapter_contract_method_count"], 52)
+        adapter_groups = {
+            group["key"]: group
+            for group in readiness["repository_adapter_contract_groups"]
+        }
+        self.assertIn("application_lifecycle", adapter_groups)
+        self.assertIn(
+            "create_application",
+            adapter_groups["application_lifecycle"]["methods"],
+        )
         self.assertEqual(len(readiness["migration_artifacts"]), 1)
         artifact = readiness["migration_artifacts"][0]
         self.assertEqual(
@@ -202,12 +226,17 @@ class ApiDatabaseTests(unittest.TestCase):
             parity_keys["postgresql_disposable_migration_ci"]["status"],
             "pass",
         )
+        self.assertEqual(
+            parity_keys["postgresql_repository_adapter_contract"]["status"],
+            "pass",
+        )
         self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")
         self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "blocker")
         blocker_keys = {row["key"] for row in readiness["blockers"]}
         self.assertIn("postgresql_repository_backend_not_implemented", blocker_keys)
         self.assertNotIn("postgresql_versioned_migrations_missing", blocker_keys)
         self.assertNotIn("postgresql_disposable_migration_ci_missing", blocker_keys)
+        self.assertNotIn("postgresql_repository_adapter_contract_missing", blocker_keys)
         self.assertIn("postgresql_disposable_parity_ci_missing", blocker_keys)
         self.assertIn("postgresql_database_url_missing", blocker_keys)
         self.assertIn("schema and parity contract", readiness["limitation"])

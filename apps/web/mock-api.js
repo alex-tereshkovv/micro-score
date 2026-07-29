@@ -205,6 +205,59 @@
       ],
     },
   ];
+  const POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT = {
+    module: "microscore_api.postgres_repository",
+    version: "postgresql-repository-adapter-v1",
+    status: "contract_only",
+    present: true,
+    runtime_enabled: false,
+    method_count: 52,
+    method_groups: [
+      {
+        key: "identity_access",
+        label: "Identity, MFA, and session lifecycle",
+        method_count: 11,
+        methods: ["create_user", "get_user", "list_users", "disable_user", "reactivate_user", "attest_user_mfa", "create_session", "get_user_by_token", "list_active_sessions", "revoke_session", "revoke_session_by_id"],
+      },
+      {
+        key: "organizations",
+        label: "MFI organization and tenant assignment",
+        method_count: 4,
+        methods: ["create_organization", "get_organization", "list_organizations", "assign_user_organization"],
+      },
+      {
+        key: "staff_invites_delivery",
+        label: "Staff invites, delivery outbox, worker, and webhooks",
+        method_count: 15,
+        methods: ["create_staff_invite", "get_staff_invite", "list_staff_invites", "mark_staff_invite_accepted", "mark_staff_invite_revoked", "mark_staff_invite_delivered", "record_staff_invite_delivery_attempt", "record_staff_invite_delivery_event", "get_staff_invite_delivery_attempt", "get_staff_invite_delivery_event", "list_staff_invite_delivery_attempts", "list_staff_invite_delivery_events", "list_staff_invite_delivery_outbox_attempts", "update_staff_invite_delivery_attempt_status", "update_staff_invite_delivery_worker_state"],
+      },
+      {
+        key: "application_lifecycle",
+        label: "Borrower application lifecycle, scoring, review, and decisions",
+        method_count: 10,
+        methods: ["create_application", "get_application", "list_applications", "list_borrower_applications", "assign_application_organization", "update_application_score", "record_application_decision", "list_application_decisions", "list_application_timeline", "clear_applications"],
+      },
+      {
+        key: "model_registry",
+        label: "Model registry and active-version governance",
+        method_count: 5,
+        methods: ["create_model_version", "get_model_version", "get_active_model_version", "list_model_versions", "activate_model_version"],
+      },
+      {
+        key: "portfolio_analytics",
+        label: "Portfolio simulations and MFI analytics",
+        method_count: 5,
+        methods: ["create_portfolio_simulation", "get_portfolio_simulation", "list_portfolio_simulations", "segment_analytics", "decision_analytics"],
+      },
+      {
+        key: "audit",
+        label: "Audit event recording and review",
+        method_count: 2,
+        methods: ["record_audit_event", "list_audit_events"],
+      },
+    ],
+    limitation: "PostgreSQL Repository Adapter Skeleton v1 defines method families and runtime guardrails only. It does not open PostgreSQL connections, does not execute repository queries, and does not make storage production-ready.",
+  };
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
     scored: "The MFI completed its internal assessment. A human review is still required.",
@@ -1728,6 +1781,12 @@
       latest_migration_version: presentArtifacts[0]?.version || null,
       versioned_migration_contract_present: versionedMigrationContractPresent,
       disposable_migration_ci_present: true,
+      repository_adapter_contract_status: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.status,
+      repository_adapter_contract_present: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.present,
+      repository_adapter_contract_version: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.version,
+      repository_adapter_module: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.module,
+      repository_adapter_contract_method_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.method_count,
+      repository_adapter_contract_groups: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.method_groups,
       migration_artifacts: POSTGRESQL_MIGRATION_ARTIFACTS,
       schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
       parity_checks: [
@@ -1769,11 +1828,18 @@
           action: "Keep scripts/postgresql-migration-smoke.py and the postgres:16 CI service as the migration smoke gate.",
         },
         {
+          key: "postgresql_repository_adapter_contract",
+          status: "pass",
+          sqlite_evidence: "52 SQLite repository method(s) are grouped into adapter contract families.",
+          postgres_requirement: "A PostgreSQL adapter must implement the same repository method families before backend selection can be enabled.",
+          action: "Keep microscore_api.postgres_repository as the contract-only skeleton until the methods are implemented and parity-tested.",
+        },
+        {
           key: "postgresql_repository_backend",
           status: "blocker",
-          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup.",
+          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; adapter contract is present but query methods are not implemented.",
           postgres_requirement: "Implement a PostgreSQL repository backend behind the same API contract.",
-          action: "Build a repository adapter and keep existing API tests backend-parametrized.",
+          action: "Implement the contract-only adapter method groups and keep existing API tests backend-parametrized.",
         },
         {
           key: "postgresql_disposable_ci",
@@ -1885,6 +1951,8 @@
           postgresql_latest_migration_version: postgresql.latest_migration_version,
           postgresql_versioned_migration_contract_present: postgresql.versioned_migration_contract_present,
           postgresql_disposable_migration_ci_present: postgresql.disposable_migration_ci_present,
+          postgresql_repository_adapter_contract_status: postgresql.repository_adapter_contract_status,
+          postgresql_repository_adapter_contract_method_count: postgresql.repository_adapter_contract_method_count,
           postgresql_blocker_keys: postgresql.blockers.map((item) => item.key),
           tenant_scoped_tables: [
             "users.organization_id",

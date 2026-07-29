@@ -15,6 +15,8 @@ from typing import Any
 
 from microscore.paths import PROJECT_ROOT
 
+from .postgres_repository import repository_contract_summary
+
 DEFAULT_API_DB_PATH = PROJECT_ROOT / "data" / "app" / "microscore.sqlite3"
 DEFAULT_SESSION_TTL_HOURS = 8.0
 DEFAULT_MODEL_VERSION = "research-v0.1"
@@ -696,8 +698,17 @@ class MicroScoreRepository:
                     "id": "postgresql_repository_backend",
                     "status": "planned",
                     "detail": (
-                        "PostgreSQL is not an active backend in this prototype and needs "
-                        "schema migrations plus integration tests before use."
+                        "PostgreSQL is not an active backend in this prototype. "
+                        "A contract-only adapter skeleton exists, but query "
+                        "implementation and repository parity tests are still required."
+                    ),
+                },
+                {
+                    "id": "postgresql_repository_adapter_contract",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter skeleton groups the SQLite repository "
+                        "method families that must be implemented before backend enablement."
                     ),
                 },
             ],
@@ -844,6 +855,11 @@ class MicroScoreRepository:
             for marker in POSTGRESQL_DISPOSABLE_MIGRATION_CI_MARKERS
         )
 
+    def postgresql_repository_adapter_contract(self) -> dict[str, Any]:
+        """Return the contract-only PostgreSQL repository adapter summary."""
+
+        return repository_contract_summary()
+
     def postgresql_migration_readiness(self) -> dict[str, Any]:
         """Return the PostgreSQL migration contract without opening a PG connection."""
 
@@ -851,6 +867,10 @@ class MicroScoreRepository:
         migration_artifacts = self.postgresql_migration_artifacts()
         disposable_migration_ci_present = (
             self.postgresql_disposable_migration_ci_present()
+        )
+        repository_adapter_contract = self.postgresql_repository_adapter_contract()
+        repository_adapter_contract_present = bool(
+            repository_adapter_contract.get("present")
         )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
@@ -989,11 +1009,39 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_repository_adapter_contract",
+                "status": (
+                    "pass" if repository_adapter_contract_present else "blocker"
+                ),
+                "sqlite_evidence": (
+                    f"{repository_adapter_contract.get('method_count', 0)} "
+                    "SQLite repository method(s) are grouped into adapter contract families."
+                ),
+                "postgres_requirement": (
+                    "A PostgreSQL adapter must implement the same repository method "
+                    "families before backend selection can be enabled."
+                ),
+                "action": (
+                    "Keep microscore_api.postgres_repository as the contract-only "
+                    "skeleton until the methods are implemented and parity-tested."
+                    if repository_adapter_contract_present
+                    else "Create a contract-only PostgreSQL adapter skeleton before repository implementation."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
-                "sqlite_evidence": "Runtime repository supports sqlite only and rejects postgresql at startup.",
+                "sqlite_evidence": (
+                    "Runtime repository supports sqlite only and rejects postgresql "
+                    "at startup; adapter contract is present but query methods are not implemented."
+                    if repository_adapter_contract_present
+                    else "Runtime repository supports sqlite only and rejects postgresql at startup."
+                ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
-                "action": "Build a repository adapter and keep existing API tests backend-parametrized.",
+                "action": (
+                    "Implement the contract-only adapter method groups and keep "
+                    "existing API tests backend-parametrized."
+                ),
             },
             {
                 "key": "postgresql_disposable_ci",
@@ -1061,6 +1109,20 @@ class MicroScoreRepository:
                     ),
                 }
             )
+        if not repository_adapter_contract_present:
+            blockers.append(
+                {
+                    "key": "postgresql_repository_adapter_contract_missing",
+                    "severity": "blocker",
+                    "summary": (
+                        "No PostgreSQL repository adapter contract skeleton is present."
+                    ),
+                    "action": (
+                        "Define contract-only method families before implementing "
+                        "PostgreSQL repository queries."
+                    ),
+                }
+            )
         if missing_environment:
             blockers.append(
                 {
@@ -1109,6 +1171,20 @@ class MicroScoreRepository:
             ),
             "versioned_migration_contract_present": versioned_migration_contract_present,
             "disposable_migration_ci_present": disposable_migration_ci_present,
+            "repository_adapter_contract_status": repository_adapter_contract.get(
+                "status"
+            ),
+            "repository_adapter_contract_present": repository_adapter_contract_present,
+            "repository_adapter_contract_version": repository_adapter_contract.get(
+                "version"
+            ),
+            "repository_adapter_module": repository_adapter_contract.get("module"),
+            "repository_adapter_contract_method_count": repository_adapter_contract.get(
+                "method_count", 0
+            ),
+            "repository_adapter_contract_groups": repository_adapter_contract.get(
+                "method_groups", []
+            ),
             "migration_artifacts": migration_artifacts,
             "schema_inventory": schema_inventory,
             "parity_checks": parity_checks,

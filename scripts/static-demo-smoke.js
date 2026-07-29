@@ -470,11 +470,14 @@ async function main() {
     || postgresqlReadinessInitial.latest_migration_version !== "0001_initial_schema"
     || !postgresqlReadinessInitial.versioned_migration_contract_present
     || !postgresqlReadinessInitial.disposable_migration_ci_present
+    || postgresqlReadinessInitial.repository_adapter_contract_status !== "contract_only"
+    || postgresqlReadinessInitial.repository_adapter_contract_method_count !== 52
     || !postgresqlReadinessInitial.migration_artifacts?.some((artifact) => artifact.path === "migrations/postgresql/0001_initial_schema.sql")
     || postgresqlParityChecks.get("postgresql_schema_inventory")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_versioned_migration_artifacts")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_jsonb_mapping")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_disposable_migration_ci")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_repository_adapter_contract")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "blocker"
     || postgresqlBlockers.has("postgresql_versioned_migrations_missing")
     || postgresqlBlockers.has("postgresql_disposable_migration_ci_missing")
@@ -1521,6 +1524,8 @@ async function main() {
       postgresql_migration_artifacts: postgresqlReadinessInitial.migration_artifact_count,
       postgresql_latest_migration: postgresqlReadinessInitial.latest_migration_version,
       postgresql_disposable_migration_ci: postgresqlReadinessInitial.disposable_migration_ci_present,
+      postgresql_repository_adapter_contract: postgresqlReadinessInitial.repository_adapter_contract_status,
+      postgresql_repository_adapter_methods: postgresqlReadinessInitial.repository_adapter_contract_method_count,
       postgresql_production_ready: postgresqlReadinessInitial.production_ready,
       staff_invite_delivery_provider: inviteDeliveryReadinessInitial.configured_provider,
       transactional_email_contract_config: transactionalDeliveryProfile.configuration_status,

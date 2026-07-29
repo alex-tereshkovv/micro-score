@@ -596,6 +596,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PostgresParityCheckResponse", schemas)
         self.assertIn("PostgresMigrationControlResponse", schemas)
         self.assertIn("PostgresMigrationArtifactResponse", schemas)
+        self.assertIn("PostgresRepositoryAdapterContractGroupResponse", schemas)
         self.assertIn("PostgresMigrationReadinessResponse", schemas)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
@@ -846,6 +847,18 @@ class ApiIntegrationTests(unittest.TestCase):
                 "postgresql_disposable_migration_ci_present"
             ]
         )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"][
+                "postgresql_repository_adapter_contract_status"
+            ],
+            "contract_only",
+        )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"][
+                "postgresql_repository_adapter_contract_method_count"
+            ],
+            52,
+        )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
             "Production identity and access",
@@ -890,6 +903,25 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(payload["versioned_migration_contract_present"])
         self.assertTrue(payload["disposable_migration_ci_present"])
+        self.assertEqual(payload["repository_adapter_contract_status"], "contract_only")
+        self.assertTrue(payload["repository_adapter_contract_present"])
+        self.assertEqual(
+            payload["repository_adapter_contract_version"],
+            "postgresql-repository-adapter-v1",
+        )
+        self.assertEqual(
+            payload["repository_adapter_module"],
+            "microscore_api.postgres_repository",
+        )
+        self.assertEqual(payload["repository_adapter_contract_method_count"], 52)
+        adapter_groups = {
+            group["key"]: group for group in payload["repository_adapter_contract_groups"]
+        }
+        self.assertIn("staff_invites_delivery", adapter_groups)
+        self.assertIn(
+            "record_staff_invite_delivery_attempt",
+            adapter_groups["staff_invites_delivery"]["methods"],
+        )
         artifact = payload["migration_artifacts"][0]
         self.assertEqual(
             artifact["path"],
@@ -922,12 +954,17 @@ class ApiIntegrationTests(unittest.TestCase):
             parity["postgresql_disposable_migration_ci"]["status"],
             "pass",
         )
+        self.assertEqual(
+            parity["postgresql_repository_adapter_contract"]["status"],
+            "pass",
+        )
         self.assertEqual(parity["postgresql_repository_backend"]["status"], "blocker")
         self.assertEqual(parity["postgresql_disposable_ci"]["status"], "blocker")
         blockers = {row["key"] for row in payload["blockers"]}
         self.assertIn("postgresql_repository_backend_not_implemented", blockers)
         self.assertNotIn("postgresql_versioned_migrations_missing", blockers)
         self.assertNotIn("postgresql_disposable_migration_ci_missing", blockers)
+        self.assertNotIn("postgresql_repository_adapter_contract_missing", blockers)
         self.assertIn("postgresql_disposable_parity_ci_missing", blockers)
         self.assertIn("postgresql_database_url_missing", blockers)
         self.assertIn("schema and parity contract", payload["limitation"])

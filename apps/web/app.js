@@ -2795,6 +2795,7 @@ function renderPostgresqlReadiness(payload) {
         <div><dt>Tenant cols</dt><dd>${Number(payload.tenant_scope_count || 0)}</dd></div>
         <div><dt>Migrations</dt><dd>${Number(payload.migration_artifact_count || 0)}${payload.latest_migration_version ? ` · ${escapeHtml(payload.latest_migration_version)}` : ""}</dd></div>
         <div><dt>PG CI</dt><dd>${payload.disposable_migration_ci_present ? "Migration smoke" : "Missing"}</dd></div>
+        <div><dt>Adapter</dt><dd>${escapeHtml(formatPolicyName(payload.repository_adapter_contract_status || "missing"))}${payload.repository_adapter_contract_method_count ? ` · ${Number(payload.repository_adapter_contract_method_count)} methods` : ""}</dd></div>
         <div><dt>Live PG</dt><dd>${payload.live_connection_tested ? "Tested" : "Not tested"}</dd></div>
       </dl>
     </section>
