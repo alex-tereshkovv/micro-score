@@ -15,7 +15,10 @@ from typing import Any
 
 from microscore.paths import PROJECT_ROOT
 
-from .postgres_repository import repository_contract_summary
+from .postgres_repository import (
+    POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
+    repository_contract_summary,
+)
 
 DEFAULT_API_DB_PATH = PROJECT_ROOT / "data" / "app" / "microscore.sqlite3"
 DEFAULT_SESSION_TTL_HOURS = 8.0
@@ -658,6 +661,7 @@ class MicroScoreRepository:
     def storage_readiness(self) -> dict[str, Any]:
         """Return deterministic storage metadata for migration planning."""
 
+        adapter_contract = self.postgresql_repository_adapter_contract()
         return {
             "backend": self.storage_backend,
             "status": "ready",
@@ -699,16 +703,26 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "A contract-only adapter skeleton exists, but query "
-                        "implementation and repository parity tests are still required."
+                        "The adapter has a read-only model registry path, but "
+                        "write methods, tenant flows, and full repository parity "
+                        "tests are still required."
                     ),
                 },
                 {
                     "id": "postgresql_repository_adapter_contract",
                     "status": "ready",
                     "detail": (
-                        "The PostgreSQL adapter skeleton groups the SQLite repository "
-                        "method families that must be implemented before backend enablement."
+                        "The PostgreSQL adapter groups SQLite repository method "
+                        "families and implements the first read-only model registry path."
+                    ),
+                },
+                {
+                    "id": "postgresql_model_registry_read_adapter",
+                    "status": "ready",
+                    "detail": (
+                        f"{adapter_contract.get('implemented_method_count', 0)} "
+                        "read-only PostgreSQL adapter method(s) are implemented "
+                        "for model registry parity tests."
                     ),
                 },
             ],
@@ -872,6 +886,14 @@ class MicroScoreRepository:
         repository_adapter_contract_present = bool(
             repository_adapter_contract.get("present")
         )
+        repository_adapter_implemented_methods = tuple(
+            str(method)
+            for method in repository_adapter_contract.get("implemented_methods", [])
+        )
+        repository_adapter_model_registry_read_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_MODEL_REGISTRY_READ_METHODS
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -1015,17 +1037,42 @@ class MicroScoreRepository:
                 ),
                 "sqlite_evidence": (
                     f"{repository_adapter_contract.get('method_count', 0)} "
-                    "SQLite repository method(s) are grouped into adapter contract families."
+                    "SQLite repository method(s) are grouped into adapter contract "
+                    f"families; {repository_adapter_contract.get('implemented_method_count', 0)} "
+                    "method(s) currently have PostgreSQL adapter coverage."
                 ),
                 "postgres_requirement": (
                     "A PostgreSQL adapter must implement the same repository method "
                     "families before backend selection can be enabled."
                 ),
                 "action": (
-                    "Keep microscore_api.postgres_repository as the contract-only "
-                    "skeleton until the methods are implemented and parity-tested."
+                    "Keep microscore_api.postgres_repository as the incremental "
+                    "adapter surface until every method family is implemented and parity-tested."
                     if repository_adapter_contract_present
                     else "Create a contract-only PostgreSQL adapter skeleton before repository implementation."
+                ),
+            },
+            {
+                "key": "postgresql_model_registry_read_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_model_registry_read_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS)} read-only "
+                    "model registry method(s) have PostgreSQL query specs and a "
+                    "SQLite-vs-adapter parity snapshot harness."
+                ),
+                "postgres_requirement": (
+                    "The adapter must read model_versions with PostgreSQL boolean "
+                    "and JSONB semantics before model governance can move off SQLite."
+                ),
+                "action": (
+                    "Promote the model registry read adapter into disposable "
+                    "PostgreSQL CI, then add create/activate parity coverage."
+                    if repository_adapter_model_registry_read_present
+                    else "Implement get/list/active model registry reads on the PostgreSQL adapter."
                 ),
             },
             {
@@ -1033,14 +1080,16 @@ class MicroScoreRepository:
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; adapter contract is present but query methods are not implemented."
+                    "at startup; the adapter has a model registry read path but "
+                    "does not yet cover the full repository contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
-                    "Implement the contract-only adapter method groups and keep "
-                    "existing API tests backend-parametrized."
+                    "Expand the PostgreSQL adapter from model registry reads to "
+                    "write methods, tenant-scoped queues, applications, analytics, "
+                    "and audit flows."
                 ),
             },
             {
@@ -1179,8 +1228,24 @@ class MicroScoreRepository:
                 "version"
             ),
             "repository_adapter_module": repository_adapter_contract.get("module"),
+            "repository_adapter_stage": repository_adapter_contract.get("stage"),
             "repository_adapter_contract_method_count": repository_adapter_contract.get(
                 "method_count", 0
+            ),
+            "repository_adapter_implemented_method_count": repository_adapter_contract.get(
+                "implemented_method_count", 0
+            ),
+            "repository_adapter_pending_method_count": repository_adapter_contract.get(
+                "pending_method_count", 0
+            ),
+            "repository_adapter_read_only_method_count": repository_adapter_contract.get(
+                "read_only_method_count", 0
+            ),
+            "repository_adapter_implemented_methods": list(
+                repository_adapter_implemented_methods
+            ),
+            "repository_adapter_model_registry_read_present": (
+                repository_adapter_model_registry_read_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

@@ -34,6 +34,7 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertEqual(payload["expected_tables"], 12)
         self.assertEqual(payload["expected_jsonb_columns"], 8)
         self.assertEqual(payload["expected_tenant_indexes"], 4)
+        self.assertEqual(payload["expected_model_registry_read_methods"], 3)
 
     def test_postgresql_migration_smoke_script_uses_psql_without_secret_logging(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "postgresql-migration-smoke.py").read_text(
@@ -48,6 +49,9 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertIn("information_schema.columns", script)
         self.assertIn("pg_indexes", script)
         self.assertIn("score_result_json->>'risk_band'", script)
+        self.assertIn("WHERE is_active IS TRUE", script)
+        self.assertIn("metrics_json->>'roc_auc'", script)
+        self.assertIn("model_registry_active_version", script)
         self.assertIn("::error title=PostgreSQL migration smoke failed::", script)
         self.assertIn("psql failed with exit code", script)
         self.assertNotIn("print(database_url", script)

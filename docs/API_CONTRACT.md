@@ -1283,16 +1283,21 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 - `parity_checks`: `postgresql_schema_inventory`,
   `postgresql_versioned_migration_artifacts`, `postgresql_jsonb_mapping`,
   `postgresql_tenant_scope_parity`, `postgresql_disposable_migration_ci`,
-  `postgresql_repository_adapter_contract`, `postgresql_repository_backend`,
-  and `postgresql_disposable_ci`;
+  `postgresql_repository_adapter_contract`,
+  `postgresql_model_registry_read_adapter`,
+  `postgresql_repository_backend`, and `postgresql_disposable_ci`;
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
   service and applies `0001_initial_schema.sql`;
-- `repository_adapter_contract_*`: a contract-only adapter skeleton in
+- `repository_adapter_contract_*`: an incremental PostgreSQL adapter in
   `microscore_api.postgres_repository`, including
-  `repository_adapter_contract_status=contract_only`, method-family groups, and
-  the number of repository methods that must later be implemented for
-  PostgreSQL;
+  `repository_adapter_contract_status=partial_read_only`,
+  `repository_adapter_stage=model_registry_read_path_v1`, method-family groups,
+  `repository_adapter_contract_method_count=52`,
+  `repository_adapter_implemented_method_count=3`,
+  `repository_adapter_pending_method_count=49`, and the implemented read-only
+  model registry methods (`get_model_version`, `get_active_model_version`,
+  `list_model_versions`);
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,
@@ -1300,10 +1305,12 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 
 The response is intentionally `blocked` even when the versioned migration draft
 is present and applied in disposable CI, and even when the PostgreSQL repository
-adapter contract skeleton is present. `0001_initial_schema.sql` is a reviewed
-DDL contract and CI smoke target, not a production migration runner. The
-adapter skeleton defines method families and guardrails, not executable queries.
-The gate remains blocked until the PostgreSQL repository backend, managed
+adapter has its first read-only model registry path. `0001_initial_schema.sql`
+is a reviewed DDL contract and CI smoke target, not a production migration
+runner. The adapter v2 proves PostgreSQL boolean/JSONB row materialization for
+model registry reads through an injected connection factory, but does not enable
+runtime backend selection. The gate remains blocked until the PostgreSQL
+repository backend, managed
 connection secret, repository-level disposable parity CI, backup/retention
 controls, and live migration execution are implemented.
 

@@ -2302,6 +2302,12 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_repository_adapter_contract_method_count": postgresql_readiness[
                     "repository_adapter_contract_method_count"
                 ],
+                "postgresql_repository_adapter_implemented_method_count": postgresql_readiness[
+                    "repository_adapter_implemented_method_count"
+                ],
+                "postgresql_repository_adapter_stage": postgresql_readiness[
+                    "repository_adapter_stage"
+                ],
                 "postgresql_blocker_keys": [
                     item["key"] for item in postgresql_readiness["blockers"]
                 ],

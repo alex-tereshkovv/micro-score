@@ -20,6 +20,9 @@ from microscore_api.database import (  # noqa: E402
     POSTGRESQL_TENANT_SCOPE_INDEXES,
     REQUIRED_SCHEMA_TABLES,
 )
+from microscore_api.postgres_repository import (  # noqa: E402
+    POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
+)
 
 
 DEFAULT_MIGRATION_PATH = (
@@ -72,6 +75,7 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_tables": len(EXPECTED_TABLES),
         "expected_jsonb_columns": len(JSON_TEXT_COLUMNS),
         "expected_tenant_indexes": len(POSTGRESQL_TENANT_SCOPE_INDEXES),
+        "expected_model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
     }
 
 
@@ -281,6 +285,26 @@ def apply_migration_and_verify(
             WHERE id = 'ci-smoke-application';
         """,
     )
+    active_model_version = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT version
+            FROM model_versions
+            WHERE is_active IS TRUE
+            ORDER BY activated_at DESC NULLS LAST, created_at DESC, version DESC
+            LIMIT 1;
+        """,
+    )
+    active_model_metric = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT metrics_json->>'roc_auc'
+            FROM model_versions
+            WHERE version = 'ci-smoke-model';
+        """,
+    )
 
     assert_catalog_subset(expected=EXPECTED_TABLES, actual=tables, label="tables")
     assert_catalog_subset(
@@ -299,6 +323,16 @@ def apply_migration_and_verify(
         label="schema migration version",
     )
     assert_catalog_subset(expected=["low"], actual=jsonb_value, label="JSONB smoke row")
+    assert_catalog_subset(
+        expected=["ci-smoke-model"],
+        actual=active_model_version,
+        label="active model registry row",
+    )
+    assert_catalog_subset(
+        expected=["0.81"],
+        actual=active_model_metric,
+        label="model registry JSONB metric",
+    )
 
     return {
         "migration": migration_path.relative_to(PROJECT_ROOT).as_posix(),
@@ -312,6 +346,9 @@ def apply_migration_and_verify(
         ),
         "required_tenant_indexes": len(POSTGRESQL_TENANT_SCOPE_INDEXES),
         "jsonb_smoke_row": jsonb_value[0],
+        "model_registry_active_version": active_model_version[0],
+        "model_registry_metric_roc_auc": active_model_metric[0],
+        "model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
     }
 
 

@@ -598,6 +598,23 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("PostgresMigrationArtifactResponse", schemas)
         self.assertIn("PostgresRepositoryAdapterContractGroupResponse", schemas)
         self.assertIn("PostgresMigrationReadinessResponse", schemas)
+        postgres_readiness_properties = schemas["PostgresMigrationReadinessResponse"][
+            "properties"
+        ]
+        self.assertIn("repository_adapter_stage", postgres_readiness_properties)
+        self.assertIn(
+            "repository_adapter_implemented_method_count",
+            postgres_readiness_properties,
+        )
+        self.assertIn(
+            "repository_adapter_model_registry_read_present",
+            postgres_readiness_properties,
+        )
+        adapter_group_properties = schemas[
+            "PostgresRepositoryAdapterContractGroupResponse"
+        ]["properties"]
+        self.assertIn("implemented_methods", adapter_group_properties)
+        self.assertIn("pending_methods", adapter_group_properties)
         self.assertIn("session_expires_at", schemas["AuthResponse"]["properties"])
         self.assertIn("session_ttl_seconds", schemas["AuthResponse"]["properties"])
         self.assertIn("storage", schemas["HealthResponse"]["properties"])
@@ -851,13 +868,25 @@ class ApiIntegrationTests(unittest.TestCase):
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_contract_status"
             ],
-            "contract_only",
+            "partial_read_only",
         )
         self.assertEqual(
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_contract_method_count"
             ],
             52,
+        )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"][
+                "postgresql_repository_adapter_implemented_method_count"
+            ],
+            3,
+        )
+        self.assertEqual(
+            checks["storage_backend"]["evidence"][
+                "postgresql_repository_adapter_stage"
+            ],
+            "model_registry_read_path_v1",
         )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
@@ -903,17 +932,26 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(payload["versioned_migration_contract_present"])
         self.assertTrue(payload["disposable_migration_ci_present"])
-        self.assertEqual(payload["repository_adapter_contract_status"], "contract_only")
+        self.assertEqual(payload["repository_adapter_contract_status"], "partial_read_only")
         self.assertTrue(payload["repository_adapter_contract_present"])
         self.assertEqual(
             payload["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v1",
+            "postgresql-repository-adapter-v2",
         )
         self.assertEqual(
             payload["repository_adapter_module"],
             "microscore_api.postgres_repository",
         )
+        self.assertEqual(payload["repository_adapter_stage"], "model_registry_read_path_v1")
         self.assertEqual(payload["repository_adapter_contract_method_count"], 52)
+        self.assertEqual(payload["repository_adapter_implemented_method_count"], 3)
+        self.assertEqual(payload["repository_adapter_pending_method_count"], 49)
+        self.assertEqual(payload["repository_adapter_read_only_method_count"], 3)
+        self.assertTrue(payload["repository_adapter_model_registry_read_present"])
+        self.assertIn(
+            "list_model_versions",
+            payload["repository_adapter_implemented_methods"],
+        )
         adapter_groups = {
             group["key"]: group for group in payload["repository_adapter_contract_groups"]
         }
@@ -921,6 +959,14 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn(
             "record_staff_invite_delivery_attempt",
             adapter_groups["staff_invites_delivery"]["methods"],
+        )
+        self.assertEqual(
+            adapter_groups["model_registry"]["implemented_method_count"],
+            3,
+        )
+        self.assertIn(
+            "create_model_version",
+            adapter_groups["model_registry"]["pending_methods"],
         )
         artifact = payload["migration_artifacts"][0]
         self.assertEqual(
@@ -956,6 +1002,10 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             parity["postgresql_repository_adapter_contract"]["status"],
+            "pass",
+        )
+        self.assertEqual(
+            parity["postgresql_model_registry_read_adapter"]["status"],
             "pass",
         )
         self.assertEqual(parity["postgresql_repository_backend"]["status"], "blocker")

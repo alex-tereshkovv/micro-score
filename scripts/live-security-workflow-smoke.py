@@ -340,8 +340,11 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_readiness["latest_migration_version"] == "0001_initial_schema"
         and postgresql_readiness["versioned_migration_contract_present"]
         and postgresql_readiness["disposable_migration_ci_present"]
-        and postgresql_readiness["repository_adapter_contract_status"] == "contract_only"
+        and postgresql_readiness["repository_adapter_contract_status"] == "partial_read_only"
         and postgresql_readiness["repository_adapter_contract_method_count"] == 52
+        and postgresql_readiness["repository_adapter_implemented_method_count"] == 3
+        and postgresql_readiness["repository_adapter_stage"] == "model_registry_read_path_v1"
+        and postgresql_readiness["repository_adapter_model_registry_read_present"]
         and any(
             artifact["path"] == "migrations/postgresql/0001_initial_schema.sql"
             for artifact in postgresql_readiness.get("migration_artifacts", [])
@@ -351,6 +354,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_parity["postgresql_jsonb_mapping"]["status"] == "pass"
         and postgresql_parity["postgresql_disposable_migration_ci"]["status"] == "pass"
         and postgresql_parity["postgresql_repository_adapter_contract"]["status"] == "pass"
+        and postgresql_parity["postgresql_model_registry_read_adapter"]["status"] == "pass"
         and postgresql_parity["postgresql_repository_backend"]["status"] == "blocker",
         "PostgreSQL readiness should expose the migration draft and remaining blockers",
     )
@@ -731,6 +735,9 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         ],
         "postgresql_repository_adapter_methods": postgresql_readiness[
             "repository_adapter_contract_method_count"
+        ],
+        "postgresql_repository_adapter_implemented_methods": postgresql_readiness[
+            "repository_adapter_implemented_method_count"
         ],
         "transactional_email_contract_config": transactional_profile["configuration_status"],
         "delivery_webhook_events": len(webhook_events),
