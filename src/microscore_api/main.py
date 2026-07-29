@@ -2305,6 +2305,12 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_repository_adapter_implemented_method_count": postgresql_readiness[
                     "repository_adapter_implemented_method_count"
                 ],
+                "postgresql_repository_adapter_completed_method_group_count": postgresql_readiness[
+                    "repository_adapter_completed_method_group_count"
+                ],
+                "postgresql_repository_adapter_completed_method_groups": postgresql_readiness[
+                    "repository_adapter_completed_method_groups"
+                ],
                 "postgresql_repository_adapter_stage": postgresql_readiness[
                     "repository_adapter_stage"
                 ],

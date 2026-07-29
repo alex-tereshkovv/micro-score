@@ -182,6 +182,7 @@ class PostgresMigrationReadinessResponse(BaseModel):
         "missing",
         "contract_only",
         "partial_read_only",
+        "partial_method_group",
         "implemented",
     ] = "missing"
     repository_adapter_contract_present: bool = False
@@ -192,8 +193,13 @@ class PostgresMigrationReadinessResponse(BaseModel):
     repository_adapter_implemented_method_count: int = Field(ge=0)
     repository_adapter_pending_method_count: int = Field(ge=0)
     repository_adapter_read_only_method_count: int = Field(ge=0)
+    repository_adapter_write_method_count: int = Field(ge=0)
+    repository_adapter_completed_method_group_count: int = Field(ge=0)
+    repository_adapter_completed_method_groups: list[str] = Field(default_factory=list)
     repository_adapter_implemented_methods: list[str] = Field(default_factory=list)
     repository_adapter_model_registry_read_present: bool = False
+    repository_adapter_model_registry_write_present: bool = False
+    repository_adapter_model_registry_group_present: bool = False
     repository_adapter_contract_groups: list[PostgresRepositoryAdapterContractGroupResponse] = Field(default_factory=list)
     migration_artifacts: list[PostgresMigrationArtifactResponse] = Field(default_factory=list)
     schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)

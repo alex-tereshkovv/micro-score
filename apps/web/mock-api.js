@@ -206,23 +206,29 @@
     },
   ];
   const POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS = [
+    "create_model_version",
     "get_model_version",
     "get_active_model_version",
     "list_model_versions",
+    "activate_model_version",
   ];
   const POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT = {
     module: "microscore_api.postgres_repository",
-    version: "postgresql-repository-adapter-v2",
-    status: "partial_read_only",
-    stage: "model_registry_read_path_v1",
+    version: "postgresql-repository-adapter-v3",
+    status: "partial_method_group",
+    stage: "model_registry_method_group_v1",
     present: true,
     runtime_enabled: false,
     method_count: 52,
     implemented_method_count: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS.length,
     implemented_methods: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS,
-    pending_method_count: 49,
-    read_only_method_count: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS.length,
-    read_only_methods: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS,
+    pending_method_count: 47,
+    completed_method_group_count: 1,
+    completed_method_groups: ["model_registry"],
+    read_only_method_count: 3,
+    read_only_methods: ["get_model_version", "get_active_model_version", "list_model_versions"],
+    write_method_count: 2,
+    write_methods: ["create_model_version", "activate_model_version"],
     method_groups: [
       {
         key: "identity_access",
@@ -277,7 +283,7 @@
         pending_methods: pendingMethods,
       };
     }),
-    limitation: "PostgreSQL Repository Adapter v2 implements only the read-only model registry path through an injected DB-API compatible connection factory. Runtime backend selection remains disabled until write methods, tenant flows, and disposable PostgreSQL parity tests cover the full repository contract.",
+    limitation: "PostgreSQL Repository Adapter v3 implements the model registry method group through an injected DB-API compatible connection factory. Runtime backend selection remains disabled until identity, tenant-scoped application, invite, simulation, analytics, and audit flows have repository parity coverage.",
   };
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
@@ -1811,8 +1817,13 @@
       repository_adapter_implemented_method_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.implemented_method_count,
       repository_adapter_pending_method_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.pending_method_count,
       repository_adapter_read_only_method_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.read_only_method_count,
+      repository_adapter_write_method_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.write_method_count,
+      repository_adapter_completed_method_group_count: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.completed_method_group_count,
+      repository_adapter_completed_method_groups: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.completed_method_groups,
       repository_adapter_implemented_methods: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.implemented_methods,
       repository_adapter_model_registry_read_present: true,
+      repository_adapter_model_registry_write_present: true,
+      repository_adapter_model_registry_group_present: true,
       repository_adapter_contract_groups: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.method_groups,
       migration_artifacts: POSTGRESQL_MIGRATION_ARTIFACTS,
       schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
@@ -1857,7 +1868,7 @@
         {
           key: "postgresql_repository_adapter_contract",
           status: "pass",
-          sqlite_evidence: "52 SQLite repository method(s) are grouped into adapter contract families; 3 method(s) currently have PostgreSQL adapter coverage.",
+          sqlite_evidence: "52 SQLite repository method(s) are grouped into adapter contract families; 5 method(s) currently have PostgreSQL adapter coverage.",
           postgres_requirement: "A PostgreSQL adapter must implement the same repository method families before backend selection can be enabled.",
           action: "Keep microscore_api.postgres_repository as the incremental adapter surface until every method family is implemented and parity-tested.",
         },
@@ -1866,14 +1877,21 @@
           status: "pass",
           sqlite_evidence: "3 read-only model registry method(s) have PostgreSQL query specs and a SQLite-vs-adapter parity snapshot harness.",
           postgres_requirement: "The adapter must read model_versions with PostgreSQL boolean and JSONB semantics before model governance can move off SQLite.",
-          action: "Promote the model registry read adapter into disposable PostgreSQL CI, then add create/activate parity coverage.",
+          action: "Keep read parity covered while promoting the complete model registry group into disposable PostgreSQL CI.",
+        },
+        {
+          key: "postgresql_model_registry_method_group_adapter",
+          status: "pass",
+          sqlite_evidence: "5 model registry method(s) have PostgreSQL query specs and SQLite-vs-adapter parity coverage, including 2 write method(s).",
+          postgres_requirement: "The adapter must preserve model version creation, active-version atomicity, PostgreSQL boolean handling, and JSONB materialization.",
+          action: "Promote the complete model registry adapter group into disposable PostgreSQL repository CI, then start the next tenant-scoped method group.",
         },
         {
           key: "postgresql_repository_backend",
           status: "blocker",
-          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; the adapter has a model registry read path but does not yet cover the full repository contract.",
+          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; the adapter has a complete model registry method group but does not yet cover the full repository contract.",
           postgres_requirement: "Implement a PostgreSQL repository backend behind the same API contract.",
-          action: "Expand the PostgreSQL adapter from model registry reads to write methods, tenant-scoped queues, applications, analytics, and audit flows.",
+          action: "Expand the PostgreSQL adapter from model registry to tenant-scoped queues, applications, simulations, analytics, identity, and audit flows.",
         },
         {
           key: "postgresql_disposable_ci",
@@ -1988,6 +2006,8 @@
           postgresql_repository_adapter_contract_status: postgresql.repository_adapter_contract_status,
           postgresql_repository_adapter_contract_method_count: postgresql.repository_adapter_contract_method_count,
           postgresql_repository_adapter_implemented_method_count: postgresql.repository_adapter_implemented_method_count,
+          postgresql_repository_adapter_completed_method_group_count: postgresql.repository_adapter_completed_method_group_count,
+          postgresql_repository_adapter_completed_method_groups: postgresql.repository_adapter_completed_method_groups,
           postgresql_repository_adapter_stage: postgresql.repository_adapter_stage,
           postgresql_blocker_keys: postgresql.blockers.map((item) => item.key),
           tenant_scoped_tables: [

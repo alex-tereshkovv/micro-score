@@ -21,7 +21,9 @@ from microscore_api.database import (  # noqa: E402
     REQUIRED_SCHEMA_TABLES,
 )
 from microscore_api.postgres_repository import (  # noqa: E402
+    POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
+    POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
 )
 
 
@@ -76,6 +78,8 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_jsonb_columns": len(JSON_TEXT_COLUMNS),
         "expected_tenant_indexes": len(POSTGRESQL_TENANT_SCOPE_INDEXES),
         "expected_model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
+        "expected_model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
+        "expected_model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
     }
 
 
@@ -201,6 +205,10 @@ def apply_migration_and_verify(
             ON CONFLICT (id) DO UPDATE
             SET score_result_json = EXCLUDED.score_result_json;
 
+            UPDATE model_versions
+            SET lifecycle_status = 'inactive', is_active = FALSE
+            WHERE version IN ('ci-smoke-model', 'ci-smoke-model-candidate');
+
             INSERT INTO model_versions (
                 version,
                 model_name,
@@ -220,8 +228,8 @@ def apply_migration_and_verify(
                 'ci-smoke-model',
                 'CI Smoke Model',
                 'logistic_regression',
-                'active',
-                TRUE,
+                'inactive',
+                FALSE,
                 'behavioral-v1',
                 'ci-smoke',
                 42,
@@ -232,7 +240,56 @@ def apply_migration_and_verify(
                 NOW()
             )
             ON CONFLICT (version) DO UPDATE
-            SET metrics_json = EXCLUDED.metrics_json;
+            SET
+                lifecycle_status = EXCLUDED.lifecycle_status,
+                is_active = EXCLUDED.is_active,
+                metrics_json = EXCLUDED.metrics_json,
+                activated_at = EXCLUDED.activated_at;
+
+            INSERT INTO model_versions (
+                version,
+                model_name,
+                model_type,
+                lifecycle_status,
+                is_active,
+                feature_schema_version,
+                training_data_label,
+                random_state,
+                metrics_json,
+                limitations_json,
+                created_by,
+                created_at,
+                activated_at
+            )
+            VALUES (
+                'ci-smoke-model-candidate',
+                'CI Smoke Candidate Model',
+                'logistic_regression',
+                'candidate',
+                FALSE,
+                'behavioral-v2',
+                'ci-smoke-candidate',
+                43,
+                '{"roc_auc": 0.84}'::jsonb,
+                '["disposable CI write smoke only"]'::jsonb,
+                'ci',
+                NOW(),
+                NULL
+            )
+            ON CONFLICT (version) DO UPDATE
+            SET
+                lifecycle_status = EXCLUDED.lifecycle_status,
+                is_active = EXCLUDED.is_active,
+                metrics_json = EXCLUDED.metrics_json,
+                activated_at = EXCLUDED.activated_at;
+
+            UPDATE model_versions
+            SET lifecycle_status = 'inactive', is_active = FALSE
+            WHERE is_active IS TRUE AND version <> 'ci-smoke-model-candidate';
+
+            UPDATE model_versions
+            SET lifecycle_status = 'active', is_active = TRUE, activated_at = NOW()
+            WHERE version = 'ci-smoke-model-candidate';
             """,
         ],
     )
@@ -302,7 +359,16 @@ def apply_migration_and_verify(
         sql="""
             SELECT metrics_json->>'roc_auc'
             FROM model_versions
-            WHERE version = 'ci-smoke-model';
+            WHERE version = 'ci-smoke-model-candidate';
+        """,
+    )
+    active_model_status = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT lifecycle_status || ':' || is_active::text
+            FROM model_versions
+            WHERE version = 'ci-smoke-model-candidate';
         """,
     )
 
@@ -324,14 +390,19 @@ def apply_migration_and_verify(
     )
     assert_catalog_subset(expected=["low"], actual=jsonb_value, label="JSONB smoke row")
     assert_catalog_subset(
-        expected=["ci-smoke-model"],
+        expected=["ci-smoke-model-candidate"],
         actual=active_model_version,
         label="active model registry row",
     )
     assert_catalog_subset(
-        expected=["0.81"],
+        expected=["0.84"],
         actual=active_model_metric,
         label="model registry JSONB metric",
+    )
+    assert_catalog_subset(
+        expected=["active:true"],
+        actual=active_model_status,
+        label="model registry activation status",
     )
 
     return {
@@ -349,6 +420,8 @@ def apply_migration_and_verify(
         "model_registry_active_version": active_model_version[0],
         "model_registry_metric_roc_auc": active_model_metric[0],
         "model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
+        "model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
+        "model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
     }
 
 

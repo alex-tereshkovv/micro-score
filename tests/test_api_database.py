@@ -136,6 +136,7 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertIn("postgresql_repository_backend", capability_ids)
         self.assertIn("postgresql_repository_adapter_contract", capability_ids)
         self.assertIn("postgresql_model_registry_read_adapter", capability_ids)
+        self.assertIn("postgresql_model_registry_method_group_adapter", capability_ids)
         self.assertEqual(readiness["postgresql_migration_status"], "planned")
         self.assertTrue(
             any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
@@ -165,12 +166,12 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(readiness["disposable_migration_ci_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_status"],
-            "partial_read_only",
+            "partial_method_group",
         )
         self.assertTrue(readiness["repository_adapter_contract_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v2",
+            "postgresql-repository-adapter-v3",
         )
         self.assertEqual(
             readiness["repository_adapter_module"],
@@ -178,15 +179,30 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(
             readiness["repository_adapter_stage"],
-            "model_registry_read_path_v1",
+            "model_registry_method_group_v1",
         )
         self.assertEqual(readiness["repository_adapter_contract_method_count"], 52)
-        self.assertEqual(readiness["repository_adapter_implemented_method_count"], 3)
-        self.assertEqual(readiness["repository_adapter_pending_method_count"], 49)
+        self.assertEqual(readiness["repository_adapter_implemented_method_count"], 5)
+        self.assertEqual(readiness["repository_adapter_pending_method_count"], 47)
         self.assertEqual(readiness["repository_adapter_read_only_method_count"], 3)
+        self.assertEqual(readiness["repository_adapter_write_method_count"], 2)
+        self.assertEqual(
+            readiness["repository_adapter_completed_method_group_count"],
+            1,
+        )
+        self.assertEqual(
+            readiness["repository_adapter_completed_method_groups"],
+            ["model_registry"],
+        )
         self.assertTrue(readiness["repository_adapter_model_registry_read_present"])
+        self.assertTrue(readiness["repository_adapter_model_registry_write_present"])
+        self.assertTrue(readiness["repository_adapter_model_registry_group_present"])
         self.assertIn(
             "get_active_model_version",
+            readiness["repository_adapter_implemented_methods"],
+        )
+        self.assertIn(
+            "activate_model_version",
             readiness["repository_adapter_implemented_methods"],
         )
         adapter_groups = {
@@ -200,12 +216,10 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(
             adapter_groups["model_registry"]["implemented_method_count"],
-            3,
+            5,
         )
-        self.assertIn(
-            "activate_model_version",
-            adapter_groups["model_registry"]["pending_methods"],
-        )
+        self.assertEqual(adapter_groups["model_registry"]["pending_method_count"], 0)
+        self.assertFalse(adapter_groups["model_registry"]["pending_methods"])
         self.assertEqual(len(readiness["migration_artifacts"]), 1)
         artifact = readiness["migration_artifacts"][0]
         self.assertEqual(
@@ -253,6 +267,10 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(
             parity_keys["postgresql_model_registry_read_adapter"]["status"],
+            "pass",
+        )
+        self.assertEqual(
+            parity_keys["postgresql_model_registry_method_group_adapter"]["status"],
             "pass",
         )
         self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")

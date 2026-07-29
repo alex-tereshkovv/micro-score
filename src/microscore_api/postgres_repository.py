@@ -1,9 +1,9 @@
-"""PostgreSQL repository adapter contract and first read-only path.
+"""PostgreSQL repository adapter contract and first completed method group.
 
 This module is deliberately not a production backend yet. It records the
 repository method families that a future PostgreSQL implementation must support
 before ``MICROSCORE_STORAGE_BACKEND=postgresql`` can be enabled, and it exposes
-the first executable read-only adapter path for model-registry parity tests.
+the first executable method group for model-registry parity tests.
 """
 
 from __future__ import annotations
@@ -11,26 +11,38 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v2"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v3"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
-POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_read_only"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_read_path_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_group"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_method_group_v1"
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
     "get_model_version",
     "get_active_model_version",
     "list_model_versions",
 )
-POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = POSTGRESQL_MODEL_REGISTRY_READ_METHODS
+POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS = (
+    "create_model_version",
+    "activate_model_version",
+)
+POSTGRESQL_MODEL_REGISTRY_METHODS = (
+    "create_model_version",
+    "get_model_version",
+    "get_active_model_version",
+    "list_model_versions",
+    "activate_model_version",
+)
+POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = POSTGRESQL_MODEL_REGISTRY_METHODS
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v2 implements only the read-only model "
-    "registry path through an injected DB-API compatible connection factory. "
-    "Runtime backend selection remains disabled until write methods, tenant "
-    "flows, and disposable PostgreSQL parity tests cover the full repository "
-    "contract."
+    "PostgreSQL Repository Adapter v3 implements the model registry method "
+    "group through an injected DB-API compatible connection factory. Runtime "
+    "backend selection remains disabled until identity, tenant-scoped "
+    "application, invite, simulation, analytics, and audit flows have "
+    "repository parity coverage."
 )
 MODEL_VERSION_COLUMNS = (
     "version",
@@ -65,6 +77,11 @@ SELECT
 FROM model_versions
 """
 GET_MODEL_VERSION_SQL = MODEL_VERSION_SELECT + "WHERE version = %(version)s"
+GET_MODEL_VERSION_EXISTS_SQL = """
+SELECT version
+FROM model_versions
+WHERE version = %(version)s
+"""
 GET_ACTIVE_MODEL_VERSION_SQL = (
     MODEL_VERSION_SELECT
     + """
@@ -79,6 +96,48 @@ LIST_MODEL_VERSIONS_SQL = (
 ORDER BY is_active DESC, created_at DESC, version DESC
 """
 )
+CREATE_MODEL_VERSION_SQL = """
+INSERT INTO model_versions (
+    version,
+    model_name,
+    model_type,
+    lifecycle_status,
+    is_active,
+    feature_schema_version,
+    training_data_label,
+    random_state,
+    metrics_json,
+    limitations_json,
+    created_by,
+    created_at,
+    activated_at
+)
+VALUES (
+    %(version)s,
+    %(model_name)s,
+    'logistic_regression',
+    'candidate',
+    FALSE,
+    %(feature_schema_version)s,
+    %(training_data_label)s,
+    %(random_state)s,
+    %(metrics_json)s::jsonb,
+    %(limitations_json)s::jsonb,
+    %(created_by)s,
+    %(created_at)s,
+    NULL
+)
+"""
+DEACTIVATE_OTHER_MODEL_VERSIONS_SQL = """
+UPDATE model_versions
+SET lifecycle_status = 'inactive', is_active = FALSE
+WHERE is_active IS TRUE AND version <> %(version)s
+"""
+ACTIVATE_MODEL_VERSION_SQL = """
+UPDATE model_versions
+SET lifecycle_status = 'active', is_active = TRUE, activated_at = %(activated_at)s
+WHERE version = %(version)s
+"""
 
 
 @dataclass(frozen=True)
@@ -223,6 +282,11 @@ def repository_implemented_methods() -> tuple[str, ...]:
 def repository_contract_summary() -> dict[str, object]:
     methods = repository_contract_methods()
     implemented_methods = repository_implemented_methods()
+    completed_groups = [
+        group.key
+        for group in REPOSITORY_METHOD_GROUPS
+        if all(method in implemented_methods for method in group.methods)
+    ]
     return {
         "module": POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
         "version": POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
@@ -234,8 +298,12 @@ def repository_contract_summary() -> dict[str, object]:
         "implemented_method_count": len(implemented_methods),
         "implemented_methods": list(implemented_methods),
         "pending_method_count": len(methods) - len(implemented_methods),
+        "completed_method_group_count": len(completed_groups),
+        "completed_method_groups": completed_groups,
         "read_only_method_count": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
         "read_only_methods": list(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
+        "write_method_count": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
+        "write_methods": list(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
         "method_groups": [
             group.as_dict(implemented_methods)
             for group in REPOSITORY_METHOD_GROUPS
@@ -260,6 +328,14 @@ def _coerce_bool(value: object) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "t", "true", "yes", "y"}
     return bool(value)
+
+
+def _json_dumps(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _row_to_mapping(
@@ -306,13 +382,21 @@ def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]
     }
 
 
+def model_registry_method_group_parity_snapshot(repository: object) -> dict[str, object]:
+    snapshot = model_registry_read_parity_snapshot(repository)
+    snapshot["implemented_methods"] = list(POSTGRESQL_MODEL_REGISTRY_METHODS)
+    snapshot["write_methods"] = list(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS)
+    snapshot["method_group_complete"] = True
+    return snapshot
+
+
 class PostgresRepositoryAdapter:
-    """Partial PostgreSQL adapter for read-only model registry parity tests.
+    """Partial PostgreSQL adapter for model registry parity tests.
 
     The adapter intentionally accepts an injected connection factory rather than
     opening ``MICROSCORE_DATABASE_URL`` by itself. That keeps the production
-    backend disabled while still letting disposable PostgreSQL tests execute the
-    first repository query path.
+    backend disabled while still letting parity tests execute the first
+    repository method group.
     """
 
     def __init__(self, connection_factory: Callable[[], Any] | None = None) -> None:
@@ -382,6 +466,26 @@ class PostgresRepositoryAdapter:
                 if callable(close):
                     close()
 
+    def _write(
+        self,
+        statements: list[tuple[str, dict[str, object]]],
+    ) -> None:
+        with self._connection() as connection:
+            try:
+                for sql, params in statements:
+                    cursor = self._execute(connection, sql, params)
+                    close = getattr(cursor, "close", None)
+                    if callable(close):
+                        close()
+                commit = getattr(connection, "commit", None)
+                if callable(commit):
+                    commit()
+            except Exception:
+                rollback = getattr(connection, "rollback", None)
+                if callable(rollback):
+                    rollback()
+                raise
+
     def get_model_version(self, version: str) -> dict[str, Any] | None:
         row = self._fetchone(GET_MODEL_VERSION_SQL, {"version": version})
         return postgres_model_version_from_row(row) if row else None
@@ -396,16 +500,54 @@ class PostgresRepositoryAdapter:
             for row in self._fetchall(LIST_MODEL_VERSIONS_SQL)
         ]
 
-    def create_model_version(self, **_: object) -> NoReturn:
-        raise NotImplementedError(
-            "PostgreSQL adapter v2 implements read-only model registry methods only."
+    def create_model_version(
+        self,
+        *,
+        version: str,
+        model_name: str,
+        feature_schema_version: str,
+        training_data_label: str,
+        random_state: int,
+        metrics: dict[str, Any],
+        limitations: list[str],
+        created_by: str,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_MODEL_VERSION_SQL,
+                    {
+                        "version": version,
+                        "model_name": model_name,
+                        "feature_schema_version": feature_schema_version,
+                        "training_data_label": training_data_label,
+                        "random_state": random_state,
+                        "metrics_json": _json_dumps(metrics),
+                        "limitations_json": _json_dumps(limitations),
+                        "created_by": created_by,
+                        "created_at": _now_iso(),
+                    },
+                )
+            ]
         )
+        return self.get_model_version(version) or {}
 
-    def activate_model_version(self, version: str) -> NoReturn:
-        raise NotImplementedError(
-            f"PostgreSQL adapter v2 cannot activate {version!r}; write methods "
-            "are still pending full repository parity coverage."
+    def activate_model_version(self, version: str) -> dict[str, Any] | None:
+        if self._fetchone(GET_MODEL_VERSION_EXISTS_SQL, {"version": version}) is None:
+            return None
+        self._write(
+            [
+                (DEACTIVATE_OTHER_MODEL_VERSIONS_SQL, {"version": version}),
+                (
+                    ACTIVATE_MODEL_VERSION_SQL,
+                    {
+                        "version": version,
+                        "activated_at": _now_iso(),
+                    },
+                ),
+            ]
         )
+        return self.get_model_version(version)
 
 
 @dataclass(frozen=True)

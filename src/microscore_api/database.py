@@ -16,7 +16,9 @@ from typing import Any
 from microscore.paths import PROJECT_ROOT
 
 from .postgres_repository import (
+    POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
+    POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
     repository_contract_summary,
 )
 
@@ -703,9 +705,9 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter has a read-only model registry path, but "
-                        "write methods, tenant flows, and full repository parity "
-                        "tests are still required."
+                        "The adapter has a complete model registry method group, "
+                        "but tenant flows and full repository parity tests are "
+                        "still required."
                     ),
                 },
                 {
@@ -713,7 +715,7 @@ class MicroScoreRepository:
                     "status": "ready",
                     "detail": (
                         "The PostgreSQL adapter groups SQLite repository method "
-                        "families and implements the first read-only model registry path."
+                        "families and implements the complete model registry method group."
                     ),
                 },
                 {
@@ -723,6 +725,15 @@ class MicroScoreRepository:
                         f"{adapter_contract.get('implemented_method_count', 0)} "
                         "read-only PostgreSQL adapter method(s) are implemented "
                         "for model registry parity tests."
+                    ),
+                },
+                {
+                    "id": "postgresql_model_registry_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers create, activate, get, "
+                        "active, and list model registry operations as the first "
+                        "complete repository method group."
                     ),
                 },
             ],
@@ -893,6 +904,14 @@ class MicroScoreRepository:
         repository_adapter_model_registry_read_present = all(
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_MODEL_REGISTRY_READ_METHODS
+        )
+        repository_adapter_model_registry_write_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS
+        )
+        repository_adapter_model_registry_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_MODEL_REGISTRY_METHODS
         )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
@@ -1076,20 +1095,45 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_model_registry_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_model_registry_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_MODEL_REGISTRY_METHODS)} model registry "
+                    "method(s) have PostgreSQL query specs and SQLite-vs-adapter "
+                    "parity coverage, including "
+                    f"{len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS)} write method(s)."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve model version creation, active-version "
+                    "atomicity, PostgreSQL boolean handling, and JSONB materialization."
+                ),
+                "action": (
+                    "Promote the complete model registry adapter group into "
+                    "disposable PostgreSQL repository CI, then start the next "
+                    "tenant-scoped method group."
+                    if repository_adapter_model_registry_group_present
+                    else "Complete create/activate model registry write parity on the PostgreSQL adapter."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; the adapter has a model registry read path but "
-                    "does not yet cover the full repository contract."
+                    "at startup; the adapter has a complete model registry method "
+                    "group but does not yet cover the full repository contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
-                    "Expand the PostgreSQL adapter from model registry reads to "
-                    "write methods, tenant-scoped queues, applications, analytics, "
-                    "and audit flows."
+                    "Expand the PostgreSQL adapter from model registry to "
+                    "tenant-scoped queues, applications, simulations, analytics, "
+                    "identity, and audit flows."
                 ),
             },
             {
@@ -1241,11 +1285,26 @@ class MicroScoreRepository:
             "repository_adapter_read_only_method_count": repository_adapter_contract.get(
                 "read_only_method_count", 0
             ),
+            "repository_adapter_write_method_count": repository_adapter_contract.get(
+                "write_method_count", 0
+            ),
+            "repository_adapter_completed_method_group_count": repository_adapter_contract.get(
+                "completed_method_group_count", 0
+            ),
+            "repository_adapter_completed_method_groups": repository_adapter_contract.get(
+                "completed_method_groups", []
+            ),
             "repository_adapter_implemented_methods": list(
                 repository_adapter_implemented_methods
             ),
             "repository_adapter_model_registry_read_present": (
                 repository_adapter_model_registry_read_present
+            ),
+            "repository_adapter_model_registry_write_present": (
+                repository_adapter_model_registry_write_present
+            ),
+            "repository_adapter_model_registry_group_present": (
+                repository_adapter_model_registry_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []
