@@ -340,18 +340,23 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_readiness["latest_migration_version"] == "0001_initial_schema"
         and postgresql_readiness["versioned_migration_contract_present"]
         and postgresql_readiness["disposable_migration_ci_present"]
-        and postgresql_readiness["repository_adapter_contract_status"] == "partial_method_group"
+        and postgresql_readiness["repository_adapter_contract_status"] == "partial_method_groups"
         and postgresql_readiness["repository_adapter_contract_method_count"] == 52
-        and postgresql_readiness["repository_adapter_implemented_method_count"] == 5
-        and postgresql_readiness["repository_adapter_completed_method_group_count"] == 1
+        and postgresql_readiness["repository_adapter_implemented_method_count"] == 7
+        and postgresql_readiness["repository_adapter_completed_method_group_count"] == 2
         and (
             "model_registry"
             in postgresql_readiness["repository_adapter_completed_method_groups"]
         )
-        and postgresql_readiness["repository_adapter_stage"] == "model_registry_method_group_v1"
+        and (
+            "audit"
+            in postgresql_readiness["repository_adapter_completed_method_groups"]
+        )
+        and postgresql_readiness["repository_adapter_stage"] == "model_registry_audit_groups_v1"
         and postgresql_readiness["repository_adapter_model_registry_read_present"]
         and postgresql_readiness["repository_adapter_model_registry_write_present"]
         and postgresql_readiness["repository_adapter_model_registry_group_present"]
+        and postgresql_readiness["repository_adapter_audit_group_present"]
         and any(
             artifact["path"] == "migrations/postgresql/0001_initial_schema.sql"
             for artifact in postgresql_readiness.get("migration_artifacts", [])
@@ -363,6 +368,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_parity["postgresql_repository_adapter_contract"]["status"] == "pass"
         and postgresql_parity["postgresql_model_registry_read_adapter"]["status"] == "pass"
         and postgresql_parity["postgresql_model_registry_method_group_adapter"]["status"] == "pass"
+        and postgresql_parity["postgresql_audit_method_group_adapter"]["status"] == "pass"
         and postgresql_parity["postgresql_repository_backend"]["status"] == "blocker",
         "PostgreSQL readiness should expose the migration draft and remaining blockers",
     )

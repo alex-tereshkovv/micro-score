@@ -16,6 +16,7 @@ from typing import Any
 from microscore.paths import PROJECT_ROOT
 
 from .postgres_repository import (
+    POSTGRESQL_AUDIT_METHODS,
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -705,8 +706,8 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter has a complete model registry method group, "
-                        "but tenant flows and full repository parity tests are "
+                        "The adapter has complete model registry and audit method "
+                        "groups, but tenant flows and full repository parity tests are "
                         "still required."
                     ),
                 },
@@ -715,7 +716,7 @@ class MicroScoreRepository:
                     "status": "ready",
                     "detail": (
                         "The PostgreSQL adapter groups SQLite repository method "
-                        "families and implements the complete model registry method group."
+                        "families and implements complete model registry and audit method groups."
                     ),
                 },
                 {
@@ -734,6 +735,14 @@ class MicroScoreRepository:
                         "The PostgreSQL adapter covers create, activate, get, "
                         "active, and list model registry operations as the first "
                         "complete repository method group."
+                    ),
+                },
+                {
+                    "id": "postgresql_audit_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers audit event recording and "
+                        "review as the second complete repository method group."
                     ),
                 },
             ],
@@ -913,6 +922,10 @@ class MicroScoreRepository:
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_MODEL_REGISTRY_METHODS
         )
+        repository_adapter_audit_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_AUDIT_METHODS
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -1088,8 +1101,8 @@ class MicroScoreRepository:
                     "and JSONB semantics before model governance can move off SQLite."
                 ),
                 "action": (
-                    "Promote the model registry read adapter into disposable "
-                    "PostgreSQL CI, then add create/activate parity coverage."
+                    "Keep read parity covered while promoting completed method "
+                    "groups into disposable PostgreSQL CI."
                     if repository_adapter_model_registry_read_present
                     else "Implement get/list/active model registry reads on the PostgreSQL adapter."
                 ),
@@ -1120,20 +1133,43 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_audit_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_audit_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_AUDIT_METHODS)} audit method(s) have "
+                    "PostgreSQL query specs and SQLite-vs-adapter parity coverage."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve append-only audit recording, "
+                    "JSONB details materialization, nullable actor/entity fields, "
+                    "and reverse-chronological review."
+                ),
+                "action": (
+                    "Promote the audit adapter group into disposable PostgreSQL "
+                    "repository CI, then start tenant-scoped organization methods."
+                    if repository_adapter_audit_group_present
+                    else "Complete record/list audit event parity on the PostgreSQL adapter."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; the adapter has a complete model registry method "
-                    "group but does not yet cover the full repository contract."
+                    "at startup; the adapter has complete model registry and "
+                    "audit method groups but does not yet cover the full repository contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
-                    "Expand the PostgreSQL adapter from model registry to "
-                    "tenant-scoped queues, applications, simulations, analytics, "
-                    "identity, and audit flows."
+                    "Expand the PostgreSQL adapter from model registry and audit "
+                    "to tenant-scoped queues, applications, simulations, analytics, "
+                    "identity, and organization flows."
                 ),
             },
             {
@@ -1305,6 +1341,9 @@ class MicroScoreRepository:
             ),
             "repository_adapter_model_registry_group_present": (
                 repository_adapter_model_registry_group_present
+            ),
+            "repository_adapter_audit_group_present": (
+                repository_adapter_audit_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

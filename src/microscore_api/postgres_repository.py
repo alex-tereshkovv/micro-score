@@ -1,9 +1,9 @@
-"""PostgreSQL repository adapter contract and first completed method group.
+"""PostgreSQL repository adapter contract and completed method groups.
 
 This module is deliberately not a production backend yet. It records the
 repository method families that a future PostgreSQL implementation must support
 before ``MICROSCORE_STORAGE_BACKEND=postgresql`` can be enabled, and it exposes
-the first executable method group for model-registry parity tests.
+the first executable method groups for repository parity tests.
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ import json
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v3"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v4"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
-POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_group"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_method_group_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_groups_v1"
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
     "get_model_version",
     "get_active_model_version",
@@ -36,12 +36,21 @@ POSTGRESQL_MODEL_REGISTRY_METHODS = (
     "list_model_versions",
     "activate_model_version",
 )
-POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = POSTGRESQL_MODEL_REGISTRY_METHODS
+POSTGRESQL_AUDIT_READ_METHODS = ("list_audit_events",)
+POSTGRESQL_AUDIT_WRITE_METHODS = ("record_audit_event",)
+POSTGRESQL_AUDIT_METHODS = (
+    "record_audit_event",
+    "list_audit_events",
+)
+POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
+    *POSTGRESQL_MODEL_REGISTRY_METHODS,
+    *POSTGRESQL_AUDIT_METHODS,
+)
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v3 implements the model registry method "
-    "group through an injected DB-API compatible connection factory. Runtime "
-    "backend selection remains disabled until identity, tenant-scoped "
-    "application, invite, simulation, analytics, and audit flows have "
+    "PostgreSQL Repository Adapter v4 implements the model registry and audit "
+    "method groups through an injected DB-API compatible connection factory. "
+    "Runtime backend selection remains disabled until identity, tenant-scoped "
+    "application, invite, simulation, and analytics flows have "
     "repository parity coverage."
 )
 MODEL_VERSION_COLUMNS = (
@@ -137,6 +146,50 @@ ACTIVATE_MODEL_VERSION_SQL = """
 UPDATE model_versions
 SET lifecycle_status = 'active', is_active = TRUE, activated_at = %(activated_at)s
 WHERE version = %(version)s
+"""
+AUDIT_EVENT_COLUMNS = (
+    "id",
+    "actor_email",
+    "action",
+    "entity_type",
+    "entity_id",
+    "details_json",
+    "created_at",
+)
+AUDIT_EVENT_SELECT = """
+SELECT
+    id,
+    actor_email,
+    action,
+    entity_type,
+    entity_id,
+    details_json,
+    created_at
+FROM audit_events
+"""
+LIST_AUDIT_EVENTS_SQL = (
+    AUDIT_EVENT_SELECT
+    + """
+ORDER BY id DESC
+"""
+)
+RECORD_AUDIT_EVENT_SQL = """
+INSERT INTO audit_events (
+    actor_email,
+    action,
+    entity_type,
+    entity_id,
+    details_json,
+    created_at
+)
+VALUES (
+    %(actor_email)s,
+    %(action)s,
+    %(entity_type)s,
+    %(entity_id)s,
+    %(details_json)s::jsonb,
+    %(created_at)s
+)
 """
 
 
@@ -282,6 +335,14 @@ def repository_implemented_methods() -> tuple[str, ...]:
 def repository_contract_summary() -> dict[str, object]:
     methods = repository_contract_methods()
     implemented_methods = repository_implemented_methods()
+    read_only_methods = (
+        *POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
+        *POSTGRESQL_AUDIT_READ_METHODS,
+    )
+    write_methods = (
+        *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
+        *POSTGRESQL_AUDIT_WRITE_METHODS,
+    )
     completed_groups = [
         group.key
         for group in REPOSITORY_METHOD_GROUPS
@@ -300,10 +361,10 @@ def repository_contract_summary() -> dict[str, object]:
         "pending_method_count": len(methods) - len(implemented_methods),
         "completed_method_group_count": len(completed_groups),
         "completed_method_groups": completed_groups,
-        "read_only_method_count": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
-        "read_only_methods": list(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
-        "write_method_count": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
-        "write_methods": list(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
+        "read_only_method_count": len(read_only_methods),
+        "read_only_methods": list(read_only_methods),
+        "write_method_count": len(write_methods),
+        "write_methods": list(write_methods),
         "method_groups": [
             group.as_dict(implemented_methods)
             for group in REPOSITORY_METHOD_GROUPS
@@ -365,6 +426,12 @@ def postgres_model_version_from_row(row: object) -> dict[str, Any]:
     return model_version
 
 
+def postgres_audit_event_from_row(row: object) -> dict[str, Any]:
+    event = _row_to_mapping(row, AUDIT_EVENT_COLUMNS)
+    event["details"] = _coerce_json(event.pop("details_json"), {}) or {}
+    return event
+
+
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
     versions = getattr(repository, "list_model_versions")()
     active = getattr(repository, "get_active_model_version")()
@@ -390,13 +457,32 @@ def model_registry_method_group_parity_snapshot(repository: object) -> dict[str,
     return snapshot
 
 
+def audit_method_group_parity_snapshot(repository: object) -> dict[str, object]:
+    events = getattr(repository, "list_audit_events")()
+    return {
+        "method_group": "audit",
+        "implemented_methods": list(POSTGRESQL_AUDIT_METHODS),
+        "event_count": len(events),
+        "actions": [event["action"] for event in events],
+        "entities": [
+            f"{event['entity_type']}:{event.get('entity_id') or ''}"
+            for event in events
+        ],
+        "details_keys": [
+            sorted((event.get("details") or {}).keys())
+            for event in events
+        ],
+        "method_group_complete": True,
+    }
+
+
 class PostgresRepositoryAdapter:
-    """Partial PostgreSQL adapter for model registry parity tests.
+    """Partial PostgreSQL adapter for completed method-group parity tests.
 
     The adapter intentionally accepts an injected connection factory rather than
     opening ``MICROSCORE_DATABASE_URL`` by itself. That keeps the production
     backend disabled while still letting parity tests execute the first
-    repository method group.
+    repository method groups.
     """
 
     def __init__(self, connection_factory: Callable[[], Any] | None = None) -> None:
@@ -548,6 +634,37 @@ class PostgresRepositoryAdapter:
             ]
         )
         return self.get_model_version(version)
+
+    def record_audit_event(
+        self,
+        *,
+        actor_email: str | None,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        details: dict[str, Any],
+    ) -> None:
+        self._write(
+            [
+                (
+                    RECORD_AUDIT_EVENT_SQL,
+                    {
+                        "actor_email": actor_email,
+                        "action": action,
+                        "entity_type": entity_type,
+                        "entity_id": entity_id,
+                        "details_json": _json_dumps(details),
+                        "created_at": _now_iso(),
+                    },
+                )
+            ]
+        )
+
+    def list_audit_events(self) -> list[dict[str, Any]]:
+        return [
+            postgres_audit_event_from_row(row)
+            for row in self._fetchall(LIST_AUDIT_EVENTS_SQL)
+        ]
 
 
 @dataclass(frozen=True)

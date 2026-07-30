@@ -21,6 +21,7 @@ from microscore_api.database import (  # noqa: E402
     REQUIRED_SCHEMA_TABLES,
 )
 from microscore_api.postgres_repository import (  # noqa: E402
+    POSTGRESQL_AUDIT_METHODS,
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -80,6 +81,7 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
         "expected_model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
         "expected_model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
+        "expected_audit_methods": len(POSTGRESQL_AUDIT_METHODS),
     }
 
 
@@ -290,6 +292,23 @@ def apply_migration_and_verify(
             UPDATE model_versions
             SET lifecycle_status = 'active', is_active = TRUE, activated_at = NOW()
             WHERE version = 'ci-smoke-model-candidate';
+
+            INSERT INTO audit_events (
+                actor_email,
+                action,
+                entity_type,
+                entity_id,
+                details_json,
+                created_at
+            )
+            VALUES (
+                'ci-smoke-analyst@example.com',
+                'postgresql_audit_adapter_smoke',
+                'postgres_repository',
+                'audit',
+                '{"method_group": "audit", "complete": true}'::jsonb,
+                NOW()
+            );
             """,
         ],
     )
@@ -371,6 +390,27 @@ def apply_migration_and_verify(
             WHERE version = 'ci-smoke-model-candidate';
         """,
     )
+    latest_audit_action = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT action
+            FROM audit_events
+            ORDER BY id DESC
+            LIMIT 1;
+        """,
+    )
+    latest_audit_detail = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT details_json->>'method_group'
+            FROM audit_events
+            WHERE action = 'postgresql_audit_adapter_smoke'
+            ORDER BY id DESC
+            LIMIT 1;
+        """,
+    )
 
     assert_catalog_subset(expected=EXPECTED_TABLES, actual=tables, label="tables")
     assert_catalog_subset(
@@ -404,6 +444,16 @@ def apply_migration_and_verify(
         actual=active_model_status,
         label="model registry activation status",
     )
+    assert_catalog_subset(
+        expected=["postgresql_audit_adapter_smoke"],
+        actual=latest_audit_action,
+        label="latest audit action",
+    )
+    assert_catalog_subset(
+        expected=["audit"],
+        actual=latest_audit_detail,
+        label="audit JSONB details",
+    )
 
     return {
         "migration": migration_path.relative_to(PROJECT_ROOT).as_posix(),
@@ -422,6 +472,9 @@ def apply_migration_and_verify(
         "model_registry_read_methods": len(POSTGRESQL_MODEL_REGISTRY_READ_METHODS),
         "model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
         "model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
+        "audit_methods": len(POSTGRESQL_AUDIT_METHODS),
+        "audit_latest_action": latest_audit_action[0],
+        "audit_detail_method_group": latest_audit_detail[0],
     }
 
 

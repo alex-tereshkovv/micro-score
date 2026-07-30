@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from microscore_api.database import MicroScoreRepository  # noqa: E402
 from microscore_api.postgres_repository import (  # noqa: E402
+    AUDIT_EVENT_COLUMNS,
     MODEL_VERSION_COLUMNS,
     POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
     POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
@@ -20,6 +21,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     PostgresRepositoryAdapter,
     PostgresRepositoryAdapterSkeleton,
     REPOSITORY_METHOD_GROUPS,
+    audit_method_group_parity_snapshot,
     model_registry_method_group_parity_snapshot,
     model_registry_read_parity_snapshot,
     repository_contract_methods,
@@ -46,8 +48,10 @@ class FakePostgresConnection:
         self,
         rows: list[tuple[object, ...]],
         query_log: list[tuple[str, dict[str, object]]],
+        audit_rows: list[tuple[object, ...]] | None = None,
     ) -> None:
         self.rows = rows
+        self.audit_rows = list(audit_rows or [])
         self.query_log = query_log
         self.closed = False
         self.commits = 0
@@ -129,6 +133,34 @@ class FakePostgresConnection:
             updated_rows.append(row)
         self.rows = updated_rows
 
+    def _insert_audit_event(self, params: dict[str, object]) -> None:
+        next_id = (
+            max((int(row[AUDIT_EVENT_COLUMNS.index("id")]) for row in self.audit_rows), default=0)
+            + 1
+        )
+        self.audit_rows.append(
+            tuple(
+                {
+                    "id": next_id,
+                    "actor_email": params["actor_email"],
+                    "action": params["action"],
+                    "entity_type": params["entity_type"],
+                    "entity_id": params["entity_id"],
+                    "details_json": params["details_json"],
+                    "created_at": params["created_at"],
+                }[column]
+                for column in AUDIT_EVENT_COLUMNS
+            )
+        )
+
+    def _ordered_audit_rows(self) -> list[tuple[object, ...]]:
+        id_index = AUDIT_EVENT_COLUMNS.index("id")
+        return sorted(
+            self.audit_rows,
+            key=lambda row: int(row[id_index]),
+            reverse=True,
+        )
+
     def execute(
         self,
         sql: str,
@@ -138,6 +170,11 @@ class FakePostgresConnection:
         if "INSERT INTO model_versions" in sql:
             self._insert_model_version(params)
             rows: list[tuple[object, ...]] = []
+        elif "INSERT INTO audit_events" in sql:
+            self._insert_audit_event(params)
+            rows = []
+        elif "FROM audit_events" in sql:
+            rows = self._ordered_audit_rows()
         elif "SET lifecycle_status = 'inactive', is_active = FALSE" in sql:
             self._deactivate_other_model_versions(params["version"])
             rows = []
@@ -188,6 +225,19 @@ def _postgres_model_version_row(model_version: dict[str, object]) -> tuple[objec
     return tuple(values[column] for column in MODEL_VERSION_COLUMNS)
 
 
+def _postgres_audit_event_row(event: dict[str, object]) -> tuple[object, ...]:
+    values = {
+        "id": event["id"],
+        "actor_email": event["actor_email"],
+        "action": event["action"],
+        "entity_type": event["entity_type"],
+        "entity_id": event["entity_id"],
+        "details_json": event["details"],
+        "created_at": event["created_at"],
+    }
+    return tuple(values[column] for column in AUDIT_EVENT_COLUMNS)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -203,7 +253,7 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             with self.subTest(method=method):
                 self.assertIn(method, sqlite_methods)
 
-    def test_repository_contract_summary_is_partial_method_group(self) -> None:
+    def test_repository_contract_summary_is_partial_method_groups(self) -> None:
         summary = repository_contract_summary()
 
         self.assertEqual(summary["module"], POSTGRESQL_REPOSITORY_ADAPTER_MODULE)
@@ -212,17 +262,20 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
         )
         self.assertEqual(summary["status"], POSTGRESQL_REPOSITORY_ADAPTER_STATUS)
-        self.assertEqual(summary["status"], "partial_method_group")
-        self.assertEqual(summary["stage"], "model_registry_method_group_v1")
+        self.assertEqual(summary["status"], "partial_method_groups")
+        self.assertEqual(summary["stage"], "model_registry_audit_groups_v1")
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 5)
-        self.assertEqual(summary["pending_method_count"], 47)
-        self.assertEqual(summary["completed_method_group_count"], 1)
-        self.assertEqual(summary["completed_method_groups"], ["model_registry"])
-        self.assertEqual(summary["read_only_method_count"], 3)
-        self.assertEqual(summary["write_method_count"], 2)
+        self.assertEqual(summary["implemented_method_count"], 7)
+        self.assertEqual(summary["pending_method_count"], 45)
+        self.assertEqual(summary["completed_method_group_count"], 2)
+        self.assertEqual(
+            summary["completed_method_groups"],
+            ["model_registry", "audit"],
+        )
+        self.assertEqual(summary["read_only_method_count"], 4)
+        self.assertEqual(summary["write_method_count"], 3)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -231,6 +284,8 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "get_active_model_version",
                 "list_model_versions",
                 "activate_model_version",
+                "record_audit_event",
+                "list_audit_events",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -243,7 +298,10 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(groups["model_registry"]["implemented_method_count"], 5)
         self.assertEqual(groups["model_registry"]["pending_method_count"], 0)
         self.assertFalse(groups["model_registry"]["pending_methods"])
-        self.assertIn("model registry method group", summary["limitation"])
+        self.assertEqual(groups["audit"]["implemented_method_count"], 2)
+        self.assertEqual(groups["audit"]["pending_method_count"], 0)
+        self.assertFalse(groups["audit"]["pending_methods"])
+        self.assertIn("model registry and audit", summary["limitation"])
 
     def test_model_registry_read_adapter_matches_sqlite_repository_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -356,6 +414,64 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 any("is_active = TRUE" in sql for sql, _params in query_log)
             )
 
+    def test_audit_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            sqlite_repository.record_audit_event(
+                actor_email="admin@example.com",
+                action="model_version_created",
+                entity_type="model_version",
+                entity_id="candidate-v0.3",
+                details={
+                    "version": "candidate-v0.3",
+                    "source": "sqlite-parity",
+                },
+            )
+            sqlite_repository.record_audit_event(
+                actor_email=None,
+                action="system_storage_checked",
+                entity_type="storage",
+                entity_id=None,
+                details={"backend": "sqlite", "status": "ready"},
+            )
+            sqlite_events = sqlite_repository.list_audit_events()
+            postgres_audit_rows = [
+                _postgres_audit_event_row(event)
+                for event in sqlite_events
+            ]
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection([], query_log, postgres_audit_rows)
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            self.assertEqual(adapter.list_audit_events(), sqlite_events)
+            adapter.record_audit_event(
+                actor_email="admin@example.com",
+                action="adapter_audit_smoke",
+                entity_type="postgres_repository",
+                entity_id="audit",
+                details={"method_group": "audit", "complete": True},
+            )
+            sqlite_repository.record_audit_event(
+                actor_email="admin@example.com",
+                action="adapter_audit_smoke",
+                entity_type="postgres_repository",
+                entity_id="audit",
+                details={"method_group": "audit", "complete": True},
+            )
+
+            self.assertEqual(
+                audit_method_group_parity_snapshot(adapter),
+                audit_method_group_parity_snapshot(sqlite_repository),
+            )
+            self.assertGreaterEqual(fake_connection.commits, 1)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(
+                any("INSERT INTO audit_events" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("ORDER BY id DESC" in sql for sql, _params in query_log)
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -374,6 +490,16 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.activate_model_version("research-v0.1")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.record_audit_event(
+                actor_email=None,
+                action="blocked_without_connection",
+                entity_type="postgres_repository",
+                entity_id=None,
+                details={},
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_audit_events()
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()
