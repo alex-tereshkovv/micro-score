@@ -25,6 +25,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
+    POSTGRESQL_ORGANIZATION_METHODS,
 )
 
 
@@ -82,6 +83,7 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
         "expected_model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
         "expected_audit_methods": len(POSTGRESQL_AUDIT_METHODS),
+        "expected_organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
     }
 
 
@@ -175,6 +177,10 @@ def apply_migration_and_verify(
                 ('ci-smoke-borrower@example.com', 'hash', 'borrower', NULL, NOW()),
                 ('ci-smoke-analyst@example.com', 'hash', 'mfi_analyst', 'ci-smoke-mfi', NOW())
             ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role;
+
+            UPDATE users
+            SET organization_id = 'ci-smoke-mfi'
+            WHERE email = 'ci-smoke-analyst@example.com';
 
             INSERT INTO loan_applications (
                 id,
@@ -390,6 +396,24 @@ def apply_migration_and_verify(
             WHERE version = 'ci-smoke-model-candidate';
         """,
     )
+    organization_directory = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT id || ':' || name
+            FROM mfi_organizations
+            WHERE id = 'ci-smoke-mfi';
+        """,
+    )
+    organization_assignment = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT organization_id
+            FROM users
+            WHERE email = 'ci-smoke-analyst@example.com';
+        """,
+    )
     latest_audit_action = query_rows(
         psql_bin=psql_bin,
         database_url=database_url,
@@ -445,6 +469,16 @@ def apply_migration_and_verify(
         label="model registry activation status",
     )
     assert_catalog_subset(
+        expected=["ci-smoke-mfi:CI Smoke MFI"],
+        actual=organization_directory,
+        label="organization directory row",
+    )
+    assert_catalog_subset(
+        expected=["ci-smoke-mfi"],
+        actual=organization_assignment,
+        label="organization user assignment",
+    )
+    assert_catalog_subset(
         expected=["postgresql_audit_adapter_smoke"],
         actual=latest_audit_action,
         label="latest audit action",
@@ -473,6 +507,9 @@ def apply_migration_and_verify(
         "model_registry_write_methods": len(POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS),
         "model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
         "audit_methods": len(POSTGRESQL_AUDIT_METHODS),
+        "organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
+        "organization_directory": organization_directory[0],
+        "organization_assignment": organization_assignment[0],
         "audit_latest_action": latest_audit_action[0],
         "audit_detail_method_group": latest_audit_detail[0],
     }

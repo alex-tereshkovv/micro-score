@@ -16,10 +16,10 @@ import json
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v4"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v5"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
 POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_groups_v1"
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
     "get_model_version",
     "get_active_model_version",
@@ -42,17 +42,72 @@ POSTGRESQL_AUDIT_METHODS = (
     "record_audit_event",
     "list_audit_events",
 )
+POSTGRESQL_ORGANIZATION_READ_METHODS = (
+    "get_organization",
+    "list_organizations",
+)
+POSTGRESQL_ORGANIZATION_WRITE_METHODS = (
+    "create_organization",
+    "assign_user_organization",
+)
+POSTGRESQL_ORGANIZATION_METHODS = (
+    "create_organization",
+    "get_organization",
+    "list_organizations",
+    "assign_user_organization",
+)
 POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_MODEL_REGISTRY_METHODS,
     *POSTGRESQL_AUDIT_METHODS,
+    *POSTGRESQL_ORGANIZATION_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v4 implements the model registry and audit "
-    "method groups through an injected DB-API compatible connection factory. "
-    "Runtime backend selection remains disabled until identity, tenant-scoped "
-    "application, invite, simulation, and analytics flows have "
+    "PostgreSQL Repository Adapter v5 implements the model registry, audit, "
+    "and organization method groups through an injected DB-API compatible "
+    "connection factory. Runtime backend selection remains disabled until "
+    "identity, tenant-scoped application, invite, simulation, and analytics flows have "
     "repository parity coverage."
 )
+ORGANIZATION_COLUMNS = (
+    "id",
+    "name",
+    "region",
+    "created_at",
+)
+ORGANIZATION_SELECT = """
+SELECT
+    id,
+    name,
+    region,
+    created_at
+FROM mfi_organizations
+"""
+GET_ORGANIZATION_SQL = ORGANIZATION_SELECT + "WHERE id = %(organization_id)s"
+LIST_ORGANIZATIONS_SQL = (
+    ORGANIZATION_SELECT
+    + """
+ORDER BY name
+"""
+)
+CREATE_ORGANIZATION_SQL = """
+INSERT INTO mfi_organizations (
+    id,
+    name,
+    region,
+    created_at
+)
+VALUES (
+    %(organization_id)s,
+    %(name)s,
+    %(region)s,
+    %(created_at)s
+)
+"""
+ASSIGN_USER_ORGANIZATION_SQL = """
+UPDATE users
+SET organization_id = %(organization_id)s
+WHERE email = %(email)s
+"""
 MODEL_VERSION_COLUMNS = (
     "version",
     "model_name",
@@ -338,10 +393,12 @@ def repository_contract_summary() -> dict[str, object]:
     read_only_methods = (
         *POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
         *POSTGRESQL_AUDIT_READ_METHODS,
+        *POSTGRESQL_ORGANIZATION_READ_METHODS,
     )
     write_methods = (
         *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
         *POSTGRESQL_AUDIT_WRITE_METHODS,
+        *POSTGRESQL_ORGANIZATION_WRITE_METHODS,
     )
     completed_groups = [
         group.key
@@ -432,6 +489,10 @@ def postgres_audit_event_from_row(row: object) -> dict[str, Any]:
     return event
 
 
+def postgres_organization_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, ORGANIZATION_COLUMNS)
+
+
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
     versions = getattr(repository, "list_model_versions")()
     active = getattr(repository, "get_active_model_version")()
@@ -471,6 +532,39 @@ def audit_method_group_parity_snapshot(repository: object) -> dict[str, object]:
         "details_keys": [
             sorted((event.get("details") or {}).keys())
             for event in events
+        ],
+        "method_group_complete": True,
+    }
+
+
+def _organization_identity(organization: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if organization is None:
+        return None
+    return {
+        "id": organization["id"],
+        "name": organization["name"],
+        "region": organization["region"],
+    }
+
+
+def organization_method_group_parity_snapshot(repository: object) -> dict[str, object]:
+    organizations = getattr(repository, "list_organizations")()
+    lookups = [
+        getattr(repository, "get_organization")(organization["id"])
+        for organization in organizations
+    ]
+    return {
+        "method_group": "organizations",
+        "implemented_methods": list(POSTGRESQL_ORGANIZATION_METHODS),
+        "organization_count": len(organizations),
+        "organization_ids": [organization["id"] for organization in organizations],
+        "organization_names": [organization["name"] for organization in organizations],
+        "organization_regions": [
+            organization["region"] for organization in organizations
+        ],
+        "lookup_matches": [
+            _organization_identity(lookup) == _organization_identity(organization)
+            for lookup, organization in zip(lookups, organizations)
         ],
         "method_group_complete": True,
     }
@@ -665,6 +759,58 @@ class PostgresRepositoryAdapter:
             postgres_audit_event_from_row(row)
             for row in self._fetchall(LIST_AUDIT_EVENTS_SQL)
         ]
+
+    def create_organization(
+        self,
+        *,
+        organization_id: str,
+        name: str,
+        region: str,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_ORGANIZATION_SQL,
+                    {
+                        "organization_id": organization_id,
+                        "name": name,
+                        "region": region,
+                        "created_at": _now_iso(),
+                    },
+                )
+            ]
+        )
+        return self.get_organization(organization_id) or {}
+
+    def get_organization(self, organization_id: str) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_ORGANIZATION_SQL,
+            {"organization_id": organization_id},
+        )
+        return postgres_organization_from_row(row) if row else None
+
+    def list_organizations(self) -> list[dict[str, Any]]:
+        return [
+            postgres_organization_from_row(row)
+            for row in self._fetchall(LIST_ORGANIZATIONS_SQL)
+        ]
+
+    def assign_user_organization(
+        self,
+        email: str,
+        organization_id: str | None,
+    ) -> None:
+        self._write(
+            [
+                (
+                    ASSIGN_USER_ORGANIZATION_SQL,
+                    {
+                        "email": email,
+                        "organization_id": organization_id,
+                    },
+                )
+            ]
+        )
 
 
 @dataclass(frozen=True)

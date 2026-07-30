@@ -20,6 +20,7 @@ from .postgres_repository import (
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
+    POSTGRESQL_ORGANIZATION_METHODS,
     repository_contract_summary,
 )
 
@@ -706,9 +707,10 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter has complete model registry and audit method "
-                        "groups, but tenant flows and full repository parity tests are "
-                        "still required."
+                        "The adapter has complete model registry, audit, and "
+                        "organization method groups, but tenant-scoped application, "
+                        "invite, simulation, analytics, and identity flows still "
+                        "need parity coverage."
                     ),
                 },
                 {
@@ -716,7 +718,8 @@ class MicroScoreRepository:
                     "status": "ready",
                     "detail": (
                         "The PostgreSQL adapter groups SQLite repository method "
-                        "families and implements complete model registry and audit method groups."
+                        "families and implements complete model registry, audit, "
+                        "and organization method groups."
                     ),
                 },
                 {
@@ -743,6 +746,15 @@ class MicroScoreRepository:
                     "detail": (
                         "The PostgreSQL adapter covers audit event recording and "
                         "review as the second complete repository method group."
+                    ),
+                },
+                {
+                    "id": "postgresql_organization_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers organization directory "
+                        "queries and user tenant assignment as the third complete "
+                        "repository method group."
                     ),
                 },
             ],
@@ -926,6 +938,10 @@ class MicroScoreRepository:
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_AUDIT_METHODS
         )
+        repository_adapter_organization_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_ORGANIZATION_METHODS
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -1036,7 +1052,11 @@ class MicroScoreRepository:
                 ),
                 "postgres_requirement": "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
                 "action": (
-                    "Review tenant indexes in the draft migration and add repository "
+                    "Use the completed organization adapter group as the tenant "
+                    "directory foundation, then add repository parity tests for "
+                    "MFI queues, analytics, review packets, invites, and simulations."
+                    if tenant_index_covered and repository_adapter_organization_group_present
+                    else "Review tenant indexes in the draft migration and add repository "
                     "parity tests for MFI queues, analytics, review packets, invites, "
                     "and simulations."
                     if tenant_index_covered
@@ -1156,20 +1176,45 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_organization_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_organization_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_ORGANIZATION_METHODS)} organization "
+                    "method(s) have PostgreSQL query specs and SQLite-vs-adapter "
+                    "parity coverage."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve organization directory ordering, "
+                    "tenant identifiers, and user organization assignment semantics."
+                ),
+                "action": (
+                    "Use the completed organization adapter group as the tenant "
+                    "boundary foundation before implementing user, application, "
+                    "invite, simulation, and analytics parity."
+                    if repository_adapter_organization_group_present
+                    else "Complete create/get/list organization and user assignment parity."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; the adapter has complete model registry and "
-                    "audit method groups but does not yet cover the full repository contract."
+                    "at startup; the adapter has complete model registry, audit, "
+                    "and organization method groups but does not yet cover the "
+                    "full repository contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
-                    "Expand the PostgreSQL adapter from model registry and audit "
-                    "to tenant-scoped queues, applications, simulations, analytics, "
-                    "identity, and organization flows."
+                    "Expand the PostgreSQL adapter from model registry, audit, "
+                    "and organization flows to users, tenant-scoped queues, "
+                    "applications, simulations, analytics, and invites."
                 ),
             },
             {
@@ -1344,6 +1389,9 @@ class MicroScoreRepository:
             ),
             "repository_adapter_audit_group_present": (
                 repository_adapter_audit_group_present
+            ),
+            "repository_adapter_organization_group_present": (
+                repository_adapter_organization_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

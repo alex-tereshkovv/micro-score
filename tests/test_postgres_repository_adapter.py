@@ -15,6 +15,7 @@ from microscore_api.database import MicroScoreRepository  # noqa: E402
 from microscore_api.postgres_repository import (  # noqa: E402
     AUDIT_EVENT_COLUMNS,
     MODEL_VERSION_COLUMNS,
+    ORGANIZATION_COLUMNS,
     POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
     POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
     POSTGRESQL_REPOSITORY_ADAPTER_STATUS,
@@ -24,6 +25,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     audit_method_group_parity_snapshot,
     model_registry_method_group_parity_snapshot,
     model_registry_read_parity_snapshot,
+    organization_method_group_parity_snapshot,
     repository_contract_methods,
     repository_contract_summary,
 )
@@ -49,9 +51,13 @@ class FakePostgresConnection:
         rows: list[tuple[object, ...]],
         query_log: list[tuple[str, dict[str, object]]],
         audit_rows: list[tuple[object, ...]] | None = None,
+        organization_rows: list[tuple[object, ...]] | None = None,
+        user_organization_rows: dict[str, str | None] | None = None,
     ) -> None:
         self.rows = rows
         self.audit_rows = list(audit_rows or [])
+        self.organization_rows = list(organization_rows or [])
+        self.user_organization_rows = dict(user_organization_rows or {})
         self.query_log = query_log
         self.closed = False
         self.commits = 0
@@ -161,6 +167,41 @@ class FakePostgresConnection:
             reverse=True,
         )
 
+    @staticmethod
+    def _row_organization_id(row: tuple[object, ...]) -> object:
+        return row[ORGANIZATION_COLUMNS.index("id")]
+
+    @staticmethod
+    def _ordered_organization_rows(
+        rows: list[tuple[object, ...]],
+    ) -> list[tuple[object, ...]]:
+        name_index = ORGANIZATION_COLUMNS.index("name")
+        return sorted(rows, key=lambda row: str(row[name_index]))
+
+    def _insert_organization(self, params: dict[str, object]) -> None:
+        organization_id = params["organization_id"]
+        if any(
+            self._row_organization_id(row) == organization_id
+            for row in self.organization_rows
+        ):
+            raise ValueError(f"duplicate organization: {organization_id}")
+        self.organization_rows.append(
+            tuple(
+                {
+                    "id": organization_id,
+                    "name": params["name"],
+                    "region": params["region"],
+                    "created_at": params["created_at"],
+                }[column]
+                for column in ORGANIZATION_COLUMNS
+            )
+        )
+
+    def _update_user_organization(self, params: dict[str, object]) -> None:
+        email = str(params["email"])
+        if email in self.user_organization_rows:
+            self.user_organization_rows[email] = params["organization_id"]
+
     def execute(
         self,
         sql: str,
@@ -173,8 +214,23 @@ class FakePostgresConnection:
         elif "INSERT INTO audit_events" in sql:
             self._insert_audit_event(params)
             rows = []
+        elif "INSERT INTO mfi_organizations" in sql:
+            self._insert_organization(params)
+            rows = []
+        elif "UPDATE users" in sql and "SET organization_id" in sql:
+            self._update_user_organization(params)
+            rows = []
         elif "FROM audit_events" in sql:
             rows = self._ordered_audit_rows()
+        elif "FROM mfi_organizations" in sql and "WHERE id = %(organization_id)s" in sql:
+            organization_id = params["organization_id"]
+            rows = [
+                row
+                for row in self.organization_rows
+                if self._row_organization_id(row) == organization_id
+            ]
+        elif "FROM mfi_organizations" in sql:
+            rows = self._ordered_organization_rows(self.organization_rows)
         elif "SET lifecycle_status = 'inactive', is_active = FALSE" in sql:
             self._deactivate_other_model_versions(params["version"])
             rows = []
@@ -238,6 +294,16 @@ def _postgres_audit_event_row(event: dict[str, object]) -> tuple[object, ...]:
     return tuple(values[column] for column in AUDIT_EVENT_COLUMNS)
 
 
+def _postgres_organization_row(organization: dict[str, object]) -> tuple[object, ...]:
+    values = {
+        "id": organization["id"],
+        "name": organization["name"],
+        "region": organization["region"],
+        "created_at": organization["created_at"],
+    }
+    return tuple(values[column] for column in ORGANIZATION_COLUMNS)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -263,19 +329,22 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         )
         self.assertEqual(summary["status"], POSTGRESQL_REPOSITORY_ADAPTER_STATUS)
         self.assertEqual(summary["status"], "partial_method_groups")
-        self.assertEqual(summary["stage"], "model_registry_audit_groups_v1")
+        self.assertEqual(
+            summary["stage"],
+            "model_registry_audit_organizations_groups_v1",
+        )
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 7)
-        self.assertEqual(summary["pending_method_count"], 45)
-        self.assertEqual(summary["completed_method_group_count"], 2)
+        self.assertEqual(summary["implemented_method_count"], 11)
+        self.assertEqual(summary["pending_method_count"], 41)
+        self.assertEqual(summary["completed_method_group_count"], 3)
         self.assertEqual(
             summary["completed_method_groups"],
-            ["model_registry", "audit"],
+            ["organizations", "model_registry", "audit"],
         )
-        self.assertEqual(summary["read_only_method_count"], 4)
-        self.assertEqual(summary["write_method_count"], 3)
+        self.assertEqual(summary["read_only_method_count"], 6)
+        self.assertEqual(summary["write_method_count"], 5)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -286,6 +355,10 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "activate_model_version",
                 "record_audit_event",
                 "list_audit_events",
+                "create_organization",
+                "get_organization",
+                "list_organizations",
+                "assign_user_organization",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -301,7 +374,10 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(groups["audit"]["implemented_method_count"], 2)
         self.assertEqual(groups["audit"]["pending_method_count"], 0)
         self.assertFalse(groups["audit"]["pending_methods"])
-        self.assertIn("model registry and audit", summary["limitation"])
+        self.assertEqual(groups["organizations"]["implemented_method_count"], 4)
+        self.assertEqual(groups["organizations"]["pending_method_count"], 0)
+        self.assertFalse(groups["organizations"]["pending_methods"])
+        self.assertIn("model registry, audit, and organization", summary["limitation"])
 
     def test_model_registry_read_adapter_matches_sqlite_repository_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -472,6 +548,102 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 any("ORDER BY id DESC" in sql for sql, _params in query_log)
             )
 
+    def test_organization_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            sqlite_repository.create_organization(
+                organization_id="pavlodar-zeta-mfi",
+                name="Zeta Pavlodar MFI",
+                region="Pavlodar",
+            )
+            sqlite_repository.create_organization(
+                organization_id="pavlodar-aksu-mfi",
+                name="Aksu Pavlodar MFI",
+                region="Aksu",
+            )
+            sqlite_repository.create_user(
+                "tenant-analyst@example.com",
+                "hash",
+                "mfi_analyst",
+            )
+
+            sqlite_organizations = sqlite_repository.list_organizations()
+            postgres_organization_rows = [
+                _postgres_organization_row(organization)
+                for organization in sqlite_organizations
+            ]
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection(
+                [],
+                query_log,
+                organization_rows=postgres_organization_rows,
+                user_organization_rows={"tenant-analyst@example.com": None},
+            )
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            self.assertEqual(
+                adapter.get_organization("pavlodar-aksu-mfi"),
+                sqlite_repository.get_organization("pavlodar-aksu-mfi"),
+            )
+            self.assertEqual(adapter.list_organizations(), sqlite_organizations)
+
+            payload = {
+                "organization_id": "pavlodar-second-mfi",
+                "name": "Second Pavlodar MFI",
+                "region": "Pavlodar region",
+            }
+            sqlite_created = sqlite_repository.create_organization(**payload)
+            postgres_created = adapter.create_organization(**payload)
+            for key in ("id", "name", "region"):
+                self.assertEqual(postgres_created[key], sqlite_created[key])
+
+            sqlite_repository.assign_user_organization(
+                "tenant-analyst@example.com",
+                "pavlodar-second-mfi",
+            )
+            adapter.assign_user_organization(
+                "tenant-analyst@example.com",
+                "pavlodar-second-mfi",
+            )
+            self.assertEqual(
+                fake_connection.user_organization_rows["tenant-analyst@example.com"],
+                sqlite_repository.get_user("tenant-analyst@example.com")[
+                    "organization_id"
+                ],
+            )
+
+            sqlite_repository.assign_user_organization(
+                "tenant-analyst@example.com",
+                None,
+            )
+            adapter.assign_user_organization("tenant-analyst@example.com", None)
+            self.assertIsNone(
+                fake_connection.user_organization_rows["tenant-analyst@example.com"]
+            )
+            self.assertIsNone(
+                sqlite_repository.get_user("tenant-analyst@example.com")[
+                    "organization_id"
+                ]
+            )
+            self.assertEqual(
+                organization_method_group_parity_snapshot(adapter),
+                organization_method_group_parity_snapshot(sqlite_repository),
+            )
+            self.assertGreaterEqual(fake_connection.commits, 3)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(
+                any("INSERT INTO mfi_organizations" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("FROM mfi_organizations" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("UPDATE users" in sql and "organization_id" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("ORDER BY name" in sql for sql, _params in query_log)
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -500,6 +672,18 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.list_audit_events()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_organization(
+                organization_id="blocked-mfi",
+                name="Blocked MFI",
+                region="Pavlodar",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_organization("blocked-mfi")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_organizations()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.assign_user_organization("blocked@example.com", "blocked-mfi")
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()

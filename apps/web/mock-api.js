@@ -213,24 +213,28 @@
     "activate_model_version",
     "record_audit_event",
     "list_audit_events",
+    "create_organization",
+    "get_organization",
+    "list_organizations",
+    "assign_user_organization",
   ];
   const POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT = {
     module: "microscore_api.postgres_repository",
-    version: "postgresql-repository-adapter-v4",
+    version: "postgresql-repository-adapter-v5",
     status: "partial_method_groups",
-    stage: "model_registry_audit_groups_v1",
+    stage: "model_registry_audit_organizations_groups_v1",
     present: true,
     runtime_enabled: false,
     method_count: 52,
     implemented_method_count: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS.length,
     implemented_methods: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS,
-    pending_method_count: 45,
-    completed_method_group_count: 2,
-    completed_method_groups: ["model_registry", "audit"],
-    read_only_method_count: 4,
-    read_only_methods: ["get_model_version", "get_active_model_version", "list_model_versions", "list_audit_events"],
-    write_method_count: 3,
-    write_methods: ["create_model_version", "activate_model_version", "record_audit_event"],
+    pending_method_count: 41,
+    completed_method_group_count: 3,
+    completed_method_groups: ["organizations", "model_registry", "audit"],
+    read_only_method_count: 6,
+    read_only_methods: ["get_model_version", "get_active_model_version", "list_model_versions", "list_audit_events", "get_organization", "list_organizations"],
+    write_method_count: 5,
+    write_methods: ["create_model_version", "activate_model_version", "record_audit_event", "create_organization", "assign_user_organization"],
     method_groups: [
       {
         key: "identity_access",
@@ -285,7 +289,7 @@
         pending_methods: pendingMethods,
       };
     }),
-    limitation: "PostgreSQL Repository Adapter v4 implements the model registry and audit method groups through an injected DB-API compatible connection factory. Runtime backend selection remains disabled until identity, tenant-scoped application, invite, simulation, and analytics flows have repository parity coverage.",
+    limitation: "PostgreSQL Repository Adapter v5 implements the model registry, audit, and organization method groups through an injected DB-API compatible connection factory. Runtime backend selection remains disabled until identity, tenant-scoped application, invite, simulation, and analytics flows have repository parity coverage.",
   };
   const borrowerStatusMessages = {
     submitted: "Application received. It is waiting for the MFI to begin review.",
@@ -1827,6 +1831,7 @@
       repository_adapter_model_registry_write_present: true,
       repository_adapter_model_registry_group_present: true,
       repository_adapter_audit_group_present: true,
+      repository_adapter_organization_group_present: true,
       repository_adapter_contract_groups: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.method_groups,
       migration_artifacts: POSTGRESQL_MIGRATION_ARTIFACTS,
       schema_inventory: POSTGRESQL_SCHEMA_INVENTORY,
@@ -1859,7 +1864,7 @@
           status: "planned",
           sqlite_evidence: `${tenantScopeCount} tenant-scope column(s) are tracked; 4/4 tenant index draft(s) are present.`,
           postgres_requirement: "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
-          action: "Review tenant indexes in the draft migration and add repository parity tests for MFI queues, analytics, review packets, invites, and simulations.",
+          action: "Use the completed organization adapter group as the tenant directory foundation, then add repository parity tests for MFI queues, analytics, review packets, invites, and simulations.",
         },
         {
           key: "postgresql_disposable_migration_ci",
@@ -1871,7 +1876,7 @@
         {
           key: "postgresql_repository_adapter_contract",
           status: "pass",
-          sqlite_evidence: "52 SQLite repository method(s) are grouped into adapter contract families; 7 method(s) currently have PostgreSQL adapter coverage.",
+          sqlite_evidence: "52 SQLite repository method(s) are grouped into adapter contract families; 11 method(s) currently have PostgreSQL adapter coverage.",
           postgres_requirement: "A PostgreSQL adapter must implement the same repository method families before backend selection can be enabled.",
           action: "Keep microscore_api.postgres_repository as the incremental adapter surface until every method family is implemented and parity-tested.",
         },
@@ -1897,11 +1902,18 @@
           action: "Promote the audit adapter group into disposable PostgreSQL repository CI, then start tenant-scoped organization methods.",
         },
         {
+          key: "postgresql_organization_method_group_adapter",
+          status: "pass",
+          sqlite_evidence: "4 organization method(s) have PostgreSQL query specs and SQLite-vs-adapter parity coverage.",
+          postgres_requirement: "The adapter must preserve organization directory ordering, tenant identifiers, and user organization assignment semantics.",
+          action: "Use the completed organization adapter group as the tenant boundary foundation before implementing user, application, invite, simulation, and analytics parity.",
+        },
+        {
           key: "postgresql_repository_backend",
           status: "blocker",
-          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; the adapter has complete model registry and audit method groups but does not yet cover the full repository contract.",
+          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; the adapter has complete model registry, audit, and organization method groups but does not yet cover the full repository contract.",
           postgres_requirement: "Implement a PostgreSQL repository backend behind the same API contract.",
-          action: "Expand the PostgreSQL adapter from model registry and audit to tenant-scoped queues, applications, simulations, analytics, identity, and organization flows.",
+          action: "Expand the PostgreSQL adapter from model registry, audit, and organization flows to users, tenant-scoped queues, applications, simulations, analytics, and invites.",
         },
         {
           key: "postgresql_disposable_ci",
