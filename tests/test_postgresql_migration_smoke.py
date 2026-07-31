@@ -40,6 +40,7 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertEqual(payload["expected_audit_methods"], 2)
         self.assertEqual(payload["expected_organization_methods"], 4)
         self.assertEqual(payload["expected_identity_methods"], 11)
+        self.assertEqual(payload["expected_staff_invite_methods"], 15)
 
     def test_postgresql_migration_smoke_script_uses_psql_without_secret_logging(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "postgresql-migration-smoke.py").read_text(
@@ -70,6 +71,12 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertIn("identity_session_scope", script)
         self.assertIn("identity_disabled_by", script)
         self.assertIn("identity_revoked_session_count", script)
+        self.assertIn("POSTGRESQL_STAFF_INVITE_METHODS", script)
+        self.assertIn("staff_invite_methods", script)
+        self.assertIn("staff_invite_delivery", script)
+        self.assertIn("staff_invite_attempt_status", script)
+        self.assertIn("staff_invite_event_metadata", script)
+        self.assertIn("metadata_json->>'message_id'", script)
         self.assertIn("ci-smoke-active-session", script)
         self.assertIn("ci-smoke-revoked-session", script)
         self.assertIn("UPDATE users", script)

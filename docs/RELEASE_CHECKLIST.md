@@ -167,17 +167,18 @@ git diff --check
   coverage, the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
   tenant-scope parity checks, disposable migration-smoke CI evidence through
   `scripts/postgresql-migration-smoke.py`, the partial method-groups
-  `microscore_api.postgres_repository` adapter v6
-  (`model_registry_audit_organizations_identity_groups_v1`, 22 implemented
-  methods out of 52, four completed method groups), missing
+  `microscore_api.postgres_repository` adapter v7
+  (`model_registry_audit_organizations_identity_invites_groups_v1`, 37 implemented
+  methods out of 52, five completed method groups), missing
   `MICROSCORE_DATABASE_URL`, and blockers for the unimplemented PostgreSQL
   repository backend and repository-level PostgreSQL parity CI.
 - Storage readiness remains explicit: SQLite is the prototype backend,
   PostgreSQL migration remains blocked/planned even with the 0001 draft,
-  migration-smoke CI, and completed model registry, audit, organization, and
-  identity/session adapter groups present, and no release should imply production storage
-  readiness until a real backend, managed database connection, production
-  migration runner, and repository parity CI gate exist.
+  migration-smoke CI, and completed model registry, audit, organization,
+  identity/session, and staff invite delivery adapter groups present, and no
+  release should imply production storage readiness until a real backend,
+  managed database connection, production migration runner, and repository
+  parity CI gate exist.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

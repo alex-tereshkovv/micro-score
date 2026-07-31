@@ -22,6 +22,7 @@ from .postgres_repository import (
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
     POSTGRESQL_ORGANIZATION_METHODS,
+    POSTGRESQL_STAFF_INVITE_METHODS,
     repository_contract_summary,
 )
 
@@ -709,9 +710,9 @@ class MicroScoreRepository:
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
                         "The adapter has complete model registry, audit, "
-                        "organization, and identity/session method groups, but "
-                        "tenant-scoped application, invite, simulation, and "
-                        "analytics flows still need parity coverage."
+                        "organization, identity/session, and staff invite delivery "
+                        "method groups, but tenant-scoped application, simulation, "
+                        "and analytics flows still need parity coverage."
                     ),
                 },
                 {
@@ -720,7 +721,8 @@ class MicroScoreRepository:
                     "detail": (
                         "The PostgreSQL adapter groups SQLite repository method "
                         "families and implements complete model registry, audit, "
-                        "organization, and identity/session method groups."
+                        "organization, identity/session, and staff invite delivery "
+                        "method groups."
                     ),
                 },
                 {
@@ -765,6 +767,16 @@ class MicroScoreRepository:
                         "The PostgreSQL adapter covers users, MFA attestation, "
                         "disable/reactivate, session TTL filtering, and session "
                         "revocation as the fourth complete repository method group."
+                    ),
+                },
+                {
+                    "id": "postgresql_staff_invites_delivery_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers staff invite creation, "
+                        "accept/revoke/deliver semantics, delivery outbox attempts, "
+                        "worker retry state, and idempotent webhook events as the "
+                        "fifth complete repository method group."
                     ),
                 },
             ],
@@ -956,6 +968,10 @@ class MicroScoreRepository:
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_IDENTITY_METHODS
         )
+        repository_adapter_staff_invites_delivery_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_STAFF_INVITE_METHODS
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -1066,10 +1082,18 @@ class MicroScoreRepository:
                 ),
                 "postgres_requirement": "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
                 "action": (
-                    "Use the completed organization adapter group as the tenant "
+                    "Use the completed organization and staff invite adapter "
+                    "groups as tenant-boundary evidence, then add repository "
+                    "parity tests for MFI queues, analytics, review packets, "
+                    "applications, and simulations."
+                    if tenant_index_covered
+                    and repository_adapter_organization_group_present
+                    and repository_adapter_staff_invites_delivery_group_present
+                    else "Use the completed organization adapter group as the tenant "
                     "directory foundation, then add repository parity tests for "
                     "MFI queues, analytics, review packets, invites, and simulations."
-                    if tenant_index_covered and repository_adapter_organization_group_present
+                    if tenant_index_covered
+                    and repository_adapter_organization_group_present
                     else "Review tenant indexes in the draft migration and add repository "
                     "parity tests for MFI queues, analytics, review packets, invites, "
                     "and simulations."
@@ -1239,21 +1263,48 @@ class MicroScoreRepository:
                 ),
             },
             {
+                "key": "postgresql_staff_invites_delivery_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_staff_invites_delivery_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_STAFF_INVITE_METHODS)} staff invite "
+                    "delivery method(s) have PostgreSQL query specs and "
+                    "SQLite-vs-adapter parity coverage."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve staff invite creation, "
+                    "accept/revoke/deliver semantics, delivery outbox ordering, "
+                    "worker retry/dead-letter fields, idempotent webhook events, "
+                    "and JSONB webhook metadata materialization."
+                ),
+                "action": (
+                    "Use the completed staff invite delivery group as the "
+                    "tenant-scoped access onboarding foundation before "
+                    "application, simulation, and analytics parity."
+                    if repository_adapter_staff_invites_delivery_group_present
+                    else "Complete staff invite delivery parity on the PostgreSQL adapter."
+                ),
+            },
+            {
                 "key": "postgresql_repository_backend",
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
                     "at startup; the adapter has complete model registry, audit, "
-                    "organization, and identity/session method groups but does "
-                    "not yet cover the full repository contract."
+                    "organization, identity/session, and staff invite delivery "
+                    "method groups but does not yet cover the full repository "
+                    "contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
                     "Expand the PostgreSQL adapter from model registry, audit, "
-                    "organization, and identity/session flows to staff invites, "
-                    "tenant-scoped queues, applications, simulations, and analytics."
+                    "organization, identity/session, and staff invite delivery "
+                    "flows to tenant-scoped applications, simulations, and analytics."
                 ),
             },
             {
@@ -1434,6 +1485,9 @@ class MicroScoreRepository:
             ),
             "repository_adapter_identity_access_group_present": (
                 repository_adapter_identity_access_group_present
+            ),
+            "repository_adapter_staff_invites_delivery_group_present": (
+                repository_adapter_staff_invites_delivery_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

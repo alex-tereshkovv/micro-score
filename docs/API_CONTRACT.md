@@ -1289,6 +1289,7 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `postgresql_audit_method_group_adapter`,
   `postgresql_organization_method_group_adapter`,
   `postgresql_identity_access_method_group_adapter`,
+  `postgresql_staff_invites_delivery_method_group_adapter`,
   `postgresql_repository_backend`, and `postgresql_disposable_ci`;
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
@@ -1296,11 +1297,11 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 - `repository_adapter_contract_*`: an incremental PostgreSQL adapter in
   `microscore_api.postgres_repository`, including
   `repository_adapter_contract_status=partial_method_groups`,
-  `repository_adapter_stage=model_registry_audit_organizations_identity_groups_v1`, method-family groups,
+  `repository_adapter_stage=model_registry_audit_organizations_identity_invites_groups_v1`, method-family groups,
   `repository_adapter_contract_method_count=52`,
-  `repository_adapter_implemented_method_count=22`,
-  `repository_adapter_pending_method_count=30`,
-  `repository_adapter_completed_method_group_count=4`, the completed identity
+  `repository_adapter_implemented_method_count=37`,
+  `repository_adapter_pending_method_count=15`,
+  `repository_adapter_completed_method_group_count=5`, the completed identity
   access method group (`create_user`, `get_user`, `list_users`,
   `disable_user`, `reactivate_user`, `attest_user_mfa`, `create_session`,
   `get_user_by_token`, `list_active_sessions`, `revoke_session`,
@@ -1310,7 +1311,16 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   registry method group (`create_model_version`, `get_model_version`,
   `get_active_model_version`, `list_model_versions`, `activate_model_version`),
   and the completed audit method group (`record_audit_event`,
-  `list_audit_events`);
+  `list_audit_events`), plus the completed staff invite delivery method group
+  (`create_staff_invite`, `get_staff_invite`, `list_staff_invites`,
+  `mark_staff_invite_accepted`, `mark_staff_invite_revoked`,
+  `mark_staff_invite_delivered`, `record_staff_invite_delivery_attempt`,
+  `record_staff_invite_delivery_event`, `get_staff_invite_delivery_attempt`,
+  `get_staff_invite_delivery_event`, `list_staff_invite_delivery_attempts`,
+  `list_staff_invite_delivery_events`,
+  `list_staff_invite_delivery_outbox_attempts`,
+  `update_staff_invite_delivery_attempt_status`, and
+  `update_staff_invite_delivery_worker_state`);
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,

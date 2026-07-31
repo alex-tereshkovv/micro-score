@@ -27,6 +27,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
     POSTGRESQL_ORGANIZATION_METHODS,
+    POSTGRESQL_STAFF_INVITE_METHODS,
 )
 
 
@@ -86,6 +87,7 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_audit_methods": len(POSTGRESQL_AUDIT_METHODS),
         "expected_organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
         "expected_identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
+        "expected_staff_invite_methods": len(POSTGRESQL_STAFF_INVITE_METHODS),
     }
 
 
@@ -213,6 +215,142 @@ def apply_migration_and_verify(
 
             DELETE FROM sessions
             WHERE token = 'ci-smoke-revoked-session';
+
+            INSERT INTO staff_invites (
+                token,
+                email,
+                role,
+                organization_id,
+                created_by,
+                created_at,
+                expires_at
+            )
+            VALUES (
+                'ci-smoke-invite',
+                'ci-smoke-invitee@example.com',
+                'mfi_analyst',
+                'ci-smoke-mfi',
+                'ci-smoke-admin@example.com',
+                NOW(),
+                NOW() + INTERVAL '2 days'
+            )
+            ON CONFLICT (token) DO UPDATE
+            SET
+                email = EXCLUDED.email,
+                role = EXCLUDED.role,
+                organization_id = EXCLUDED.organization_id,
+                created_by = EXCLUDED.created_by,
+                expires_at = EXCLUDED.expires_at,
+                accepted_at = NULL,
+                accepted_by = NULL,
+                revoked_at = NULL,
+                revoked_by = NULL,
+                delivered_at = NULL,
+                delivered_by = NULL,
+                delivery_channel = NULL,
+                delivery_recipient = NULL,
+                delivery_url_base = NULL,
+                delivery_note = NULL;
+
+            INSERT INTO staff_invite_delivery_attempts (
+                attempt_id,
+                invite_token,
+                attempted_at,
+                attempted_by,
+                provider,
+                status,
+                channel,
+                recipient,
+                delivery_url_base,
+                note,
+                error,
+                worker_status,
+                worker_attempt_count,
+                next_worker_run_at,
+                dead_letter_at,
+                last_worker_error
+            )
+            VALUES (
+                'ci-smoke-invite-attempt',
+                'ci-smoke-invite',
+                NOW(),
+                'ci-smoke-admin@example.com',
+                'local_outbox',
+                'queued',
+                'email',
+                'ci-smoke-invitee@example.com',
+                'https://example.test/invites',
+                'postgresql migration smoke',
+                NULL,
+                'queued',
+                0,
+                NOW(),
+                NULL,
+                NULL
+            )
+            ON CONFLICT (attempt_id) DO UPDATE
+            SET
+                status = EXCLUDED.status,
+                worker_status = EXCLUDED.worker_status,
+                worker_attempt_count = EXCLUDED.worker_attempt_count,
+                next_worker_run_at = EXCLUDED.next_worker_run_at,
+                dead_letter_at = NULL,
+                last_worker_error = NULL;
+
+            UPDATE staff_invite_delivery_attempts
+            SET
+                status = 'sent',
+                error = NULL,
+                worker_status = 'completed',
+                worker_attempt_count = 1,
+                next_worker_run_at = NULL,
+                dead_letter_at = NULL,
+                last_worker_error = NULL
+            WHERE attempt_id = 'ci-smoke-invite-attempt';
+
+            UPDATE staff_invites
+            SET
+                delivered_at = NOW(),
+                delivered_by = 'ci-smoke-admin@example.com',
+                delivery_channel = 'email',
+                delivery_recipient = 'ci-smoke-invitee@example.com',
+                delivery_url_base = 'https://example.test/invites',
+                delivery_note = 'postgresql migration smoke'
+            WHERE token = 'ci-smoke-invite' AND delivered_at IS NULL;
+
+            INSERT INTO staff_invite_delivery_events (
+                event_id,
+                provider,
+                provider_event_id,
+                attempt_id,
+                invite_token,
+                event_type,
+                mapped_attempt_status,
+                received_at,
+                occurred_at,
+                recipient,
+                error,
+                metadata_json
+            )
+            VALUES (
+                'ci-smoke-invite-event',
+                'local_outbox',
+                'ci-smoke-provider-event',
+                'ci-smoke-invite-attempt',
+                'ci-smoke-invite',
+                'delivered',
+                'delivered',
+                NOW(),
+                NOW(),
+                'ci-smoke-invitee@example.com',
+                NULL,
+                '{"message_id": "ci-smoke-message"}'::jsonb
+            )
+            ON CONFLICT (event_id) DO UPDATE
+            SET
+                event_type = EXCLUDED.event_type,
+                mapped_attempt_status = EXCLUDED.mapped_attempt_status,
+                metadata_json = EXCLUDED.metadata_json;
 
             INSERT INTO loan_applications (
                 id,
@@ -483,6 +621,33 @@ def apply_migration_and_verify(
             WHERE token = 'ci-smoke-revoked-session';
         """,
     )
+    staff_invite_delivery = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT delivery_channel || ':' || delivery_recipient
+            FROM staff_invites
+            WHERE token = 'ci-smoke-invite';
+        """,
+    )
+    staff_invite_attempt_status = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT status || ':' || worker_status || ':' || worker_attempt_count::text
+            FROM staff_invite_delivery_attempts
+            WHERE attempt_id = 'ci-smoke-invite-attempt';
+        """,
+    )
+    staff_invite_event_metadata = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT event_type || ':' || metadata_json->>'message_id'
+            FROM staff_invite_delivery_events
+            WHERE event_id = 'ci-smoke-invite-event';
+        """,
+    )
     latest_audit_action = query_rows(
         psql_bin=psql_bin,
         database_url=database_url,
@@ -568,6 +733,21 @@ def apply_migration_and_verify(
         label="identity revoked session count",
     )
     assert_catalog_subset(
+        expected=["email:ci-smoke-invitee@example.com"],
+        actual=staff_invite_delivery,
+        label="staff invite delivery marker",
+    )
+    assert_catalog_subset(
+        expected=["sent:completed:1"],
+        actual=staff_invite_attempt_status,
+        label="staff invite delivery attempt worker state",
+    )
+    assert_catalog_subset(
+        expected=["delivered:ci-smoke-message"],
+        actual=staff_invite_event_metadata,
+        label="staff invite delivery event metadata",
+    )
+    assert_catalog_subset(
         expected=["postgresql_audit_adapter_smoke"],
         actual=latest_audit_action,
         label="latest audit action",
@@ -598,12 +778,16 @@ def apply_migration_and_verify(
         "audit_methods": len(POSTGRESQL_AUDIT_METHODS),
         "organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
         "identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
+        "staff_invite_methods": len(POSTGRESQL_STAFF_INVITE_METHODS),
         "organization_directory": organization_directory[0],
         "organization_assignment": organization_assignment[0],
         "identity_mfa_method": identity_mfa_method[0],
         "identity_session_scope": identity_session_scope[0],
         "identity_disabled_by": identity_disabled_by[0],
         "identity_revoked_session_count": identity_revoked_session_count[0],
+        "staff_invite_delivery": staff_invite_delivery[0],
+        "staff_invite_attempt_status": staff_invite_attempt_status[0],
+        "staff_invite_event_metadata": staff_invite_event_metadata[0],
         "audit_latest_action": latest_audit_action[0],
         "audit_detail_method_group": latest_audit_detail[0],
     }

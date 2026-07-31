@@ -22,6 +22,11 @@ from microscore_api.postgres_repository import (  # noqa: E402
     POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
     POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
     POSTGRESQL_REPOSITORY_ADAPTER_STATUS,
+    STAFF_INVITE_BASE_COLUMNS,
+    STAFF_INVITE_COLUMNS,
+    STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS,
+    STAFF_INVITE_DELIVERY_EVENT_COLUMNS,
+    STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS,
     SESSION_USER_COLUMNS,
     USER_COLUMNS,
     PostgresRepositoryAdapter,
@@ -34,6 +39,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     organization_method_group_parity_snapshot,
     repository_contract_methods,
     repository_contract_summary,
+    staff_invites_delivery_method_group_parity_snapshot,
 )
 
 
@@ -66,12 +72,27 @@ class FakePostgresConnection:
         user_rows: list[tuple[object, ...]] | None = None,
         session_rows: list[tuple[object, ...]] | None = None,
         user_organization_rows: dict[str, str | None] | None = None,
+        staff_invite_rows: list[tuple[object, ...]] | None = None,
+        staff_invite_delivery_attempt_rows: list[tuple[object, ...]] | None = None,
+        staff_invite_delivery_event_rows: list[tuple[object, ...]] | None = None,
     ) -> None:
         self.rows = rows
         self.audit_rows = list(audit_rows or [])
         self.organization_rows = list(organization_rows or [])
         self.user_rows = list(user_rows or [])
         self.session_rows = list(session_rows or [])
+        self.staff_invite_rows = [
+            tuple(row[STAFF_INVITE_COLUMNS.index(column)] for column in STAFF_INVITE_BASE_COLUMNS)
+            if len(row) == len(STAFF_INVITE_COLUMNS)
+            else row
+            for row in (staff_invite_rows or [])
+        ]
+        self.staff_invite_delivery_attempt_rows = list(
+            staff_invite_delivery_attempt_rows or []
+        )
+        self.staff_invite_delivery_event_rows = list(
+            staff_invite_delivery_event_rows or []
+        )
         self.user_organization_rows = dict(user_organization_rows or {})
         for row in self.user_rows:
             self.user_organization_rows.setdefault(
@@ -387,6 +408,447 @@ class FakePostgresConnection:
             {"organization_id": params["organization_id"]},
         )
 
+    @staticmethod
+    def _row_staff_invite_token(row: tuple[object, ...]) -> object:
+        return row[STAFF_INVITE_BASE_COLUMNS.index("token")]
+
+    @staticmethod
+    def _row_staff_invite_attempt_id(row: tuple[object, ...]) -> object:
+        return row[STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("attempt_id")]
+
+    @staticmethod
+    def _row_staff_invite_attempt_token(row: tuple[object, ...]) -> object:
+        return row[STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("invite_token")]
+
+    @staticmethod
+    def _row_staff_invite_event_id(row: tuple[object, ...]) -> object:
+        return row[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_id")]
+
+    @staticmethod
+    def _row_staff_invite_event_token(row: tuple[object, ...]) -> object:
+        return row[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("invite_token")]
+
+    @staticmethod
+    def _replace_staff_invite_column(
+        row: tuple[object, ...],
+        column: str,
+        value: object,
+    ) -> tuple[object, ...]:
+        values = list(row)
+        values[STAFF_INVITE_BASE_COLUMNS.index(column)] = value
+        return tuple(values)
+
+    @staticmethod
+    def _replace_delivery_attempt_column(
+        row: tuple[object, ...],
+        column: str,
+        value: object,
+    ) -> tuple[object, ...]:
+        values = list(row)
+        values[STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index(column)] = value
+        return tuple(values)
+
+    def _insert_staff_invite(self, params: dict[str, object]) -> None:
+        token = params["token"]
+        if any(
+            self._row_staff_invite_token(row) == token
+            for row in self.staff_invite_rows
+        ):
+            raise ValueError(f"duplicate staff invite: {token}")
+        values = {
+            "token": token,
+            "email": params["email"],
+            "role": params["role"],
+            "organization_id": params["organization_id"],
+            "created_by": params["created_by"],
+            "created_at": params["created_at"],
+            "expires_at": params["expires_at"],
+            "accepted_at": None,
+            "accepted_by": None,
+            "revoked_at": None,
+            "revoked_by": None,
+            "delivered_at": None,
+            "delivered_by": None,
+            "delivery_channel": None,
+            "delivery_recipient": None,
+            "delivery_url_base": None,
+            "delivery_note": None,
+        }
+        self.staff_invite_rows.append(
+            tuple(values[column] for column in STAFF_INVITE_BASE_COLUMNS)
+        )
+
+    def _update_staff_invite_row(
+        self,
+        token: object,
+        replacements: dict[str, object],
+        *,
+        require_accepted_null: bool = False,
+        require_revoked_null: bool = False,
+        require_delivered_null: bool = False,
+    ) -> int:
+        updated_rows: list[tuple[object, ...]] = []
+        rowcount = 0
+        for row in self.staff_invite_rows:
+            if self._row_staff_invite_token(row) != token:
+                updated_rows.append(row)
+                continue
+            if (
+                require_accepted_null
+                and row[STAFF_INVITE_BASE_COLUMNS.index("accepted_at")] is not None
+            ):
+                updated_rows.append(row)
+                continue
+            if (
+                require_revoked_null
+                and row[STAFF_INVITE_BASE_COLUMNS.index("revoked_at")] is not None
+            ):
+                updated_rows.append(row)
+                continue
+            if (
+                require_delivered_null
+                and row[STAFF_INVITE_BASE_COLUMNS.index("delivered_at")] is not None
+            ):
+                updated_rows.append(row)
+                continue
+            for column, value in replacements.items():
+                row = self._replace_staff_invite_column(row, column, value)
+            updated_rows.append(row)
+            rowcount += 1
+        self.staff_invite_rows = updated_rows
+        return rowcount
+
+    def _staff_invite_by_token(self, token: object) -> tuple[object, ...] | None:
+        for row in self.staff_invite_rows:
+            if self._row_staff_invite_token(row) == token:
+                return row
+        return None
+
+    def _ordered_staff_invite_rows(self) -> list[tuple[object, ...]]:
+        return sorted(
+            self.staff_invite_rows,
+            key=lambda row: str(row[STAFF_INVITE_BASE_COLUMNS.index("created_at")] or ""),
+            reverse=True,
+        )
+
+    def _latest_delivery_attempt_for_token(
+        self,
+        token: object,
+    ) -> tuple[object, ...] | None:
+        rows = [
+            row
+            for row in self.staff_invite_delivery_attempt_rows
+            if self._row_staff_invite_attempt_token(row) == token
+        ]
+        attempted_at_index = STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index(
+            "attempted_at"
+        )
+        attempt_id_index = STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("attempt_id")
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                str(row[attempted_at_index] or ""),
+                str(row[attempt_id_index] or ""),
+            ),
+            reverse=True,
+        )
+        return rows[0] if rows else None
+
+    def _latest_delivery_event_for_token(
+        self,
+        token: object,
+    ) -> tuple[object, ...] | None:
+        rows = [
+            row
+            for row in self.staff_invite_delivery_event_rows
+            if self._row_staff_invite_event_token(row) == token
+        ]
+        received_at_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("received_at")
+        event_id_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_id")
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                str(row[received_at_index] or ""),
+                str(row[event_id_index] or ""),
+            ),
+            reverse=True,
+        )
+        return rows[0] if rows else None
+
+    def _staff_invite_select_row(
+        self,
+        row: tuple[object, ...],
+    ) -> tuple[object, ...]:
+        token = self._row_staff_invite_token(row)
+        latest_attempt = self._latest_delivery_attempt_for_token(token)
+        latest_event = self._latest_delivery_event_for_token(token)
+        attempt_count = sum(
+            1
+            for attempt in self.staff_invite_delivery_attempt_rows
+            if self._row_staff_invite_attempt_token(attempt) == token
+        )
+        event_count = sum(
+            1
+            for event in self.staff_invite_delivery_event_rows
+            if self._row_staff_invite_event_token(event) == token
+        )
+        computed = {
+            "delivery_attempt_count": attempt_count,
+            "last_delivery_attempt_at": (
+                latest_attempt[
+                    STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("attempted_at")
+                ]
+                if latest_attempt
+                else None
+            ),
+            "last_delivery_status": (
+                latest_attempt[STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("status")]
+                if latest_attempt
+                else None
+            ),
+            "last_delivery_provider": (
+                latest_attempt[STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("provider")]
+                if latest_attempt
+                else None
+            ),
+            "delivery_event_count": event_count,
+            "last_delivery_event_at": (
+                latest_event[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("received_at")]
+                if latest_event
+                else None
+            ),
+            "last_delivery_event_type": (
+                latest_event[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_type")]
+                if latest_event
+                else None
+            ),
+        }
+        base = dict(zip(STAFF_INVITE_BASE_COLUMNS, row))
+        values = {**base, **computed}
+        return tuple(values[column] for column in STAFF_INVITE_COLUMNS)
+
+    def _insert_delivery_attempt(self, params: dict[str, object]) -> None:
+        attempt_id = params["attempt_id"]
+        if any(
+            self._row_staff_invite_attempt_id(row) == attempt_id
+            for row in self.staff_invite_delivery_attempt_rows
+        ):
+            raise ValueError(f"duplicate staff invite delivery attempt: {attempt_id}")
+        values = {
+            "attempt_id": attempt_id,
+            "invite_token": params["token"],
+            "attempted_at": params["attempted_at"],
+            "attempted_by": params["attempted_by"],
+            "provider": params["provider"],
+            "status": params["status"],
+            "channel": params["channel"],
+            "recipient": params["recipient"],
+            "delivery_url_base": params["url_base"],
+            "note": params["note"],
+            "error": params["error"],
+            "worker_status": params["worker_status"],
+            "worker_attempt_count": params["worker_attempt_count"],
+            "next_worker_run_at": params["next_worker_run_at"],
+            "dead_letter_at": params["dead_letter_at"],
+            "last_worker_error": params["last_worker_error"],
+        }
+        self.staff_invite_delivery_attempt_rows.append(
+            tuple(values[column] for column in STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS)
+        )
+
+    def _delivery_attempt_by_id(
+        self,
+        attempt_id: object,
+    ) -> tuple[object, ...] | None:
+        for row in self.staff_invite_delivery_attempt_rows:
+            if self._row_staff_invite_attempt_id(row) == attempt_id:
+                return row
+        return None
+
+    def _list_delivery_attempt_rows(self, token: object) -> list[tuple[object, ...]]:
+        rows = [
+            row
+            for row in self.staff_invite_delivery_attempt_rows
+            if self._row_staff_invite_attempt_token(row) == token
+        ]
+        attempted_at_index = STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index(
+            "attempted_at"
+        )
+        attempt_id_index = STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS.index("attempt_id")
+        return sorted(
+            rows,
+            key=lambda row: (
+                str(row[attempted_at_index] or ""),
+                str(row[attempt_id_index] or ""),
+            ),
+            reverse=True,
+        )
+
+    def _update_delivery_attempt_row(
+        self,
+        attempt_id: object,
+        replacements: dict[str, object],
+    ) -> int:
+        updated_rows: list[tuple[object, ...]] = []
+        rowcount = 0
+        for row in self.staff_invite_delivery_attempt_rows:
+            if self._row_staff_invite_attempt_id(row) != attempt_id:
+                updated_rows.append(row)
+                continue
+            for column, value in replacements.items():
+                row = self._replace_delivery_attempt_column(row, column, value)
+            updated_rows.append(row)
+            rowcount += 1
+        self.staff_invite_delivery_attempt_rows = updated_rows
+        return rowcount
+
+    def _latest_delivery_event_for_attempt(
+        self,
+        attempt_id: object,
+    ) -> tuple[object, ...] | None:
+        rows = [
+            row
+            for row in self.staff_invite_delivery_event_rows
+            if row[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("attempt_id")]
+            == attempt_id
+        ]
+        received_at_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("received_at")
+        event_id_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_id")
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                str(row[received_at_index] or ""),
+                str(row[event_id_index] or ""),
+            ),
+            reverse=True,
+        )
+        return rows[0] if rows else None
+
+    def _delivery_outbox_rows(self) -> list[tuple[object, ...]]:
+        rows: list[tuple[object, ...]] = []
+        for attempt in self.staff_invite_delivery_attempt_rows:
+            invite = self._staff_invite_by_token(
+                self._row_staff_invite_attempt_token(attempt)
+            )
+            if invite is None:
+                continue
+            latest_event = self._latest_delivery_event_for_attempt(
+                self._row_staff_invite_attempt_id(attempt)
+            )
+            values = {
+                **dict(zip(STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS, attempt)),
+                "email": invite[STAFF_INVITE_BASE_COLUMNS.index("email")],
+                "role": invite[STAFF_INVITE_BASE_COLUMNS.index("role")],
+                "organization_id": invite[
+                    STAFF_INVITE_BASE_COLUMNS.index("organization_id")
+                ],
+                "expires_at": invite[STAFF_INVITE_BASE_COLUMNS.index("expires_at")],
+                "accepted_at": invite[STAFF_INVITE_BASE_COLUMNS.index("accepted_at")],
+                "revoked_at": invite[STAFF_INVITE_BASE_COLUMNS.index("revoked_at")],
+                "delivered_at": invite[STAFF_INVITE_BASE_COLUMNS.index("delivered_at")],
+                "last_delivery_event_type": (
+                    latest_event[
+                        STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_type")
+                    ]
+                    if latest_event
+                    else None
+                ),
+            }
+            rows.append(tuple(values[column] for column in STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS))
+        attempted_at_index = STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS.index("attempted_at")
+        attempt_id_index = STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS.index("attempt_id")
+        next_worker_run_at_index = STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS.index(
+            "next_worker_run_at"
+        )
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                str(row[attempted_at_index] or ""),
+                str(row[attempt_id_index] or ""),
+            ),
+            reverse=True,
+        )
+        return sorted(
+            rows,
+            key=lambda row: (
+                1 if row[next_worker_run_at_index] is None else 0,
+                str(row[next_worker_run_at_index] or ""),
+            ),
+        )
+
+    def _insert_delivery_event(self, params: dict[str, object]) -> None:
+        event_id = params["event_id"]
+        if self._delivery_event_by_id(event_id) is not None:
+            raise ValueError(f"duplicate staff invite delivery event: {event_id}")
+        if (
+            self._delivery_event_by_provider(
+                params["provider"],
+                params["provider_event_id"],
+            )
+            is not None
+        ):
+            raise ValueError(
+                "duplicate staff invite delivery provider event: "
+                f"{params['provider']}:{params['provider_event_id']}"
+            )
+        values = {
+            "event_id": event_id,
+            "provider": params["provider"],
+            "provider_event_id": params["provider_event_id"],
+            "attempt_id": params["attempt_id"],
+            "invite_token": params["token"],
+            "event_type": params["event_type"],
+            "mapped_attempt_status": params["mapped_attempt_status"],
+            "received_at": params["received_at"],
+            "occurred_at": params["occurred_at"],
+            "recipient": params["recipient"],
+            "error": params["error"],
+            "metadata_json": params["metadata_json"],
+        }
+        self.staff_invite_delivery_event_rows.append(
+            tuple(values[column] for column in STAFF_INVITE_DELIVERY_EVENT_COLUMNS)
+        )
+
+    def _delivery_event_by_id(self, event_id: object) -> tuple[object, ...] | None:
+        for row in self.staff_invite_delivery_event_rows:
+            if self._row_staff_invite_event_id(row) == event_id:
+                return row
+        return None
+
+    def _delivery_event_by_provider(
+        self,
+        provider: object,
+        provider_event_id: object,
+    ) -> tuple[object, ...] | None:
+        provider_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("provider")
+        provider_event_id_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index(
+            "provider_event_id"
+        )
+        for row in self.staff_invite_delivery_event_rows:
+            if (
+                row[provider_index] == provider
+                and row[provider_event_id_index] == provider_event_id
+            ):
+                return row
+        return None
+
+    def _list_delivery_event_rows(self, token: object) -> list[tuple[object, ...]]:
+        rows = [
+            row
+            for row in self.staff_invite_delivery_event_rows
+            if self._row_staff_invite_event_token(row) == token
+        ]
+        received_at_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("received_at")
+        event_id_index = STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_id")
+        return sorted(
+            rows,
+            key=lambda row: (
+                str(row[received_at_index] or ""),
+                str(row[event_id_index] or ""),
+            ),
+            reverse=True,
+        )
+
     def execute(
         self,
         sql: str,
@@ -412,6 +874,18 @@ class FakePostgresConnection:
             rowcount = 1
         elif "INSERT INTO mfi_organizations" in sql:
             self._insert_organization(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO staff_invites" in sql:
+            self._insert_staff_invite(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO staff_invite_delivery_attempts" in sql:
+            self._insert_delivery_attempt(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO staff_invite_delivery_events" in sql:
+            self._insert_delivery_event(params)
             rows = []
             rowcount = 1
         elif "DELETE FROM sessions" in sql and "WHERE token" in sql:
@@ -455,6 +929,100 @@ class FakePostgresConnection:
             self._update_user_organization(params)
             rows = []
             rowcount = 1
+        elif "UPDATE staff_invites" in sql and "accepted_at = %(accepted_at)s" in sql:
+            rowcount = self._update_staff_invite_row(
+                params["token"],
+                {
+                    "accepted_at": params["accepted_at"],
+                    "accepted_by": params["accepted_by"],
+                },
+                require_accepted_null=True,
+                require_revoked_null=True,
+            )
+            rows = []
+        elif "UPDATE staff_invites" in sql and "revoked_at = %(revoked_at)s" in sql:
+            rowcount = self._update_staff_invite_row(
+                params["token"],
+                {
+                    "revoked_at": params["revoked_at"],
+                    "revoked_by": params["revoked_by"],
+                },
+                require_accepted_null=True,
+                require_revoked_null=True,
+            )
+            rows = []
+        elif "UPDATE staff_invites" in sql and "delivered_at = %(delivered_at)s" in sql:
+            rowcount = self._update_staff_invite_row(
+                params["token"],
+                {
+                    "delivered_at": params["delivered_at"],
+                    "delivered_by": params["delivered_by"],
+                    "delivery_channel": params["channel"],
+                    "delivery_recipient": params["recipient"],
+                    "delivery_url_base": params["url_base"],
+                    "delivery_note": params["note"],
+                },
+                require_delivered_null=True,
+            )
+            rows = []
+        elif (
+            "UPDATE staff_invite_delivery_attempts" in sql
+            and "worker_attempt_count = %(worker_attempt_count)s" in sql
+        ):
+            rowcount = self._update_delivery_attempt_row(
+                params["attempt_id"],
+                {
+                    "status": params["status"],
+                    "error": params["error"],
+                    "worker_status": params["worker_status"],
+                    "worker_attempt_count": params["worker_attempt_count"],
+                    "next_worker_run_at": params["next_worker_run_at"],
+                    "dead_letter_at": params["dead_letter_at"],
+                    "last_worker_error": params["last_worker_error"],
+                },
+            )
+            rows = []
+        elif "UPDATE staff_invite_delivery_attempts" in sql:
+            rowcount = self._update_delivery_attempt_row(
+                params["attempt_id"],
+                {
+                    "status": params["status"],
+                    "error": params["error"],
+                    "worker_status": params["worker_status"],
+                    "next_worker_run_at": params["next_worker_run_at"],
+                    "dead_letter_at": params["dead_letter_at"],
+                    "last_worker_error": params["last_worker_error"],
+                },
+            )
+            rows = []
+        elif "FROM staff_invite_delivery_attempts AS attempts" in sql:
+            rows = self._delivery_outbox_rows()
+        elif "FROM staff_invite_delivery_attempts" in sql and "WHERE attempt_id = %(attempt_id)s" in sql:
+            attempt = self._delivery_attempt_by_id(params["attempt_id"])
+            rows = [attempt] if attempt else []
+        elif "FROM staff_invite_delivery_attempts" in sql and "WHERE invite_token = %(token)s" in sql:
+            rows = self._list_delivery_attempt_rows(params["token"])
+        elif "FROM staff_invite_delivery_events" in sql and "provider = %(provider)s" in sql:
+            event = self._delivery_event_by_provider(
+                params["provider"],
+                params["provider_event_id"],
+            )
+            rows = [
+                (event[STAFF_INVITE_DELIVERY_EVENT_COLUMNS.index("event_id")],)
+            ] if event else []
+        elif "FROM staff_invite_delivery_events" in sql and "WHERE event_id = %(event_id)s" in sql:
+            event = self._delivery_event_by_id(params["event_id"])
+            rows = [event] if event else []
+        elif "FROM staff_invite_delivery_events" in sql and "WHERE invite_token = %(token)s" in sql:
+            rows = self._list_delivery_event_rows(params["token"])
+        elif "FROM staff_invites" in sql and "WHERE token = %(token)s" in sql:
+            invite = self._staff_invite_by_token(params["token"])
+            rows = [self._staff_invite_select_row(invite)] if invite else []
+        elif "FROM staff_invites" in sql:
+            rows = [
+                self._staff_invite_select_row(row)
+                for row in self._ordered_staff_invite_rows()
+            ]
         elif "FROM sessions" in sql and "WHERE sessions.token" in sql:
             rows = self._session_user_rows_for_token(params["token"])
         elif "FROM sessions" in sql and "ORDER BY sessions.created_at DESC" in sql:
@@ -600,6 +1168,24 @@ def _postgres_session_row(
     return (token, email, created_at)
 
 
+def _postgres_staff_invite_row(invite: dict[str, object]) -> tuple[object, ...]:
+    return tuple(invite[column] for column in STAFF_INVITE_COLUMNS)
+
+
+def _postgres_staff_invite_delivery_attempt_row(
+    attempt: dict[str, object],
+) -> tuple[object, ...]:
+    return tuple(attempt[column] for column in STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS)
+
+
+def _postgres_staff_invite_delivery_event_row(
+    event: dict[str, object],
+) -> tuple[object, ...]:
+    values = dict(event)
+    values["metadata_json"] = values.pop("metadata")
+    return tuple(values[column] for column in STAFF_INVITE_DELIVERY_EVENT_COLUMNS)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -627,20 +1213,26 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(summary["status"], "partial_method_groups")
         self.assertEqual(
             summary["stage"],
-            "model_registry_audit_organizations_identity_groups_v1",
+            "model_registry_audit_organizations_identity_invites_groups_v1",
         )
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 22)
-        self.assertEqual(summary["pending_method_count"], 30)
-        self.assertEqual(summary["completed_method_group_count"], 4)
+        self.assertEqual(summary["implemented_method_count"], 37)
+        self.assertEqual(summary["pending_method_count"], 15)
+        self.assertEqual(summary["completed_method_group_count"], 5)
         self.assertEqual(
             summary["completed_method_groups"],
-            ["identity_access", "organizations", "model_registry", "audit"],
+            [
+                "identity_access",
+                "organizations",
+                "staff_invites_delivery",
+                "model_registry",
+                "audit",
+            ],
         )
-        self.assertEqual(summary["read_only_method_count"], 10)
-        self.assertEqual(summary["write_method_count"], 12)
+        self.assertEqual(summary["read_only_method_count"], 17)
+        self.assertEqual(summary["write_method_count"], 20)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -666,6 +1258,21 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "list_active_sessions",
                 "revoke_session",
                 "revoke_session_by_id",
+                "create_staff_invite",
+                "get_staff_invite",
+                "list_staff_invites",
+                "mark_staff_invite_accepted",
+                "mark_staff_invite_revoked",
+                "mark_staff_invite_delivered",
+                "record_staff_invite_delivery_attempt",
+                "record_staff_invite_delivery_event",
+                "get_staff_invite_delivery_attempt",
+                "get_staff_invite_delivery_event",
+                "list_staff_invite_delivery_attempts",
+                "list_staff_invite_delivery_events",
+                "list_staff_invite_delivery_outbox_attempts",
+                "update_staff_invite_delivery_attempt_status",
+                "update_staff_invite_delivery_worker_state",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -687,8 +1294,14 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(groups["identity_access"]["implemented_method_count"], 11)
         self.assertEqual(groups["identity_access"]["pending_method_count"], 0)
         self.assertFalse(groups["identity_access"]["pending_methods"])
+        self.assertEqual(
+            groups["staff_invites_delivery"]["implemented_method_count"],
+            15,
+        )
+        self.assertEqual(groups["staff_invites_delivery"]["pending_method_count"], 0)
+        self.assertFalse(groups["staff_invites_delivery"]["pending_methods"])
         self.assertIn(
-            "model registry, audit, organization, and identity/session",
+            "model registry, audit, organization, identity/session, and staff invite delivery",
             summary["limitation"],
         )
 
@@ -1214,6 +1827,353 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 any("ORDER BY sessions.created_at DESC" in sql for sql, _params in query_log)
             )
 
+    def test_staff_invites_delivery_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection([], query_log)
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            for repository in (sqlite_repository, adapter):
+                repository.create_organization(
+                    organization_id="invite-mfi",
+                    name="Invite MFI",
+                    region="Pavlodar",
+                )
+                repository.create_user(
+                    "invite-admin@example.com",
+                    "admin-hash",
+                    "admin",
+                    None,
+                )
+
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(hours=48)
+            ).isoformat()
+            invite_payload = {
+                "token": "invite-delivery-token",
+                "email": "analyst-invite@example.com",
+                "role": "mfi_analyst",
+                "organization_id": "invite-mfi",
+                "created_by": "invite-admin@example.com",
+                "expires_at": expires_at,
+            }
+            sqlite_created = sqlite_repository.create_staff_invite(**invite_payload)
+            postgres_created = adapter.create_staff_invite(**invite_payload)
+            for key in (
+                "token",
+                "email",
+                "role",
+                "organization_id",
+                "created_by",
+                "expires_at",
+                "delivery_attempt_count",
+                "delivery_event_count",
+            ):
+                self.assertEqual(postgres_created[key], sqlite_created[key])
+
+            queued_payload = {
+                "attempt_id": "invite-attempt-1",
+                "token": "invite-delivery-token",
+                "attempted_by": "invite-admin@example.com",
+                "provider": "local_outbox",
+                "status": "queued",
+                "channel": "email",
+                "recipient": "analyst-invite@example.com",
+                "url_base": "https://example.test/invites",
+                "note": "first invite delivery",
+                "error": None,
+            }
+            sqlite_attempt = sqlite_repository.record_staff_invite_delivery_attempt(
+                **queued_payload
+            )
+            postgres_attempt = adapter.record_staff_invite_delivery_attempt(
+                **queued_payload
+            )
+            for key in (
+                "attempt_id",
+                "invite_token",
+                "attempted_by",
+                "provider",
+                "status",
+                "channel",
+                "recipient",
+                "delivery_url_base",
+                "note",
+                "error",
+                "worker_status",
+                "worker_attempt_count",
+            ):
+                self.assertEqual(postgres_attempt[key], sqlite_attempt[key])
+            self.assertEqual(postgres_attempt["worker_status"], "queued")
+            self.assertEqual(postgres_attempt["worker_attempt_count"], 0)
+
+            self.assertEqual(
+                adapter.list_staff_invite_delivery_outbox_attempts()[0]["attempt_id"],
+                sqlite_repository.list_staff_invite_delivery_outbox_attempts()[0][
+                    "attempt_id"
+                ],
+            )
+
+            next_worker_run_at = (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).isoformat()
+            sqlite_worker = sqlite_repository.update_staff_invite_delivery_worker_state(
+                "invite-attempt-1",
+                status="queued",
+                error="temporary SMTP timeout",
+                worker_status="retry_scheduled",
+                worker_attempt_count=1,
+                next_worker_run_at=next_worker_run_at,
+                dead_letter_at=None,
+                last_worker_error="temporary SMTP timeout",
+            )
+            postgres_worker = adapter.update_staff_invite_delivery_worker_state(
+                "invite-attempt-1",
+                status="queued",
+                error="temporary SMTP timeout",
+                worker_status="retry_scheduled",
+                worker_attempt_count=1,
+                next_worker_run_at=next_worker_run_at,
+                dead_letter_at=None,
+                last_worker_error="temporary SMTP timeout",
+            )
+            for key in (
+                "status",
+                "error",
+                "worker_status",
+                "worker_attempt_count",
+                "next_worker_run_at",
+                "last_worker_error",
+            ):
+                self.assertEqual(postgres_worker[key], sqlite_worker[key])
+
+            sqlite_status = sqlite_repository.update_staff_invite_delivery_attempt_status(
+                "invite-attempt-1",
+                status="sent",
+                error=None,
+            )
+            postgres_status = adapter.update_staff_invite_delivery_attempt_status(
+                "invite-attempt-1",
+                status="sent",
+                error=None,
+            )
+            self.assertEqual(postgres_status["status"], sqlite_status["status"])
+            self.assertEqual(
+                postgres_status["worker_status"],
+                sqlite_status["worker_status"],
+            )
+            self.assertEqual(postgres_status["worker_status"], "completed")
+
+            sqlite_delivered = sqlite_repository.mark_staff_invite_delivered(
+                "invite-delivery-token",
+                delivered_by="invite-admin@example.com",
+                channel="email",
+                recipient="analyst-invite@example.com",
+                url_base="https://example.test/invites",
+                note="delivered by local outbox",
+            )
+            postgres_delivered = adapter.mark_staff_invite_delivered(
+                "invite-delivery-token",
+                delivered_by="invite-admin@example.com",
+                channel="email",
+                recipient="analyst-invite@example.com",
+                url_base="https://example.test/invites",
+                note="delivered by local outbox",
+            )
+            for key in (
+                "token",
+                "delivery_channel",
+                "delivery_recipient",
+                "delivery_url_base",
+                "delivery_note",
+                "was_already_delivered",
+            ):
+                self.assertEqual(postgres_delivered[key], sqlite_delivered[key])
+            self.assertFalse(postgres_delivered["was_already_delivered"])
+            self.assertTrue(
+                adapter.mark_staff_invite_delivered(
+                    "invite-delivery-token",
+                    delivered_by="invite-admin@example.com",
+                    channel="email",
+                    recipient="analyst-invite@example.com",
+                    url_base="https://example.test/invites",
+                    note="delivered by local outbox",
+                )["was_already_delivered"]
+            )
+
+            event_payload = {
+                "event_id": "invite-event-1",
+                "provider": "local_outbox",
+                "provider_event_id": "provider-event-1",
+                "attempt_id": "invite-attempt-1",
+                "token": "invite-delivery-token",
+                "event_type": "delivered",
+                "mapped_attempt_status": "delivered",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "recipient": "analyst-invite@example.com",
+                "error": None,
+                "metadata": {"latency_ms": 12, "message_id": "message-1"},
+            }
+            sqlite_event = sqlite_repository.record_staff_invite_delivery_event(
+                **event_payload
+            )
+            postgres_event = adapter.record_staff_invite_delivery_event(
+                **event_payload
+            )
+            for key in (
+                "event_id",
+                "provider",
+                "provider_event_id",
+                "attempt_id",
+                "invite_token",
+                "event_type",
+                "mapped_attempt_status",
+                "recipient",
+                "error",
+                "metadata",
+                "was_duplicate",
+            ):
+                self.assertEqual(postgres_event[key], sqlite_event[key])
+            self.assertFalse(postgres_event["was_duplicate"])
+
+            duplicate_event_payload = {
+                **event_payload,
+                "event_id": "invite-event-duplicate",
+            }
+            sqlite_duplicate = sqlite_repository.record_staff_invite_delivery_event(
+                **duplicate_event_payload
+            )
+            postgres_duplicate = adapter.record_staff_invite_delivery_event(
+                **duplicate_event_payload
+            )
+            self.assertEqual(postgres_duplicate["event_id"], sqlite_duplicate["event_id"])
+            self.assertEqual(postgres_duplicate["event_id"], "invite-event-1")
+            self.assertTrue(postgres_duplicate["was_duplicate"])
+
+            accept_payload = {
+                **invite_payload,
+                "token": "invite-accept-token",
+                "email": "accept-invite@example.com",
+            }
+            revoke_payload = {
+                **invite_payload,
+                "token": "invite-revoke-token",
+                "email": "revoke-invite@example.com",
+            }
+            sqlite_repository.create_staff_invite(**accept_payload)
+            adapter.create_staff_invite(**accept_payload)
+            sqlite_repository.create_staff_invite(**revoke_payload)
+            adapter.create_staff_invite(**revoke_payload)
+            self.assertEqual(
+                adapter.mark_staff_invite_accepted(
+                    "invite-accept-token",
+                    "invite-admin@example.com",
+                ),
+                sqlite_repository.mark_staff_invite_accepted(
+                    "invite-accept-token",
+                    "invite-admin@example.com",
+                ),
+            )
+            self.assertFalse(
+                adapter.mark_staff_invite_accepted(
+                    "invite-accept-token",
+                    "invite-admin@example.com",
+                )
+            )
+            self.assertEqual(
+                adapter.mark_staff_invite_revoked(
+                    "invite-revoke-token",
+                    "invite-admin@example.com",
+                ),
+                sqlite_repository.mark_staff_invite_revoked(
+                    "invite-revoke-token",
+                    "invite-admin@example.com",
+                ),
+            )
+            self.assertFalse(
+                adapter.mark_staff_invite_revoked(
+                    "invite-revoke-token",
+                    "invite-admin@example.com",
+                )
+            )
+
+            self.assertEqual(
+                adapter.get_staff_invite_delivery_attempt("invite-attempt-1")[
+                    "status"
+                ],
+                sqlite_repository.get_staff_invite_delivery_attempt("invite-attempt-1")[
+                    "status"
+                ],
+            )
+            self.assertEqual(
+                adapter.get_staff_invite_delivery_event("invite-event-1")[
+                    "metadata"
+                ],
+                sqlite_repository.get_staff_invite_delivery_event("invite-event-1")[
+                    "metadata"
+                ],
+            )
+            self.assertIsNone(adapter.get_staff_invite("missing-invite"))
+            self.assertFalse(
+                adapter.mark_staff_invite_accepted(
+                    "missing-invite",
+                    "invite-admin@example.com",
+                )
+            )
+            self.assertIsNone(
+                adapter.update_staff_invite_delivery_attempt_status(
+                    "missing-attempt",
+                    status="sent",
+                    error=None,
+                )
+            )
+            self.assertIsNone(adapter.get_staff_invite_delivery_event("missing-event"))
+
+            self.assertEqual(
+                staff_invites_delivery_method_group_parity_snapshot(
+                    adapter,
+                    "invite-delivery-token",
+                ),
+                staff_invites_delivery_method_group_parity_snapshot(
+                    sqlite_repository,
+                    "invite-delivery-token",
+                ),
+            )
+            self.assertGreaterEqual(fake_connection.commits, 10)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(
+                any("INSERT INTO staff_invites" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any(
+                    "INSERT INTO staff_invite_delivery_attempts" in sql
+                    for sql, _params in query_log
+                )
+            )
+            self.assertTrue(
+                any(
+                    "INSERT INTO staff_invite_delivery_events" in sql
+                    for sql, _params in query_log
+                )
+            )
+            self.assertTrue(
+                any("FROM staff_invites" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any(
+                    "FROM staff_invite_delivery_attempts AS attempts" in sql
+                    for sql, _params in query_log
+                )
+            )
+            self.assertTrue(
+                any(
+                    "provider = %(provider)s" in sql
+                    and "provider_event_id" in sql
+                    for sql, _params in query_log
+                )
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -1276,6 +2236,91 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             adapter.revoke_session("blocked-token")
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.revoke_session_by_id("blocked-session-id")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_staff_invite(
+                token="blocked-invite-token",
+                email="blocked-invite@example.com",
+                role="mfi_analyst",
+                organization_id="blocked-mfi",
+                created_by="blocked-admin@example.com",
+                expires_at=datetime.now(timezone.utc).isoformat(),
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_staff_invite("blocked-invite-token")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_staff_invites()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.mark_staff_invite_accepted(
+                "blocked-invite-token",
+                "blocked-admin@example.com",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.mark_staff_invite_revoked(
+                "blocked-invite-token",
+                "blocked-admin@example.com",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.mark_staff_invite_delivered(
+                "blocked-invite-token",
+                delivered_by="blocked-admin@example.com",
+                channel="manual_copy",
+                recipient="blocked-invite@example.com",
+                url_base="https://example.test/invites",
+                note=None,
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.record_staff_invite_delivery_attempt(
+                attempt_id="blocked-attempt",
+                token="blocked-invite-token",
+                attempted_by="blocked-admin@example.com",
+                provider="local_outbox",
+                status="queued",
+                channel="email",
+                recipient="blocked-invite@example.com",
+                url_base="https://example.test/invites",
+                note=None,
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_staff_invite_delivery_attempt("blocked-attempt")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_staff_invite_delivery_attempts("blocked-invite-token")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.update_staff_invite_delivery_attempt_status(
+                "blocked-attempt",
+                status="sent",
+                error=None,
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.update_staff_invite_delivery_worker_state(
+                "blocked-attempt",
+                status="queued",
+                error=None,
+                worker_status="retry_scheduled",
+                worker_attempt_count=1,
+                next_worker_run_at=None,
+                dead_letter_at=None,
+                last_worker_error=None,
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_staff_invite_delivery_outbox_attempts()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.record_staff_invite_delivery_event(
+                event_id="blocked-event",
+                provider="local_outbox",
+                provider_event_id="blocked-provider-event",
+                attempt_id="blocked-attempt",
+                token="blocked-invite-token",
+                event_type="delivered",
+                mapped_attempt_status="delivered",
+                occurred_at=None,
+                recipient="blocked-invite@example.com",
+                error=None,
+                metadata={},
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_staff_invite_delivery_event("blocked-event")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_staff_invite_delivery_events("blocked-invite-token")
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()

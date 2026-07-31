@@ -18,10 +18,10 @@ import os
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v6"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v7"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
 POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_invites_groups_v1"
 DEFAULT_SESSION_TTL_HOURS = 8.0
 STAFF_ROLES = {"admin", "mfi_analyst"}
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
@@ -88,17 +88,54 @@ POSTGRESQL_IDENTITY_METHODS = (
     "revoke_session",
     "revoke_session_by_id",
 )
+POSTGRESQL_STAFF_INVITE_READ_METHODS = (
+    "get_staff_invite",
+    "list_staff_invites",
+    "get_staff_invite_delivery_attempt",
+    "get_staff_invite_delivery_event",
+    "list_staff_invite_delivery_attempts",
+    "list_staff_invite_delivery_events",
+    "list_staff_invite_delivery_outbox_attempts",
+)
+POSTGRESQL_STAFF_INVITE_WRITE_METHODS = (
+    "create_staff_invite",
+    "mark_staff_invite_accepted",
+    "mark_staff_invite_revoked",
+    "mark_staff_invite_delivered",
+    "record_staff_invite_delivery_attempt",
+    "record_staff_invite_delivery_event",
+    "update_staff_invite_delivery_attempt_status",
+    "update_staff_invite_delivery_worker_state",
+)
+POSTGRESQL_STAFF_INVITE_METHODS = (
+    "create_staff_invite",
+    "get_staff_invite",
+    "list_staff_invites",
+    "mark_staff_invite_accepted",
+    "mark_staff_invite_revoked",
+    "mark_staff_invite_delivered",
+    "record_staff_invite_delivery_attempt",
+    "record_staff_invite_delivery_event",
+    "get_staff_invite_delivery_attempt",
+    "get_staff_invite_delivery_event",
+    "list_staff_invite_delivery_attempts",
+    "list_staff_invite_delivery_events",
+    "list_staff_invite_delivery_outbox_attempts",
+    "update_staff_invite_delivery_attempt_status",
+    "update_staff_invite_delivery_worker_state",
+)
 POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_MODEL_REGISTRY_METHODS,
     *POSTGRESQL_AUDIT_METHODS,
     *POSTGRESQL_ORGANIZATION_METHODS,
     *POSTGRESQL_IDENTITY_METHODS,
+    *POSTGRESQL_STAFF_INVITE_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v6 implements the model registry, audit, "
-    "organization, and identity/session method groups through an injected "
+    "PostgreSQL Repository Adapter v7 implements the model registry, audit, "
+    "organization, identity/session, and staff invite delivery method groups through an injected "
     "DB-API compatible connection factory. Runtime backend selection remains "
-    "disabled until tenant-scoped application, invite, simulation, and analytics flows have "
+    "disabled until tenant-scoped application, simulation, and analytics flows have "
     "repository parity coverage."
 )
 USER_COLUMNS = (
@@ -294,6 +331,394 @@ ASSIGN_USER_ORGANIZATION_SQL = """
 UPDATE users
 SET organization_id = %(organization_id)s
 WHERE email = %(email)s
+"""
+STAFF_INVITE_BASE_COLUMNS = (
+    "token",
+    "email",
+    "role",
+    "organization_id",
+    "created_by",
+    "created_at",
+    "expires_at",
+    "accepted_at",
+    "accepted_by",
+    "revoked_at",
+    "revoked_by",
+    "delivered_at",
+    "delivered_by",
+    "delivery_channel",
+    "delivery_recipient",
+    "delivery_url_base",
+    "delivery_note",
+)
+STAFF_INVITE_COLUMNS = (
+    *STAFF_INVITE_BASE_COLUMNS,
+    "delivery_attempt_count",
+    "last_delivery_attempt_at",
+    "last_delivery_status",
+    "last_delivery_provider",
+    "delivery_event_count",
+    "last_delivery_event_at",
+    "last_delivery_event_type",
+)
+STAFF_INVITE_SELECT = """
+SELECT
+    token,
+    email,
+    role,
+    organization_id,
+    created_by,
+    created_at,
+    expires_at,
+    accepted_at,
+    accepted_by,
+    revoked_at,
+    revoked_by,
+    delivered_at,
+    delivered_by,
+    delivery_channel,
+    delivery_recipient,
+    delivery_url_base,
+    delivery_note,
+    COALESCE((
+        SELECT COUNT(*)
+        FROM staff_invite_delivery_attempts
+        WHERE invite_token = staff_invites.token
+    ), 0) AS delivery_attempt_count,
+    (
+        SELECT attempted_at
+        FROM staff_invite_delivery_attempts
+        WHERE invite_token = staff_invites.token
+        ORDER BY attempted_at DESC, attempt_id DESC
+        LIMIT 1
+    ) AS last_delivery_attempt_at,
+    (
+        SELECT status
+        FROM staff_invite_delivery_attempts
+        WHERE invite_token = staff_invites.token
+        ORDER BY attempted_at DESC, attempt_id DESC
+        LIMIT 1
+    ) AS last_delivery_status,
+    (
+        SELECT provider
+        FROM staff_invite_delivery_attempts
+        WHERE invite_token = staff_invites.token
+        ORDER BY attempted_at DESC, attempt_id DESC
+        LIMIT 1
+    ) AS last_delivery_provider,
+    COALESCE((
+        SELECT COUNT(*)
+        FROM staff_invite_delivery_events
+        WHERE invite_token = staff_invites.token
+    ), 0) AS delivery_event_count,
+    (
+        SELECT received_at
+        FROM staff_invite_delivery_events
+        WHERE invite_token = staff_invites.token
+        ORDER BY received_at DESC, event_id DESC
+        LIMIT 1
+    ) AS last_delivery_event_at,
+    (
+        SELECT event_type
+        FROM staff_invite_delivery_events
+        WHERE invite_token = staff_invites.token
+        ORDER BY received_at DESC, event_id DESC
+        LIMIT 1
+    ) AS last_delivery_event_type
+FROM staff_invites
+"""
+GET_STAFF_INVITE_SQL = STAFF_INVITE_SELECT + "WHERE token = %(token)s"
+LIST_STAFF_INVITES_SQL = (
+    STAFF_INVITE_SELECT
+    + """
+ORDER BY created_at DESC
+"""
+)
+CREATE_STAFF_INVITE_SQL = """
+INSERT INTO staff_invites (
+    token,
+    email,
+    role,
+    organization_id,
+    created_by,
+    created_at,
+    expires_at
+)
+VALUES (
+    %(token)s,
+    %(email)s,
+    %(role)s,
+    %(organization_id)s,
+    %(created_by)s,
+    %(created_at)s,
+    %(expires_at)s
+)
+"""
+MARK_STAFF_INVITE_ACCEPTED_SQL = """
+UPDATE staff_invites
+SET accepted_at = %(accepted_at)s, accepted_by = %(accepted_by)s
+WHERE token = %(token)s AND accepted_at IS NULL AND revoked_at IS NULL
+"""
+MARK_STAFF_INVITE_REVOKED_SQL = """
+UPDATE staff_invites
+SET revoked_at = %(revoked_at)s, revoked_by = %(revoked_by)s
+WHERE token = %(token)s AND accepted_at IS NULL AND revoked_at IS NULL
+"""
+MARK_STAFF_INVITE_DELIVERED_SQL = """
+UPDATE staff_invites
+SET
+    delivered_at = %(delivered_at)s,
+    delivered_by = %(delivered_by)s,
+    delivery_channel = %(channel)s,
+    delivery_recipient = %(recipient)s,
+    delivery_url_base = %(url_base)s,
+    delivery_note = %(note)s
+WHERE token = %(token)s AND delivered_at IS NULL
+"""
+STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS = (
+    "attempt_id",
+    "invite_token",
+    "attempted_at",
+    "attempted_by",
+    "provider",
+    "status",
+    "channel",
+    "recipient",
+    "delivery_url_base",
+    "note",
+    "error",
+    "worker_status",
+    "worker_attempt_count",
+    "next_worker_run_at",
+    "dead_letter_at",
+    "last_worker_error",
+)
+STAFF_INVITE_DELIVERY_ATTEMPT_SELECT = """
+SELECT
+    attempt_id,
+    invite_token,
+    attempted_at,
+    attempted_by,
+    provider,
+    status,
+    channel,
+    recipient,
+    delivery_url_base,
+    note,
+    error,
+    worker_status,
+    worker_attempt_count,
+    next_worker_run_at,
+    dead_letter_at,
+    last_worker_error
+FROM staff_invite_delivery_attempts
+"""
+GET_STAFF_INVITE_DELIVERY_ATTEMPT_SQL = (
+    STAFF_INVITE_DELIVERY_ATTEMPT_SELECT
+    + """
+WHERE attempt_id = %(attempt_id)s
+"""
+)
+LIST_STAFF_INVITE_DELIVERY_ATTEMPTS_SQL = (
+    STAFF_INVITE_DELIVERY_ATTEMPT_SELECT
+    + """
+WHERE invite_token = %(token)s
+ORDER BY attempted_at DESC, attempt_id DESC
+"""
+)
+RECORD_STAFF_INVITE_DELIVERY_ATTEMPT_SQL = """
+INSERT INTO staff_invite_delivery_attempts (
+    attempt_id,
+    invite_token,
+    attempted_at,
+    attempted_by,
+    provider,
+    status,
+    channel,
+    recipient,
+    delivery_url_base,
+    note,
+    error,
+    worker_status,
+    worker_attempt_count,
+    next_worker_run_at,
+    dead_letter_at,
+    last_worker_error
+)
+VALUES (
+    %(attempt_id)s,
+    %(token)s,
+    %(attempted_at)s,
+    %(attempted_by)s,
+    %(provider)s,
+    %(status)s,
+    %(channel)s,
+    %(recipient)s,
+    %(url_base)s,
+    %(note)s,
+    %(error)s,
+    %(worker_status)s,
+    %(worker_attempt_count)s,
+    %(next_worker_run_at)s,
+    %(dead_letter_at)s,
+    %(last_worker_error)s
+)
+"""
+UPDATE_STAFF_INVITE_DELIVERY_ATTEMPT_STATUS_SQL = """
+UPDATE staff_invite_delivery_attempts
+SET
+    status = %(status)s,
+    error = %(error)s,
+    worker_status = %(worker_status)s,
+    next_worker_run_at = %(next_worker_run_at)s,
+    dead_letter_at = %(dead_letter_at)s,
+    last_worker_error = %(last_worker_error)s
+WHERE attempt_id = %(attempt_id)s
+"""
+UPDATE_STAFF_INVITE_DELIVERY_WORKER_STATE_SQL = """
+UPDATE staff_invite_delivery_attempts
+SET
+    status = %(status)s,
+    error = %(error)s,
+    worker_status = %(worker_status)s,
+    worker_attempt_count = %(worker_attempt_count)s,
+    next_worker_run_at = %(next_worker_run_at)s,
+    dead_letter_at = %(dead_letter_at)s,
+    last_worker_error = %(last_worker_error)s
+WHERE attempt_id = %(attempt_id)s
+"""
+STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS = (
+    *STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS,
+    "email",
+    "role",
+    "organization_id",
+    "expires_at",
+    "accepted_at",
+    "revoked_at",
+    "delivered_at",
+    "last_delivery_event_type",
+)
+LIST_STAFF_INVITE_DELIVERY_OUTBOX_ATTEMPTS_SQL = """
+SELECT
+    attempts.attempt_id,
+    attempts.invite_token,
+    attempts.attempted_at,
+    attempts.attempted_by,
+    attempts.provider,
+    attempts.status,
+    attempts.channel,
+    attempts.recipient,
+    attempts.delivery_url_base,
+    attempts.note,
+    attempts.error,
+    attempts.worker_status,
+    attempts.worker_attempt_count,
+    attempts.next_worker_run_at,
+    attempts.dead_letter_at,
+    attempts.last_worker_error,
+    invites.email,
+    invites.role,
+    invites.organization_id,
+    invites.expires_at,
+    invites.accepted_at,
+    invites.revoked_at,
+    invites.delivered_at,
+    (
+        SELECT events.event_type
+        FROM staff_invite_delivery_events AS events
+        WHERE events.attempt_id = attempts.attempt_id
+        ORDER BY events.received_at DESC, events.event_id DESC
+        LIMIT 1
+    ) AS last_delivery_event_type
+FROM staff_invite_delivery_attempts AS attempts
+JOIN staff_invites AS invites
+    ON invites.token = attempts.invite_token
+ORDER BY
+    CASE
+        WHEN attempts.next_worker_run_at IS NULL THEN 1
+        ELSE 0
+    END,
+    attempts.next_worker_run_at ASC,
+    attempts.attempted_at DESC,
+    attempts.attempt_id DESC
+"""
+STAFF_INVITE_DELIVERY_EVENT_COLUMNS = (
+    "event_id",
+    "provider",
+    "provider_event_id",
+    "attempt_id",
+    "invite_token",
+    "event_type",
+    "mapped_attempt_status",
+    "received_at",
+    "occurred_at",
+    "recipient",
+    "error",
+    "metadata_json",
+)
+STAFF_INVITE_DELIVERY_EVENT_SELECT = """
+SELECT
+    event_id,
+    provider,
+    provider_event_id,
+    attempt_id,
+    invite_token,
+    event_type,
+    mapped_attempt_status,
+    received_at,
+    occurred_at,
+    recipient,
+    error,
+    metadata_json
+FROM staff_invite_delivery_events
+"""
+GET_STAFF_INVITE_DELIVERY_EVENT_SQL = (
+    STAFF_INVITE_DELIVERY_EVENT_SELECT
+    + """
+WHERE event_id = %(event_id)s
+"""
+)
+GET_STAFF_INVITE_DELIVERY_EVENT_ID_BY_PROVIDER_SQL = """
+SELECT event_id
+FROM staff_invite_delivery_events
+WHERE provider = %(provider)s AND provider_event_id = %(provider_event_id)s
+"""
+LIST_STAFF_INVITE_DELIVERY_EVENTS_SQL = (
+    STAFF_INVITE_DELIVERY_EVENT_SELECT
+    + """
+WHERE invite_token = %(token)s
+ORDER BY received_at DESC, event_id DESC
+"""
+)
+RECORD_STAFF_INVITE_DELIVERY_EVENT_SQL = """
+INSERT INTO staff_invite_delivery_events (
+    event_id,
+    provider,
+    provider_event_id,
+    attempt_id,
+    invite_token,
+    event_type,
+    mapped_attempt_status,
+    received_at,
+    occurred_at,
+    recipient,
+    error,
+    metadata_json
+)
+VALUES (
+    %(event_id)s,
+    %(provider)s,
+    %(provider_event_id)s,
+    %(attempt_id)s,
+    %(token)s,
+    %(event_type)s,
+    %(mapped_attempt_status)s,
+    %(received_at)s,
+    %(occurred_at)s,
+    %(recipient)s,
+    %(error)s,
+    %(metadata_json)s::jsonb
+)
 """
 MODEL_VERSION_COLUMNS = (
     "version",
@@ -582,12 +1007,14 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_AUDIT_READ_METHODS,
         *POSTGRESQL_ORGANIZATION_READ_METHODS,
         *POSTGRESQL_IDENTITY_READ_METHODS,
+        *POSTGRESQL_STAFF_INVITE_READ_METHODS,
     )
     write_methods = (
         *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
         *POSTGRESQL_AUDIT_WRITE_METHODS,
         *POSTGRESQL_ORGANIZATION_WRITE_METHODS,
         *POSTGRESQL_IDENTITY_WRITE_METHODS,
+        *POSTGRESQL_STAFF_INVITE_WRITE_METHODS,
     )
     completed_groups = [
         group.key
@@ -680,6 +1107,24 @@ def session_expiry_metadata(
     }
 
 
+def _initial_delivery_worker_state(status: str, attempted_at: str) -> dict[str, Any]:
+    if status == "queued":
+        return {
+            "worker_status": "queued",
+            "worker_attempt_count": 0,
+            "next_worker_run_at": attempted_at,
+            "dead_letter_at": None,
+            "last_worker_error": None,
+        }
+    return {
+        "worker_status": "completed",
+        "worker_attempt_count": 0,
+        "next_worker_run_at": None,
+        "dead_letter_at": None,
+        "last_worker_error": None,
+    }
+
+
 def _row_to_mapping(
     row: object,
     columns: tuple[str, ...] = MODEL_VERSION_COLUMNS,
@@ -731,6 +1176,39 @@ def postgres_session_user_from_row(row: object) -> dict[str, Any]:
 
 def postgres_active_session_from_row(row: object) -> dict[str, Any]:
     return _row_to_mapping(row, ACTIVE_SESSION_COLUMNS)
+
+
+def postgres_staff_invite_from_row(row: object) -> dict[str, Any]:
+    invite = _row_to_mapping(row, STAFF_INVITE_COLUMNS)
+    invite["delivery_attempt_count"] = int(
+        invite.get("delivery_attempt_count") or 0
+    )
+    invite["delivery_event_count"] = int(invite.get("delivery_event_count") or 0)
+    return invite
+
+
+def postgres_staff_invite_delivery_attempt_from_row(row: object) -> dict[str, Any]:
+    attempt = _row_to_mapping(row, STAFF_INVITE_DELIVERY_ATTEMPT_COLUMNS)
+    attempt["worker_attempt_count"] = int(
+        attempt.get("worker_attempt_count") or 0
+    )
+    return attempt
+
+
+def postgres_staff_invite_delivery_outbox_attempt_from_row(
+    row: object,
+) -> dict[str, Any]:
+    attempt = _row_to_mapping(row, STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS)
+    attempt["worker_attempt_count"] = int(
+        attempt.get("worker_attempt_count") or 0
+    )
+    return attempt
+
+
+def postgres_staff_invite_delivery_event_from_row(row: object) -> dict[str, Any]:
+    event = _row_to_mapping(row, STAFF_INVITE_DELIVERY_EVENT_COLUMNS)
+    event["metadata"] = _coerce_json(event.pop("metadata_json"), {}) or {}
+    return event
 
 
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
@@ -849,6 +1327,74 @@ def identity_access_method_group_parity_snapshot(
         "staff_session_count": len(staff_sessions),
         "staff_session_emails": [
             session["email"] for session in staff_sessions
+        ],
+        "method_group_complete": True,
+    }
+
+
+def _staff_invite_state(invite: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if invite is None:
+        return None
+    return {
+        "token": invite["token"],
+        "email": invite["email"],
+        "role": invite["role"],
+        "organization_id": invite["organization_id"],
+        "accepted": invite.get("accepted_at") is not None,
+        "revoked": invite.get("revoked_at") is not None,
+        "delivered": invite.get("delivered_at") is not None,
+        "delivery_channel": invite.get("delivery_channel"),
+        "delivery_attempt_count": int(invite.get("delivery_attempt_count") or 0),
+        "last_delivery_status": invite.get("last_delivery_status"),
+        "last_delivery_provider": invite.get("last_delivery_provider"),
+        "delivery_event_count": int(invite.get("delivery_event_count") or 0),
+        "last_delivery_event_type": invite.get("last_delivery_event_type"),
+    }
+
+
+def staff_invites_delivery_method_group_parity_snapshot(
+    repository: object,
+    token: str,
+) -> dict[str, object]:
+    invites = getattr(repository, "list_staff_invites")()
+    attempts = getattr(repository, "list_staff_invite_delivery_attempts")(token)
+    events = getattr(repository, "list_staff_invite_delivery_events")(token)
+    outbox_attempts = getattr(repository, "list_staff_invite_delivery_outbox_attempts")()
+    return {
+        "method_group": "staff_invites_delivery",
+        "implemented_methods": list(POSTGRESQL_STAFF_INVITE_METHODS),
+        "invite_count": len(invites),
+        "invite_tokens": sorted(invite["token"] for invite in invites),
+        "invite_states": [
+            _staff_invite_state(invite)
+            for invite in sorted(invites, key=lambda item: str(item["token"]))
+        ],
+        "lookup": _staff_invite_state(getattr(repository, "get_staff_invite")(token)),
+        "attempt_count": len(attempts),
+        "attempt_ids": [attempt["attempt_id"] for attempt in attempts],
+        "attempt_statuses": [attempt["status"] for attempt in attempts],
+        "attempt_worker_statuses": [
+            attempt["worker_status"] for attempt in attempts
+        ],
+        "attempt_worker_counts": [
+            int(attempt.get("worker_attempt_count") or 0)
+            for attempt in attempts
+        ],
+        "outbox_attempt_ids": [
+            attempt["attempt_id"] for attempt in outbox_attempts
+        ],
+        "outbox_worker_statuses": [
+            attempt["worker_status"] for attempt in outbox_attempts
+        ],
+        "event_count": len(events),
+        "event_ids": [event["event_id"] for event in events],
+        "event_types": [event["event_type"] for event in events],
+        "event_mapped_statuses": [
+            event["mapped_attempt_status"] for event in events
+        ],
+        "event_metadata_keys": [
+            sorted((event.get("metadata") or {}).keys())
+            for event in events
         ],
         "method_group_complete": True,
     }
@@ -1322,6 +1868,327 @@ class PostgresRepositoryAdapter:
                 )
             ]
         )
+
+    def create_staff_invite(
+        self,
+        *,
+        token: str,
+        email: str,
+        role: str,
+        organization_id: str,
+        created_by: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_STAFF_INVITE_SQL,
+                    {
+                        "token": token,
+                        "email": email,
+                        "role": role,
+                        "organization_id": organization_id,
+                        "created_by": created_by,
+                        "created_at": _now_iso(),
+                        "expires_at": expires_at,
+                    },
+                )
+            ]
+        )
+        return self.get_staff_invite(token) or {}
+
+    def get_staff_invite(self, token: str) -> dict[str, Any] | None:
+        row = self._fetchone(GET_STAFF_INVITE_SQL, {"token": token})
+        return postgres_staff_invite_from_row(row) if row else None
+
+    def list_staff_invites(self) -> list[dict[str, Any]]:
+        return [
+            postgres_staff_invite_from_row(row)
+            for row in self._fetchall(LIST_STAFF_INVITES_SQL)
+        ]
+
+    def mark_staff_invite_accepted(self, token: str, accepted_by: str) -> bool:
+        rowcounts = self._write_with_rowcounts(
+            [
+                (
+                    MARK_STAFF_INVITE_ACCEPTED_SQL,
+                    {
+                        "token": token,
+                        "accepted_at": _now_iso(),
+                        "accepted_by": accepted_by,
+                    },
+                )
+            ]
+        )
+        return bool(rowcounts and rowcounts[0] > 0)
+
+    def mark_staff_invite_revoked(self, token: str, revoked_by: str) -> bool:
+        rowcounts = self._write_with_rowcounts(
+            [
+                (
+                    MARK_STAFF_INVITE_REVOKED_SQL,
+                    {
+                        "token": token,
+                        "revoked_at": _now_iso(),
+                        "revoked_by": revoked_by,
+                    },
+                )
+            ]
+        )
+        return bool(rowcounts and rowcounts[0] > 0)
+
+    def mark_staff_invite_delivered(
+        self,
+        token: str,
+        *,
+        delivered_by: str | None,
+        channel: str,
+        recipient: str | None,
+        url_base: str,
+        note: str | None,
+    ) -> dict[str, Any] | None:
+        existing = self.get_staff_invite(token)
+        if existing is None:
+            return None
+        was_already_delivered = existing.get("delivered_at") is not None
+        if not was_already_delivered:
+            self._write(
+                [
+                    (
+                        MARK_STAFF_INVITE_DELIVERED_SQL,
+                        {
+                            "token": token,
+                            "delivered_at": _now_iso(),
+                            "delivered_by": delivered_by,
+                            "channel": channel,
+                            "recipient": recipient,
+                            "url_base": url_base,
+                            "note": note,
+                        },
+                    )
+                ]
+            )
+        delivered = self.get_staff_invite(token) or existing
+        delivered["was_already_delivered"] = was_already_delivered
+        return delivered
+
+    def record_staff_invite_delivery_attempt(
+        self,
+        *,
+        attempt_id: str,
+        token: str,
+        attempted_by: str,
+        provider: str,
+        status: str,
+        channel: str,
+        recipient: str | None,
+        url_base: str | None,
+        note: str | None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        attempted_at = _now_iso()
+        worker_state = _initial_delivery_worker_state(status, attempted_at)
+        self._write(
+            [
+                (
+                    RECORD_STAFF_INVITE_DELIVERY_ATTEMPT_SQL,
+                    {
+                        "attempt_id": attempt_id,
+                        "token": token,
+                        "attempted_at": attempted_at,
+                        "attempted_by": attempted_by,
+                        "provider": provider,
+                        "status": status,
+                        "channel": channel,
+                        "recipient": recipient,
+                        "url_base": url_base,
+                        "note": note,
+                        "error": error,
+                        "worker_status": worker_state["worker_status"],
+                        "worker_attempt_count": worker_state[
+                            "worker_attempt_count"
+                        ],
+                        "next_worker_run_at": worker_state["next_worker_run_at"],
+                        "dead_letter_at": worker_state["dead_letter_at"],
+                        "last_worker_error": worker_state["last_worker_error"],
+                    },
+                )
+            ]
+        )
+        return self.get_staff_invite_delivery_attempt(attempt_id) or {}
+
+    def get_staff_invite_delivery_attempt(
+        self,
+        attempt_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_STAFF_INVITE_DELIVERY_ATTEMPT_SQL,
+            {"attempt_id": attempt_id},
+        )
+        return postgres_staff_invite_delivery_attempt_from_row(row) if row else None
+
+    def list_staff_invite_delivery_attempts(
+        self,
+        token: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            postgres_staff_invite_delivery_attempt_from_row(row)
+            for row in self._fetchall(
+                LIST_STAFF_INVITE_DELIVERY_ATTEMPTS_SQL,
+                {"token": token},
+            )
+        ]
+
+    def update_staff_invite_delivery_attempt_status(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        error: str | None,
+        worker_status: str | None = None,
+        next_worker_run_at: str | None = None,
+        dead_letter_at: str | None = None,
+        last_worker_error: str | None = None,
+    ) -> dict[str, Any] | None:
+        worker_status_value = worker_status
+        if worker_status_value is None:
+            worker_status_value = "retry_scheduled" if status == "queued" else "completed"
+        rowcounts = self._write_with_rowcounts(
+            [
+                (
+                    UPDATE_STAFF_INVITE_DELIVERY_ATTEMPT_STATUS_SQL,
+                    {
+                        "attempt_id": attempt_id,
+                        "status": status,
+                        "error": error,
+                        "worker_status": worker_status_value,
+                        "next_worker_run_at": next_worker_run_at,
+                        "dead_letter_at": dead_letter_at,
+                        "last_worker_error": last_worker_error,
+                    },
+                )
+            ]
+        )
+        if not rowcounts or rowcounts[0] == 0:
+            return None
+        return self.get_staff_invite_delivery_attempt(attempt_id)
+
+    def update_staff_invite_delivery_worker_state(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        error: str | None,
+        worker_status: str,
+        worker_attempt_count: int,
+        next_worker_run_at: str | None,
+        dead_letter_at: str | None,
+        last_worker_error: str | None,
+    ) -> dict[str, Any] | None:
+        rowcounts = self._write_with_rowcounts(
+            [
+                (
+                    UPDATE_STAFF_INVITE_DELIVERY_WORKER_STATE_SQL,
+                    {
+                        "attempt_id": attempt_id,
+                        "status": status,
+                        "error": error,
+                        "worker_status": worker_status,
+                        "worker_attempt_count": worker_attempt_count,
+                        "next_worker_run_at": next_worker_run_at,
+                        "dead_letter_at": dead_letter_at,
+                        "last_worker_error": last_worker_error,
+                    },
+                )
+            ]
+        )
+        if not rowcounts or rowcounts[0] == 0:
+            return None
+        return self.get_staff_invite_delivery_attempt(attempt_id)
+
+    def list_staff_invite_delivery_outbox_attempts(self) -> list[dict[str, Any]]:
+        return [
+            postgres_staff_invite_delivery_outbox_attempt_from_row(row)
+            for row in self._fetchall(LIST_STAFF_INVITE_DELIVERY_OUTBOX_ATTEMPTS_SQL)
+        ]
+
+    def record_staff_invite_delivery_event(
+        self,
+        *,
+        event_id: str,
+        provider: str,
+        provider_event_id: str,
+        attempt_id: str,
+        token: str,
+        event_type: str,
+        mapped_attempt_status: str,
+        occurred_at: str | None,
+        recipient: str | None,
+        error: str | None,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        existing = self._fetchone(
+            GET_STAFF_INVITE_DELIVERY_EVENT_ID_BY_PROVIDER_SQL,
+            {
+                "provider": provider,
+                "provider_event_id": provider_event_id,
+            },
+        )
+        if existing is None:
+            self._write(
+                [
+                    (
+                        RECORD_STAFF_INVITE_DELIVERY_EVENT_SQL,
+                        {
+                            "event_id": event_id,
+                            "provider": provider,
+                            "provider_event_id": provider_event_id,
+                            "attempt_id": attempt_id,
+                            "token": token,
+                            "event_type": event_type,
+                            "mapped_attempt_status": mapped_attempt_status,
+                            "received_at": _now_iso(),
+                            "occurred_at": occurred_at,
+                            "recipient": recipient,
+                            "error": error,
+                            "metadata_json": _json_dumps(metadata),
+                        },
+                    )
+                ]
+            )
+            stored_event_id = event_id
+            was_duplicate = False
+        else:
+            stored_event_id = _row_to_mapping(existing, ("event_id",))["event_id"]
+            was_duplicate = True
+        event = self.get_staff_invite_delivery_event(str(stored_event_id)) or {}
+        event["was_duplicate"] = was_duplicate
+        return event
+
+    def get_staff_invite_delivery_event(
+        self,
+        event_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_STAFF_INVITE_DELIVERY_EVENT_SQL,
+            {"event_id": event_id},
+        )
+        return postgres_staff_invite_delivery_event_from_row(row) if row else None
+
+    def list_staff_invite_delivery_events(
+        self,
+        token: str,
+    ) -> list[dict[str, Any]]:
+        events = [
+            postgres_staff_invite_delivery_event_from_row(row)
+            for row in self._fetchall(
+                LIST_STAFF_INVITE_DELIVERY_EVENTS_SQL,
+                {"token": token},
+            )
+        ]
+        for event in events:
+            event["was_duplicate"] = False
+        return events
 
 
 @dataclass(frozen=True)
