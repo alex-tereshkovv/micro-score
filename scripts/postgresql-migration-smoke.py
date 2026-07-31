@@ -22,6 +22,7 @@ from microscore_api.database import (  # noqa: E402
 )
 from microscore_api.postgres_repository import (  # noqa: E402
     POSTGRESQL_AUDIT_METHODS,
+    POSTGRESQL_IDENTITY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -84,6 +85,7 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
         "expected_audit_methods": len(POSTGRESQL_AUDIT_METHODS),
         "expected_organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
+        "expected_identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
     }
 
 
@@ -174,13 +176,43 @@ def apply_migration_and_verify(
 
             INSERT INTO users (email, password_hash, role, organization_id, created_at)
             VALUES
+                ('ci-smoke-admin@example.com', 'hash', 'admin', NULL, NOW()),
                 ('ci-smoke-borrower@example.com', 'hash', 'borrower', NULL, NOW()),
-                ('ci-smoke-analyst@example.com', 'hash', 'mfi_analyst', 'ci-smoke-mfi', NOW())
-            ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role;
+                ('ci-smoke-analyst@example.com', 'hash', 'mfi_analyst', 'ci-smoke-mfi', NOW()),
+                ('ci-smoke-disabled@example.com', 'hash', 'mfi_analyst', 'ci-smoke-mfi', NOW())
+            ON CONFLICT (email) DO UPDATE
+            SET
+                role = EXCLUDED.role,
+                organization_id = EXCLUDED.organization_id;
 
             UPDATE users
             SET organization_id = 'ci-smoke-mfi'
             WHERE email = 'ci-smoke-analyst@example.com';
+
+            UPDATE users
+            SET
+                mfa_attested_at = NOW(),
+                mfa_attested_by = 'ci-smoke-admin@example.com',
+                mfa_method = 'totp'
+            WHERE email = 'ci-smoke-analyst@example.com';
+
+            INSERT INTO sessions (token, email, created_at)
+            VALUES
+                ('ci-smoke-active-session', 'ci-smoke-analyst@example.com', NOW()),
+                ('ci-smoke-revoked-session', 'ci-smoke-disabled@example.com', NOW())
+            ON CONFLICT (token) DO UPDATE
+            SET
+                email = EXCLUDED.email,
+                created_at = EXCLUDED.created_at;
+
+            UPDATE users
+            SET
+                disabled_at = NOW(),
+                disabled_by = 'ci-smoke-admin@example.com'
+            WHERE email = 'ci-smoke-disabled@example.com';
+
+            DELETE FROM sessions
+            WHERE token = 'ci-smoke-revoked-session';
 
             INSERT INTO loan_applications (
                 id,
@@ -414,6 +446,43 @@ def apply_migration_and_verify(
             WHERE email = 'ci-smoke-analyst@example.com';
         """,
     )
+    identity_mfa_method = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT mfa_method
+            FROM users
+            WHERE email = 'ci-smoke-analyst@example.com';
+        """,
+    )
+    identity_session_scope = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT users.role || ':' || COALESCE(users.organization_id, '')
+            FROM sessions
+            JOIN users ON users.email = sessions.email
+            WHERE sessions.token = 'ci-smoke-active-session';
+        """,
+    )
+    identity_disabled_by = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT disabled_by
+            FROM users
+            WHERE email = 'ci-smoke-disabled@example.com';
+        """,
+    )
+    identity_revoked_session_count = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT COUNT(*)::text
+            FROM sessions
+            WHERE token = 'ci-smoke-revoked-session';
+        """,
+    )
     latest_audit_action = query_rows(
         psql_bin=psql_bin,
         database_url=database_url,
@@ -479,6 +548,26 @@ def apply_migration_and_verify(
         label="organization user assignment",
     )
     assert_catalog_subset(
+        expected=["totp"],
+        actual=identity_mfa_method,
+        label="identity MFA method",
+    )
+    assert_catalog_subset(
+        expected=["mfi_analyst:ci-smoke-mfi"],
+        actual=identity_session_scope,
+        label="identity active session scope",
+    )
+    assert_catalog_subset(
+        expected=["ci-smoke-admin@example.com"],
+        actual=identity_disabled_by,
+        label="identity disable actor",
+    )
+    assert_catalog_subset(
+        expected=["0"],
+        actual=identity_revoked_session_count,
+        label="identity revoked session count",
+    )
+    assert_catalog_subset(
         expected=["postgresql_audit_adapter_smoke"],
         actual=latest_audit_action,
         label="latest audit action",
@@ -508,8 +597,13 @@ def apply_migration_and_verify(
         "model_registry_methods": len(POSTGRESQL_MODEL_REGISTRY_METHODS),
         "audit_methods": len(POSTGRESQL_AUDIT_METHODS),
         "organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
+        "identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
         "organization_directory": organization_directory[0],
         "organization_assignment": organization_assignment[0],
+        "identity_mfa_method": identity_mfa_method[0],
+        "identity_session_scope": identity_session_scope[0],
+        "identity_disabled_by": identity_disabled_by[0],
+        "identity_revoked_session_count": identity_revoked_session_count[0],
         "audit_latest_action": latest_audit_action[0],
         "audit_detail_method_group": latest_audit_detail[0],
     }

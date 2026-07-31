@@ -17,6 +17,7 @@ from microscore.paths import PROJECT_ROOT
 
 from .postgres_repository import (
     POSTGRESQL_AUDIT_METHODS,
+    POSTGRESQL_IDENTITY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -707,10 +708,10 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter has complete model registry, audit, and "
-                        "organization method groups, but tenant-scoped application, "
-                        "invite, simulation, analytics, and identity flows still "
-                        "need parity coverage."
+                        "The adapter has complete model registry, audit, "
+                        "organization, and identity/session method groups, but "
+                        "tenant-scoped application, invite, simulation, and "
+                        "analytics flows still need parity coverage."
                     ),
                 },
                 {
@@ -719,7 +720,7 @@ class MicroScoreRepository:
                     "detail": (
                         "The PostgreSQL adapter groups SQLite repository method "
                         "families and implements complete model registry, audit, "
-                        "and organization method groups."
+                        "organization, and identity/session method groups."
                     ),
                 },
                 {
@@ -755,6 +756,15 @@ class MicroScoreRepository:
                         "The PostgreSQL adapter covers organization directory "
                         "queries and user tenant assignment as the third complete "
                         "repository method group."
+                    ),
+                },
+                {
+                    "id": "postgresql_identity_access_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers users, MFA attestation, "
+                        "disable/reactivate, session TTL filtering, and session "
+                        "revocation as the fourth complete repository method group."
                     ),
                 },
             ],
@@ -941,6 +951,10 @@ class MicroScoreRepository:
         repository_adapter_organization_group_present = all(
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_ORGANIZATION_METHODS
+        )
+        repository_adapter_identity_access_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_IDENTITY_METHODS
         )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
@@ -1193,10 +1207,35 @@ class MicroScoreRepository:
                 ),
                 "action": (
                     "Use the completed organization adapter group as the tenant "
-                    "boundary foundation before implementing user, application, "
-                    "invite, simulation, and analytics parity."
+                    "boundary foundation before implementing application, invite, "
+                    "simulation, and analytics parity."
                     if repository_adapter_organization_group_present
                     else "Complete create/get/list organization and user assignment parity."
+                ),
+            },
+            {
+                "key": "postgresql_identity_access_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_identity_access_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_IDENTITY_METHODS)} identity/session "
+                    "method(s) have PostgreSQL query specs and SQLite-vs-adapter "
+                    "parity coverage."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve user registration, staff MFA "
+                    "attestation, disable/reactivate semantics, session TTL "
+                    "filtering, staff-only session views, and session revocation."
+                ),
+                "action": (
+                    "Use the completed identity access adapter group as the "
+                    "security foundation before implementing staff invite, "
+                    "application, simulation, and analytics parity."
+                    if repository_adapter_identity_access_group_present
+                    else "Complete users, MFA, and session lifecycle parity on the PostgreSQL adapter."
                 ),
             },
             {
@@ -1205,16 +1244,16 @@ class MicroScoreRepository:
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
                     "at startup; the adapter has complete model registry, audit, "
-                    "and organization method groups but does not yet cover the "
-                    "full repository contract."
+                    "organization, and identity/session method groups but does "
+                    "not yet cover the full repository contract."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
                     "Expand the PostgreSQL adapter from model registry, audit, "
-                    "and organization flows to users, tenant-scoped queues, "
-                    "applications, simulations, analytics, and invites."
+                    "organization, and identity/session flows to staff invites, "
+                    "tenant-scoped queues, applications, simulations, and analytics."
                 ),
             },
             {
@@ -1392,6 +1431,9 @@ class MicroScoreRepository:
             ),
             "repository_adapter_organization_group_present": (
                 repository_adapter_organization_group_present
+            ),
+            "repository_adapter_identity_access_group_present": (
+                repository_adapter_identity_access_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

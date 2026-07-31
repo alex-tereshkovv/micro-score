@@ -39,6 +39,7 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertEqual(payload["expected_model_registry_methods"], 5)
         self.assertEqual(payload["expected_audit_methods"], 2)
         self.assertEqual(payload["expected_organization_methods"], 4)
+        self.assertEqual(payload["expected_identity_methods"], 11)
 
     def test_postgresql_migration_smoke_script_uses_psql_without_secret_logging(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "postgresql-migration-smoke.py").read_text(
@@ -64,6 +65,13 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertIn("POSTGRESQL_ORGANIZATION_METHODS", script)
         self.assertIn("organization_directory", script)
         self.assertIn("organization_assignment", script)
+        self.assertIn("POSTGRESQL_IDENTITY_METHODS", script)
+        self.assertIn("identity_mfa_method", script)
+        self.assertIn("identity_session_scope", script)
+        self.assertIn("identity_disabled_by", script)
+        self.assertIn("identity_revoked_session_count", script)
+        self.assertIn("ci-smoke-active-session", script)
+        self.assertIn("ci-smoke-revoked-session", script)
         self.assertIn("UPDATE users", script)
         self.assertIn("::error title=PostgreSQL migration smoke failed::", script)
         self.assertIn("psql failed with exit code", script)

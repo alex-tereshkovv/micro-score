@@ -4,6 +4,7 @@ import inspect
 import tempfile
 import unittest
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -14,15 +15,20 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from microscore_api.database import MicroScoreRepository  # noqa: E402
 from microscore_api.postgres_repository import (  # noqa: E402
     AUDIT_EVENT_COLUMNS,
+    ACTIVE_SESSION_COLUMNS,
+    LIST_USER_COLUMNS,
     MODEL_VERSION_COLUMNS,
     ORGANIZATION_COLUMNS,
     POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
     POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
     POSTGRESQL_REPOSITORY_ADAPTER_STATUS,
+    SESSION_USER_COLUMNS,
+    USER_COLUMNS,
     PostgresRepositoryAdapter,
     PostgresRepositoryAdapterSkeleton,
     REPOSITORY_METHOD_GROUPS,
     audit_method_group_parity_snapshot,
+    identity_access_method_group_parity_snapshot,
     model_registry_method_group_parity_snapshot,
     model_registry_read_parity_snapshot,
     organization_method_group_parity_snapshot,
@@ -32,8 +38,13 @@ from microscore_api.postgres_repository import (  # noqa: E402
 
 
 class FakePostgresCursor:
-    def __init__(self, rows: list[tuple[object, ...]]) -> None:
+    def __init__(
+        self,
+        rows: list[tuple[object, ...]],
+        rowcount: int | None = None,
+    ) -> None:
         self._rows = rows
+        self.rowcount = len(rows) if rowcount is None else rowcount
 
     def fetchone(self) -> tuple[object, ...] | None:
         return self._rows[0] if self._rows else None
@@ -52,12 +63,21 @@ class FakePostgresConnection:
         query_log: list[tuple[str, dict[str, object]]],
         audit_rows: list[tuple[object, ...]] | None = None,
         organization_rows: list[tuple[object, ...]] | None = None,
+        user_rows: list[tuple[object, ...]] | None = None,
+        session_rows: list[tuple[object, ...]] | None = None,
         user_organization_rows: dict[str, str | None] | None = None,
     ) -> None:
         self.rows = rows
         self.audit_rows = list(audit_rows or [])
         self.organization_rows = list(organization_rows or [])
+        self.user_rows = list(user_rows or [])
+        self.session_rows = list(session_rows or [])
         self.user_organization_rows = dict(user_organization_rows or {})
+        for row in self.user_rows:
+            self.user_organization_rows.setdefault(
+                str(row[USER_COLUMNS.index("email")]),
+                row[USER_COLUMNS.index("organization_id")],
+            )
         self.query_log = query_log
         self.closed = False
         self.commits = 0
@@ -94,6 +114,167 @@ class FakePostgresConnection:
         values = list(row)
         values[MODEL_VERSION_COLUMNS.index(column)] = value
         return tuple(values)
+
+    @staticmethod
+    def _row_user_email(row: tuple[object, ...]) -> object:
+        return row[USER_COLUMNS.index("email")]
+
+    @staticmethod
+    def _row_user_role(row: tuple[object, ...]) -> object:
+        return row[USER_COLUMNS.index("role")]
+
+    @staticmethod
+    def _row_session_token(row: tuple[object, ...]) -> object:
+        return row[0]
+
+    @staticmethod
+    def _row_session_email(row: tuple[object, ...]) -> object:
+        return row[1]
+
+    @staticmethod
+    def _row_session_created_at(row: tuple[object, ...]) -> object:
+        return row[2]
+
+    @staticmethod
+    def _replace_user_column(
+        row: tuple[object, ...],
+        column: str,
+        value: object,
+    ) -> tuple[object, ...]:
+        values = list(row)
+        values[USER_COLUMNS.index(column)] = value
+        return tuple(values)
+
+    def _insert_user(self, params: dict[str, object]) -> None:
+        email = params["email"]
+        if any(self._row_user_email(row) == email for row in self.user_rows):
+            raise ValueError(f"duplicate user: {email}")
+        row = tuple(
+            {
+                "email": email,
+                "password_hash": params["password_hash"],
+                "role": params["role"],
+                "organization_id": params["organization_id"],
+                "created_at": params["created_at"],
+                "disabled_at": None,
+                "disabled_by": None,
+                "mfa_attested_at": None,
+                "mfa_attested_by": None,
+                "mfa_method": None,
+            }[column]
+            for column in USER_COLUMNS
+        )
+        self.user_rows.append(row)
+        self.user_organization_rows[str(email)] = params["organization_id"]
+
+    def _user_by_email(self, email: object) -> tuple[object, ...] | None:
+        for row in self.user_rows:
+            if self._row_user_email(row) == email:
+                return row
+        return None
+
+    def _list_user_rows(self) -> list[tuple[object, ...]]:
+        rows = [
+            tuple(row[USER_COLUMNS.index(column)] for column in LIST_USER_COLUMNS)
+            for row in self.user_rows
+        ]
+        role_index = LIST_USER_COLUMNS.index("role")
+        email_index = LIST_USER_COLUMNS.index("email")
+        return sorted(
+            rows,
+            key=lambda row: (str(row[role_index]), str(row[email_index])),
+        )
+
+    def _update_user_row(
+        self,
+        email: object,
+        replacements: dict[str, object],
+        *,
+        require_null: str | None = None,
+        require_not_null: str | None = None,
+    ) -> int:
+        updated_rows: list[tuple[object, ...]] = []
+        rowcount = 0
+        for row in self.user_rows:
+            if self._row_user_email(row) != email:
+                updated_rows.append(row)
+                continue
+            if require_null is not None and row[USER_COLUMNS.index(require_null)] is not None:
+                updated_rows.append(row)
+                continue
+            if require_not_null is not None and row[USER_COLUMNS.index(require_not_null)] is None:
+                updated_rows.append(row)
+                continue
+            for column, value in replacements.items():
+                row = self._replace_user_column(row, column, value)
+            updated_rows.append(row)
+            rowcount += 1
+        self.user_rows = updated_rows
+        if "organization_id" in replacements:
+            self.user_organization_rows[str(email)] = replacements["organization_id"]
+        return rowcount
+
+    def _insert_session(self, params: dict[str, object]) -> None:
+        token = params["token"]
+        if any(self._row_session_token(row) == token for row in self.session_rows):
+            raise ValueError(f"duplicate session: {token}")
+        self.session_rows.append(
+            (
+                token,
+                params["email"],
+                params["created_at"],
+            )
+        )
+
+    def _delete_session_by_token(self, token: object) -> int:
+        before = len(self.session_rows)
+        self.session_rows = [
+            row for row in self.session_rows if self._row_session_token(row) != token
+        ]
+        return before - len(self.session_rows)
+
+    def _delete_sessions_by_email(self, email: object) -> int:
+        before = len(self.session_rows)
+        self.session_rows = [
+            row for row in self.session_rows if self._row_session_email(row) != email
+        ]
+        return before - len(self.session_rows)
+
+    def _session_user_rows_for_token(
+        self,
+        token: object,
+    ) -> list[tuple[object, ...]]:
+        rows: list[tuple[object, ...]] = []
+        for session in self.session_rows:
+            if self._row_session_token(session) != token:
+                continue
+            user = self._user_by_email(self._row_session_email(session))
+            if user is None:
+                continue
+            rows.append((*user, self._row_session_created_at(session)))
+        return rows
+
+    def _active_session_rows(self) -> list[tuple[object, ...]]:
+        rows: list[tuple[object, ...]] = []
+        for session in self.session_rows:
+            user = self._user_by_email(self._row_session_email(session))
+            if user is None:
+                continue
+            values = {
+                "token": self._row_session_token(session),
+                "email": self._row_session_email(session),
+                "session_created_at": self._row_session_created_at(session),
+                "role": user[USER_COLUMNS.index("role")],
+                "organization_id": user[USER_COLUMNS.index("organization_id")],
+                "disabled_at": user[USER_COLUMNS.index("disabled_at")],
+            }
+            rows.append(tuple(values[column] for column in ACTIVE_SESSION_COLUMNS))
+        created_at_index = ACTIVE_SESSION_COLUMNS.index("session_created_at")
+        return sorted(
+            rows,
+            key=lambda row: str(row[created_at_index] or ""),
+            reverse=True,
+        )
 
     def _insert_model_version(self, params: dict[str, object]) -> None:
         version = params["version"]
@@ -201,6 +382,10 @@ class FakePostgresConnection:
         email = str(params["email"])
         if email in self.user_organization_rows:
             self.user_organization_rows[email] = params["organization_id"]
+        self._update_user_row(
+            email,
+            {"organization_id": params["organization_id"]},
+        )
 
     def execute(
         self,
@@ -208,18 +393,102 @@ class FakePostgresConnection:
         params: dict[str, object],
     ) -> FakePostgresCursor:
         self.query_log.append((sql, dict(params)))
+        rowcount: int | None = None
         if "INSERT INTO model_versions" in sql:
             self._insert_model_version(params)
             rows: list[tuple[object, ...]] = []
+            rowcount = 1
+        elif "INSERT INTO users" in sql:
+            self._insert_user(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO sessions" in sql:
+            self._insert_session(params)
+            rows = []
+            rowcount = 1
         elif "INSERT INTO audit_events" in sql:
             self._insert_audit_event(params)
             rows = []
+            rowcount = 1
         elif "INSERT INTO mfi_organizations" in sql:
             self._insert_organization(params)
+            rows = []
+            rowcount = 1
+        elif "DELETE FROM sessions" in sql and "WHERE token" in sql:
+            rowcount = self._delete_session_by_token(params["token"])
+            rows = []
+        elif "DELETE FROM sessions" in sql and "WHERE email" in sql:
+            rowcount = self._delete_sessions_by_email(params["email"])
+            rows = []
+        elif "UPDATE users" in sql and "disabled_at = %(disabled_at)s" in sql:
+            rowcount = self._update_user_row(
+                params["email"],
+                {
+                    "disabled_at": params["disabled_at"],
+                    "disabled_by": params["disabled_by"],
+                },
+                require_null="disabled_at",
+            )
+            rows = []
+        elif "UPDATE users" in sql and "disabled_at = NULL" in sql:
+            rowcount = self._update_user_row(
+                params["email"],
+                {
+                    "disabled_at": None,
+                    "disabled_by": None,
+                },
+                require_not_null="disabled_at",
+            )
+            rows = []
+        elif "UPDATE users" in sql and "mfa_attested_at = %(mfa_attested_at)s" in sql:
+            rowcount = self._update_user_row(
+                params["email"],
+                {
+                    "mfa_attested_at": params["mfa_attested_at"],
+                    "mfa_attested_by": params["mfa_attested_by"],
+                    "mfa_method": params["mfa_method"],
+                },
+                require_null="mfa_attested_at",
+            )
             rows = []
         elif "UPDATE users" in sql and "SET organization_id" in sql:
             self._update_user_organization(params)
             rows = []
+            rowcount = 1
+        elif "FROM sessions" in sql and "WHERE sessions.token" in sql:
+            rows = self._session_user_rows_for_token(params["token"])
+        elif "FROM sessions" in sql and "ORDER BY sessions.created_at DESC" in sql:
+            rows = self._active_session_rows()
+        elif "FROM users" in sql and "ORDER BY role, email" in sql:
+            rows = self._list_user_rows()
+        elif "FROM users" in sql and "WHERE email = %(email)s" in sql:
+            user = self._user_by_email(params["email"])
+            if user is None:
+                rows = []
+            elif "SELECT email, disabled_at, disabled_by" in sql:
+                rows = [
+                    (
+                        user[USER_COLUMNS.index("email")],
+                        user[USER_COLUMNS.index("disabled_at")],
+                        user[USER_COLUMNS.index("disabled_by")],
+                    )
+                ]
+            elif "SELECT email, disabled_at" in sql:
+                rows = [
+                    (
+                        user[USER_COLUMNS.index("email")],
+                        user[USER_COLUMNS.index("disabled_at")],
+                    )
+                ]
+            elif "SELECT email, mfa_attested_at" in sql:
+                rows = [
+                    (
+                        user[USER_COLUMNS.index("email")],
+                        user[USER_COLUMNS.index("mfa_attested_at")],
+                    )
+                ]
+            else:
+                rows = [user]
         elif "FROM audit_events" in sql:
             rows = self._ordered_audit_rows()
         elif "FROM mfi_organizations" in sql and "WHERE id = %(organization_id)s" in sql:
@@ -234,9 +503,11 @@ class FakePostgresConnection:
         elif "SET lifecycle_status = 'inactive', is_active = FALSE" in sql:
             self._deactivate_other_model_versions(params["version"])
             rows = []
+            rowcount = 1
         elif "SET lifecycle_status = 'active', is_active = TRUE" in sql:
             self._activate_model_version(params)
             rows = []
+            rowcount = 1
         elif "WHERE version = %(version)s" in sql:
             version = params["version"]
             rows = [
@@ -250,7 +521,7 @@ class FakePostgresConnection:
             ][:1]
         else:
             rows = self._ordered_rows(self.rows)
-        return FakePostgresCursor(rows)
+        return FakePostgresCursor(rows, rowcount=rowcount)
 
     def commit(self) -> None:
         self.commits += 1
@@ -304,6 +575,31 @@ def _postgres_organization_row(organization: dict[str, object]) -> tuple[object,
     return tuple(values[column] for column in ORGANIZATION_COLUMNS)
 
 
+def _postgres_user_row(user: dict[str, object]) -> tuple[object, ...]:
+    values = {
+        "email": user["email"],
+        "password_hash": user["password_hash"],
+        "role": user["role"],
+        "organization_id": user["organization_id"],
+        "created_at": user["created_at"],
+        "disabled_at": user["disabled_at"],
+        "disabled_by": user["disabled_by"],
+        "mfa_attested_at": user["mfa_attested_at"],
+        "mfa_attested_by": user["mfa_attested_by"],
+        "mfa_method": user["mfa_method"],
+    }
+    return tuple(values[column] for column in USER_COLUMNS)
+
+
+def _postgres_session_row(
+    *,
+    token: str,
+    email: str,
+    created_at: str,
+) -> tuple[object, ...]:
+    return (token, email, created_at)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -331,20 +627,20 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(summary["status"], "partial_method_groups")
         self.assertEqual(
             summary["stage"],
-            "model_registry_audit_organizations_groups_v1",
+            "model_registry_audit_organizations_identity_groups_v1",
         )
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 11)
-        self.assertEqual(summary["pending_method_count"], 41)
-        self.assertEqual(summary["completed_method_group_count"], 3)
+        self.assertEqual(summary["implemented_method_count"], 22)
+        self.assertEqual(summary["pending_method_count"], 30)
+        self.assertEqual(summary["completed_method_group_count"], 4)
         self.assertEqual(
             summary["completed_method_groups"],
-            ["organizations", "model_registry", "audit"],
+            ["identity_access", "organizations", "model_registry", "audit"],
         )
-        self.assertEqual(summary["read_only_method_count"], 6)
-        self.assertEqual(summary["write_method_count"], 5)
+        self.assertEqual(summary["read_only_method_count"], 10)
+        self.assertEqual(summary["write_method_count"], 12)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -359,6 +655,17 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "get_organization",
                 "list_organizations",
                 "assign_user_organization",
+                "create_user",
+                "get_user",
+                "list_users",
+                "disable_user",
+                "reactivate_user",
+                "attest_user_mfa",
+                "create_session",
+                "get_user_by_token",
+                "list_active_sessions",
+                "revoke_session",
+                "revoke_session_by_id",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -377,7 +684,13 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(groups["organizations"]["implemented_method_count"], 4)
         self.assertEqual(groups["organizations"]["pending_method_count"], 0)
         self.assertFalse(groups["organizations"]["pending_methods"])
-        self.assertIn("model registry, audit, and organization", summary["limitation"])
+        self.assertEqual(groups["identity_access"]["implemented_method_count"], 11)
+        self.assertEqual(groups["identity_access"]["pending_method_count"], 0)
+        self.assertFalse(groups["identity_access"]["pending_methods"])
+        self.assertIn(
+            "model registry, audit, organization, and identity/session",
+            summary["limitation"],
+        )
 
     def test_model_registry_read_adapter_matches_sqlite_repository_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -644,6 +957,263 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 any("ORDER BY name" in sql for sql, _params in query_log)
             )
 
+    def test_identity_access_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            fixed_now = datetime.now(timezone.utc).replace(microsecond=0)
+            active_created_at = (fixed_now - timedelta(minutes=30)).isoformat()
+            borrower_created_at = (fixed_now - timedelta(minutes=20)).isoformat()
+            expired_created_at = (fixed_now - timedelta(hours=3)).isoformat()
+            disabled_created_at = (fixed_now - timedelta(minutes=10)).isoformat()
+            sqlite_repository.create_organization(
+                organization_id="identity-mfi",
+                name="Identity MFI",
+                region="Pavlodar",
+            )
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection([], query_log)
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            user_payloads = [
+                ("identity-admin@example.com", "admin-hash", "admin", None),
+                (
+                    "identity-analyst@example.com",
+                    "analyst-hash",
+                    "mfi_analyst",
+                    "identity-mfi",
+                ),
+                ("identity-borrower@example.com", "borrower-hash", "borrower", None),
+                (
+                    "identity-disabled@example.com",
+                    "disabled-hash",
+                    "mfi_analyst",
+                    "identity-mfi",
+                ),
+            ]
+            for email, password_hash, role, organization_id in user_payloads:
+                sqlite_created = sqlite_repository.create_user(
+                    email,
+                    password_hash,
+                    role,
+                    organization_id,
+                )
+                postgres_created = adapter.create_user(
+                    email,
+                    password_hash,
+                    role,
+                    organization_id,
+                )
+                for key in ("email", "password_hash", "role", "organization_id"):
+                    self.assertEqual(postgres_created[key], sqlite_created[key])
+
+            sqlite_attested = sqlite_repository.attest_user_mfa(
+                "identity-analyst@example.com",
+                "identity-admin@example.com",
+                "totp",
+            )
+            postgres_attested = adapter.attest_user_mfa(
+                "identity-analyst@example.com",
+                "identity-admin@example.com",
+                "totp",
+            )
+            self.assertEqual(postgres_attested["mfa_method"], sqlite_attested["mfa_method"])
+            self.assertFalse(postgres_attested["was_already_attested"])
+            self.assertTrue(
+                adapter.attest_user_mfa(
+                    "identity-analyst@example.com",
+                    "identity-admin@example.com",
+                    "totp",
+                )["was_already_attested"]
+            )
+            self.assertIsNone(adapter.attest_user_mfa("missing@example.com", "admin", "totp"))
+
+            for repository in (sqlite_repository, adapter):
+                self.assertEqual(
+                    repository.create_session(
+                        "identity-analyst-token",
+                        "identity-analyst@example.com",
+                        created_at=active_created_at,
+                    )["session_ttl_seconds"],
+                    28_800,
+                )
+                repository.create_session(
+                    "identity-borrower-token",
+                    "identity-borrower@example.com",
+                    created_at=borrower_created_at,
+                )
+                repository.create_session(
+                    "identity-expired-token",
+                    "identity-admin@example.com",
+                    created_at=expired_created_at,
+                )
+                repository.create_session(
+                    "identity-disabled-token",
+                    "identity-disabled@example.com",
+                    created_at=disabled_created_at,
+                )
+
+            sqlite_disabled = sqlite_repository.disable_user(
+                "identity-disabled@example.com",
+                "identity-admin@example.com",
+            )
+            postgres_disabled = adapter.disable_user(
+                "identity-disabled@example.com",
+                "identity-admin@example.com",
+            )
+            self.assertEqual(postgres_disabled["revoked_session_count"], 1)
+            self.assertEqual(
+                postgres_disabled["revoked_session_count"],
+                sqlite_disabled["revoked_session_count"],
+            )
+            self.assertFalse(postgres_disabled["was_already_disabled"])
+            self.assertTrue(
+                adapter.disable_user(
+                    "identity-disabled@example.com",
+                    "identity-admin@example.com",
+                )["was_already_disabled"]
+            )
+            self.assertIsNone(adapter.disable_user("missing@example.com", "admin"))
+
+            sqlite_reactivated = sqlite_repository.reactivate_user(
+                "identity-disabled@example.com"
+            )
+            postgres_reactivated = adapter.reactivate_user(
+                "identity-disabled@example.com"
+            )
+            self.assertFalse(postgres_reactivated["was_already_active"])
+            self.assertIsNotNone(postgres_reactivated["previous_disabled_at"])
+            self.assertEqual(
+                postgres_reactivated["previous_disabled_by"],
+                sqlite_reactivated["previous_disabled_by"],
+            )
+            self.assertTrue(
+                adapter.reactivate_user("identity-disabled@example.com")[
+                    "was_already_active"
+                ]
+            )
+            self.assertIsNone(adapter.reactivate_user("missing@example.com"))
+
+            sqlite_active_user = sqlite_repository.get_user_by_token(
+                "identity-analyst-token",
+                now=fixed_now,
+                ttl_hours=1,
+            )
+            postgres_active_user = adapter.get_user_by_token(
+                "identity-analyst-token",
+                now=fixed_now,
+                ttl_hours=1,
+            )
+            self.assertEqual(postgres_active_user["email"], sqlite_active_user["email"])
+            self.assertEqual(
+                postgres_active_user["session_expires_at"],
+                sqlite_active_user["session_expires_at"],
+            )
+            self.assertIsNone(
+                adapter.get_user_by_token(
+                    "identity-expired-token",
+                    now=fixed_now,
+                    ttl_hours=1,
+                )
+            )
+            self.assertIsNone(
+                sqlite_repository.get_user_by_token(
+                    "identity-expired-token",
+                    now=fixed_now,
+                    ttl_hours=1,
+                )
+            )
+
+            self.assertEqual(
+                identity_access_method_group_parity_snapshot(
+                    adapter,
+                    now=fixed_now,
+                    ttl_hours=1,
+                ),
+                identity_access_method_group_parity_snapshot(
+                    sqlite_repository,
+                    now=fixed_now,
+                    ttl_hours=1,
+                ),
+            )
+            active_sessions = adapter.list_active_sessions(
+                now=fixed_now,
+                ttl_hours=1,
+            )
+            borrower_session = next(
+                session
+                for session in active_sessions
+                if session["email"] == "identity-borrower@example.com"
+            )
+            self.assertIsNone(
+                adapter.revoke_session_by_id(
+                    borrower_session["session_id"],
+                    staff_only=True,
+                )
+            )
+            sqlite_borrower_session = next(
+                session
+                for session in sqlite_repository.list_active_sessions(
+                    now=fixed_now,
+                    ttl_hours=1,
+                )
+                if session["email"] == "identity-borrower@example.com"
+            )
+            self.assertIsNone(
+                sqlite_repository.revoke_session_by_id(
+                    sqlite_borrower_session["session_id"],
+                    staff_only=True,
+                )
+            )
+            analyst_session = next(
+                session
+                for session in active_sessions
+                if session["email"] == "identity-analyst@example.com"
+            )
+            sqlite_analyst_session = next(
+                session
+                for session in sqlite_repository.list_active_sessions(
+                    now=fixed_now,
+                    ttl_hours=1,
+                )
+                if session["email"] == "identity-analyst@example.com"
+            )
+            self.assertEqual(
+                adapter.revoke_session_by_id(
+                    analyst_session["session_id"],
+                    staff_only=True,
+                )["email"],
+                sqlite_repository.revoke_session_by_id(
+                    sqlite_analyst_session["session_id"],
+                    staff_only=True,
+                )["email"],
+            )
+            self.assertTrue(adapter.revoke_session("identity-borrower-token"))
+            self.assertTrue(sqlite_repository.revoke_session("identity-borrower-token"))
+            self.assertFalse(adapter.revoke_session("identity-borrower-token"))
+
+            self.assertEqual(
+                identity_access_method_group_parity_snapshot(
+                    adapter,
+                    now=fixed_now,
+                    ttl_hours=1,
+                ),
+                identity_access_method_group_parity_snapshot(
+                    sqlite_repository,
+                    now=fixed_now,
+                    ttl_hours=1,
+                ),
+            )
+            self.assertGreaterEqual(fake_connection.commits, 10)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(any("INSERT INTO users" in sql for sql, _params in query_log))
+            self.assertTrue(any("INSERT INTO sessions" in sql for sql, _params in query_log))
+            self.assertTrue(any("DELETE FROM sessions" in sql for sql, _params in query_log))
+            self.assertTrue(any("mfa_attested_at" in sql for sql, _params in query_log))
+            self.assertTrue(any("disabled_at" in sql for sql, _params in query_log))
+            self.assertTrue(
+                any("ORDER BY sessions.created_at DESC" in sql for sql, _params in query_log)
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -684,6 +1254,28 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             adapter.list_organizations()
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.assign_user_organization("blocked@example.com", "blocked-mfi")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_user("blocked@example.com", "hash", "admin")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_user("blocked@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_users()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.disable_user("blocked@example.com", "admin@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.reactivate_user("blocked@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.attest_user_mfa("blocked@example.com", "admin@example.com", "totp")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_session("blocked-token", "blocked@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_user_by_token("blocked-token")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_active_sessions()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.revoke_session("blocked-token")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.revoke_session_by_id("blocked-session-id")
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()

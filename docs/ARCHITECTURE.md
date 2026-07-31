@@ -116,9 +116,9 @@ Main local components:
   `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
   the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
   JSONB mapping coverage, disposable PostgreSQL migration-smoke CI,
-  a partial PostgreSQL adapter with model registry, audit, and organization
-  method groups completed, tenant-scope parity checks, and remaining migration
-  blockers;
+  a partial PostgreSQL adapter with model registry, audit, organization, and
+  identity/session method groups completed, tenant-scope parity checks, and
+  remaining migration blockers;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 
@@ -200,13 +200,14 @@ while the research is still pre-pilot.
 - No PostgreSQL repository backend, managed database secret, deployment, or
   repository-level disposable PostgreSQL parity CI yet. A versioned 0001 schema
   draft exists, is applied in disposable migration-smoke CI, and has a
-  `postgresql-repository-adapter-v5` surface with
-  `model_registry_audit_organizations_groups_v1` covering `create_model_version`,
+  `postgresql-repository-adapter-v6` surface with
+  `model_registry_audit_organizations_identity_groups_v1` covering `create_model_version`,
   `get_model_version`, `get_active_model_version`, `list_model_versions`, and
   `activate_model_version`, plus `record_audit_event`, `list_audit_events`,
   `create_organization`, `get_organization`, `list_organizations`, and
-  `assign_user_organization`; tenant-scoped application/invite/simulation flows
-  and full backend selection remain blocked.
+  `assign_user_organization`, plus user/MFA/session lifecycle methods from
+  `create_user` through `revoke_session_by_id`; tenant-scoped
+  application/invite/simulation flows and full backend selection remain blocked.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
 - Monte Carlo stress shifts and financial assumptions are transparent defaults,

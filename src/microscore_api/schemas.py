@@ -203,6 +203,7 @@ class PostgresMigrationReadinessResponse(BaseModel):
     repository_adapter_model_registry_group_present: bool = False
     repository_adapter_audit_group_present: bool = False
     repository_adapter_organization_group_present: bool = False
+    repository_adapter_identity_access_group_present: bool = False
     repository_adapter_contract_groups: list[PostgresRepositoryAdapterContractGroupResponse] = Field(default_factory=list)
     migration_artifacts: list[PostgresMigrationArtifactResponse] = Field(default_factory=list)
     schema_inventory: list[PostgresSchemaTableResponse] = Field(default_factory=list)

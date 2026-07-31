@@ -1288,6 +1288,7 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `postgresql_model_registry_method_group_adapter`,
   `postgresql_audit_method_group_adapter`,
   `postgresql_organization_method_group_adapter`,
+  `postgresql_identity_access_method_group_adapter`,
   `postgresql_repository_backend`, and `postgresql_disposable_ci`;
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
@@ -1295,11 +1296,15 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 - `repository_adapter_contract_*`: an incremental PostgreSQL adapter in
   `microscore_api.postgres_repository`, including
   `repository_adapter_contract_status=partial_method_groups`,
-  `repository_adapter_stage=model_registry_audit_organizations_groups_v1`, method-family groups,
+  `repository_adapter_stage=model_registry_audit_organizations_identity_groups_v1`, method-family groups,
   `repository_adapter_contract_method_count=52`,
-  `repository_adapter_implemented_method_count=11`,
-  `repository_adapter_pending_method_count=41`,
-  `repository_adapter_completed_method_group_count=3`, the completed organization
+  `repository_adapter_implemented_method_count=22`,
+  `repository_adapter_pending_method_count=30`,
+  `repository_adapter_completed_method_group_count=4`, the completed identity
+  access method group (`create_user`, `get_user`, `list_users`,
+  `disable_user`, `reactivate_user`, `attest_user_mfa`, `create_session`,
+  `get_user_by_token`, `list_active_sessions`, `revoke_session`,
+  `revoke_session_by_id`), the completed organization
   method group (`create_organization`, `get_organization`,
   `list_organizations`, `assign_user_organization`), the completed model
   registry method group (`create_model_version`, `get_model_version`,
@@ -1313,12 +1318,14 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 
 The response is intentionally `blocked` even when the versioned migration draft
 is present and applied in disposable CI, and even when the PostgreSQL repository
-adapter has completed model registry, audit, and organization method groups.
+adapter has completed model registry, audit, organization, and identity/session
+method groups.
 `0001_initial_schema.sql` is a reviewed DDL contract and CI smoke target, not a
-production migration runner. The adapter v5 proves PostgreSQL boolean/JSONB row
+production migration runner. The adapter v6 proves PostgreSQL boolean/JSONB row
 materialization, active-version write semantics, append-only audit review, and
-organization tenant-assignment semantics through an injected connection factory,
-but does not enable runtime backend selection. The gate remains blocked until the PostgreSQL repository backend,
+organization tenant-assignment semantics plus users, MFA, session TTL filtering,
+staff-only session views, and revocation semantics through an injected
+connection factory, but does not enable runtime backend selection. The gate remains blocked until the PostgreSQL repository backend,
 managed
 connection secret, repository-level disposable parity CI, backup/retention
 controls, and live migration execution are implemented.

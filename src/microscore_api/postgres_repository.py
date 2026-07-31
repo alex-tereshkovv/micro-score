@@ -11,15 +11,19 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
+import os
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v5"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v6"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
 POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_groups_v1"
+DEFAULT_SESSION_TTL_HOURS = 8.0
+STAFF_ROLES = {"admin", "mfi_analyst"}
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
     "get_model_version",
     "get_active_model_version",
@@ -56,18 +60,201 @@ POSTGRESQL_ORGANIZATION_METHODS = (
     "list_organizations",
     "assign_user_organization",
 )
+POSTGRESQL_IDENTITY_READ_METHODS = (
+    "get_user",
+    "list_users",
+    "get_user_by_token",
+    "list_active_sessions",
+)
+POSTGRESQL_IDENTITY_WRITE_METHODS = (
+    "create_user",
+    "disable_user",
+    "reactivate_user",
+    "attest_user_mfa",
+    "create_session",
+    "revoke_session",
+    "revoke_session_by_id",
+)
+POSTGRESQL_IDENTITY_METHODS = (
+    "create_user",
+    "get_user",
+    "list_users",
+    "disable_user",
+    "reactivate_user",
+    "attest_user_mfa",
+    "create_session",
+    "get_user_by_token",
+    "list_active_sessions",
+    "revoke_session",
+    "revoke_session_by_id",
+)
 POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_MODEL_REGISTRY_METHODS,
     *POSTGRESQL_AUDIT_METHODS,
     *POSTGRESQL_ORGANIZATION_METHODS,
+    *POSTGRESQL_IDENTITY_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v5 implements the model registry, audit, "
-    "and organization method groups through an injected DB-API compatible "
-    "connection factory. Runtime backend selection remains disabled until "
-    "identity, tenant-scoped application, invite, simulation, and analytics flows have "
+    "PostgreSQL Repository Adapter v6 implements the model registry, audit, "
+    "organization, and identity/session method groups through an injected "
+    "DB-API compatible connection factory. Runtime backend selection remains "
+    "disabled until tenant-scoped application, invite, simulation, and analytics flows have "
     "repository parity coverage."
 )
+USER_COLUMNS = (
+    "email",
+    "password_hash",
+    "role",
+    "organization_id",
+    "created_at",
+    "disabled_at",
+    "disabled_by",
+    "mfa_attested_at",
+    "mfa_attested_by",
+    "mfa_method",
+)
+LIST_USER_COLUMNS = (
+    "email",
+    "role",
+    "organization_id",
+    "created_at",
+    "disabled_at",
+    "disabled_by",
+    "mfa_attested_at",
+    "mfa_attested_by",
+    "mfa_method",
+)
+SESSION_USER_COLUMNS = (
+    *USER_COLUMNS,
+    "session_created_at",
+)
+ACTIVE_SESSION_COLUMNS = (
+    "token",
+    "email",
+    "session_created_at",
+    "role",
+    "organization_id",
+    "disabled_at",
+)
+USER_SELECT = """
+SELECT
+    email,
+    password_hash,
+    role,
+    organization_id,
+    created_at,
+    disabled_at,
+    disabled_by,
+    mfa_attested_at,
+    mfa_attested_by,
+    mfa_method
+FROM users
+"""
+GET_USER_SQL = USER_SELECT + "WHERE email = %(email)s"
+LIST_USERS_SQL = """
+SELECT
+    email,
+    role,
+    organization_id,
+    created_at,
+    disabled_at,
+    disabled_by,
+    mfa_attested_at,
+    mfa_attested_by,
+    mfa_method
+FROM users
+ORDER BY role, email
+"""
+CREATE_USER_SQL = """
+INSERT INTO users (
+    email,
+    password_hash,
+    role,
+    organization_id,
+    created_at
+)
+VALUES (
+    %(email)s,
+    %(password_hash)s,
+    %(role)s,
+    %(organization_id)s,
+    %(created_at)s
+)
+"""
+GET_USER_DISABLE_STATUS_SQL = """
+SELECT email, disabled_at
+FROM users
+WHERE email = %(email)s
+"""
+DISABLE_USER_SQL = """
+UPDATE users
+SET disabled_at = %(disabled_at)s, disabled_by = %(disabled_by)s
+WHERE email = %(email)s AND disabled_at IS NULL
+"""
+GET_USER_REACTIVATE_STATUS_SQL = """
+SELECT email, disabled_at, disabled_by
+FROM users
+WHERE email = %(email)s
+"""
+REACTIVATE_USER_SQL = """
+UPDATE users
+SET disabled_at = NULL, disabled_by = NULL
+WHERE email = %(email)s AND disabled_at IS NOT NULL
+"""
+GET_USER_MFA_STATUS_SQL = """
+SELECT email, mfa_attested_at
+FROM users
+WHERE email = %(email)s
+"""
+ATTEST_USER_MFA_SQL = """
+UPDATE users
+SET
+    mfa_attested_at = %(mfa_attested_at)s,
+    mfa_attested_by = %(mfa_attested_by)s,
+    mfa_method = %(mfa_method)s
+WHERE email = %(email)s AND mfa_attested_at IS NULL
+"""
+CREATE_SESSION_SQL = """
+INSERT INTO sessions (token, email, created_at)
+VALUES (%(token)s, %(email)s, %(created_at)s)
+"""
+GET_USER_BY_TOKEN_SQL = """
+SELECT
+    users.email,
+    users.password_hash,
+    users.role,
+    users.organization_id,
+    users.created_at,
+    users.disabled_at,
+    users.disabled_by,
+    users.mfa_attested_at,
+    users.mfa_attested_by,
+    users.mfa_method,
+    sessions.created_at AS session_created_at
+FROM sessions
+JOIN users ON users.email = sessions.email
+WHERE sessions.token = %(token)s
+"""
+DELETE_SESSION_BY_TOKEN_SQL = """
+DELETE FROM sessions
+WHERE token = %(token)s
+"""
+DELETE_SESSIONS_BY_EMAIL_SQL = """
+DELETE FROM sessions
+WHERE email = %(email)s
+"""
+LIST_ACTIVE_SESSIONS_SQL = """
+SELECT
+    sessions.token,
+    sessions.email,
+    sessions.created_at AS session_created_at,
+    users.role,
+    users.organization_id,
+    users.disabled_at
+FROM sessions
+JOIN users ON users.email = sessions.email
+ORDER BY sessions.created_at DESC
+"""
 ORGANIZATION_COLUMNS = (
     "id",
     "name",
@@ -394,11 +581,13 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
         *POSTGRESQL_AUDIT_READ_METHODS,
         *POSTGRESQL_ORGANIZATION_READ_METHODS,
+        *POSTGRESQL_IDENTITY_READ_METHODS,
     )
     write_methods = (
         *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
         *POSTGRESQL_AUDIT_WRITE_METHODS,
         *POSTGRESQL_ORGANIZATION_WRITE_METHODS,
+        *POSTGRESQL_IDENTITY_WRITE_METHODS,
     )
     completed_groups = [
         group.key
@@ -456,6 +645,41 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_utc_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def configured_session_ttl_hours() -> float:
+    raw_value = os.environ.get("MICROSCORE_SESSION_TTL_HOURS", "").strip()
+    if not raw_value:
+        return DEFAULT_SESSION_TTL_HOURS
+    try:
+        value = float(raw_value)
+    except ValueError:
+        return DEFAULT_SESSION_TTL_HOURS
+    return value if value > 0 else DEFAULT_SESSION_TTL_HOURS
+
+
+def session_expiry_metadata(
+    created_at: str | None = None,
+    *,
+    ttl_hours: float | None = None,
+) -> dict[str, Any]:
+    session_created_at = (
+        _parse_utc_datetime(created_at) if created_at else datetime.now(timezone.utc)
+    )
+    ttl = ttl_hours if ttl_hours is not None else configured_session_ttl_hours()
+    expires_at = session_created_at + timedelta(hours=ttl)
+    return {
+        "session_created_at": session_created_at.isoformat(),
+        "session_expires_at": expires_at.isoformat(),
+        "session_ttl_seconds": max(1, int(round(ttl * 3600))),
+    }
+
+
 def _row_to_mapping(
     row: object,
     columns: tuple[str, ...] = MODEL_VERSION_COLUMNS,
@@ -491,6 +715,22 @@ def postgres_audit_event_from_row(row: object) -> dict[str, Any]:
 
 def postgres_organization_from_row(row: object) -> dict[str, Any]:
     return _row_to_mapping(row, ORGANIZATION_COLUMNS)
+
+
+def postgres_user_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, USER_COLUMNS)
+
+
+def postgres_list_user_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, LIST_USER_COLUMNS)
+
+
+def postgres_session_user_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, SESSION_USER_COLUMNS)
+
+
+def postgres_active_session_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, ACTIVE_SESSION_COLUMNS)
 
 
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
@@ -565,6 +805,50 @@ def organization_method_group_parity_snapshot(repository: object) -> dict[str, o
         "lookup_matches": [
             _organization_identity(lookup) == _organization_identity(organization)
             for lookup, organization in zip(lookups, organizations)
+        ],
+        "method_group_complete": True,
+    }
+
+
+def identity_access_method_group_parity_snapshot(
+    repository: object,
+    *,
+    now: datetime | None = None,
+    ttl_hours: float | None = None,
+) -> dict[str, object]:
+    users = getattr(repository, "list_users")()
+    active_sessions = getattr(repository, "list_active_sessions")(
+        now=now,
+        ttl_hours=ttl_hours,
+    )
+    staff_sessions = getattr(repository, "list_active_sessions")(
+        staff_only=True,
+        now=now,
+        ttl_hours=ttl_hours,
+    )
+    return {
+        "method_group": "identity_access",
+        "implemented_methods": list(POSTGRESQL_IDENTITY_METHODS),
+        "user_count": len(users),
+        "user_emails": [user["email"] for user in users],
+        "user_roles": [user["role"] for user in users],
+        "user_organization_ids": [user.get("organization_id") for user in users],
+        "disabled_users": [
+            user["email"] for user in users if user.get("disabled_at") is not None
+        ],
+        "mfa_attested_users": [
+            user["email"] for user in users if user.get("mfa_attested_at") is not None
+        ],
+        "active_session_count": len(active_sessions),
+        "active_session_emails": [
+            session["email"] for session in active_sessions
+        ],
+        "active_session_ids": [
+            session["session_id"] for session in active_sessions
+        ],
+        "staff_session_count": len(staff_sessions),
+        "staff_session_emails": [
+            session["email"] for session in staff_sessions
         ],
         "method_group_complete": True,
     }
@@ -650,10 +934,18 @@ class PostgresRepositoryAdapter:
         self,
         statements: list[tuple[str, dict[str, object]]],
     ) -> None:
+        self._write_with_rowcounts(statements)
+
+    def _write_with_rowcounts(
+        self,
+        statements: list[tuple[str, dict[str, object]]],
+    ) -> list[int]:
+        rowcounts: list[int] = []
         with self._connection() as connection:
             try:
                 for sql, params in statements:
                     cursor = self._execute(connection, sql, params)
+                    rowcounts.append(int(getattr(cursor, "rowcount", 0) or 0))
                     close = getattr(cursor, "close", None)
                     if callable(close):
                         close()
@@ -665,6 +957,225 @@ class PostgresRepositoryAdapter:
                 if callable(rollback):
                     rollback()
                 raise
+        return rowcounts
+
+    def create_user(
+        self,
+        email: str,
+        password_hash: str,
+        role: str,
+        organization_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_USER_SQL,
+                    {
+                        "email": email,
+                        "password_hash": password_hash,
+                        "role": role,
+                        "organization_id": organization_id,
+                        "created_at": _now_iso(),
+                    },
+                )
+            ]
+        )
+        self.record_audit_event(
+            actor_email=email,
+            action="user_registered",
+            entity_type="user",
+            entity_id=email,
+            details={"role": role, "organization_id": organization_id},
+        )
+        return self.get_user(email) or {}
+
+    def get_user(self, email: str) -> dict[str, Any] | None:
+        row = self._fetchone(GET_USER_SQL, {"email": email})
+        return postgres_user_from_row(row) if row else None
+
+    def list_users(self) -> list[dict[str, Any]]:
+        return [
+            postgres_list_user_from_row(row)
+            for row in self._fetchall(LIST_USERS_SQL)
+        ]
+
+    def disable_user(self, email: str, disabled_by: str) -> dict[str, Any] | None:
+        existing = self._fetchone(GET_USER_DISABLE_STATUS_SQL, {"email": email})
+        if existing is None:
+            return None
+        existing_status = _row_to_mapping(existing, ("email", "disabled_at"))
+        if existing_status["disabled_at"] is None:
+            self._write(
+                [
+                    (
+                        DISABLE_USER_SQL,
+                        {
+                            "email": email,
+                            "disabled_at": _now_iso(),
+                            "disabled_by": disabled_by,
+                        },
+                    )
+                ]
+            )
+        revoked_counts = self._write_with_rowcounts(
+            [(DELETE_SESSIONS_BY_EMAIL_SQL, {"email": email})]
+        )
+        disabled = self.get_user(email) or {}
+        disabled["revoked_session_count"] = revoked_counts[0] if revoked_counts else 0
+        disabled["was_already_disabled"] = (
+            existing_status["disabled_at"] is not None
+        )
+        return disabled
+
+    def reactivate_user(self, email: str) -> dict[str, Any] | None:
+        existing = self._fetchone(GET_USER_REACTIVATE_STATUS_SQL, {"email": email})
+        if existing is None:
+            return None
+        existing_status = _row_to_mapping(
+            existing,
+            ("email", "disabled_at", "disabled_by"),
+        )
+        if existing_status["disabled_at"] is not None:
+            self._write([(REACTIVATE_USER_SQL, {"email": email})])
+        reactivated = self.get_user(email) or {}
+        reactivated["was_already_active"] = existing_status["disabled_at"] is None
+        reactivated["previous_disabled_at"] = existing_status["disabled_at"]
+        reactivated["previous_disabled_by"] = existing_status["disabled_by"]
+        return reactivated
+
+    def attest_user_mfa(
+        self,
+        email: str,
+        attested_by: str,
+        method: str,
+    ) -> dict[str, Any] | None:
+        existing = self._fetchone(GET_USER_MFA_STATUS_SQL, {"email": email})
+        if existing is None:
+            return None
+        existing_status = _row_to_mapping(existing, ("email", "mfa_attested_at"))
+        if existing_status["mfa_attested_at"] is None:
+            self._write(
+                [
+                    (
+                        ATTEST_USER_MFA_SQL,
+                        {
+                            "email": email,
+                            "mfa_attested_at": _now_iso(),
+                            "mfa_attested_by": attested_by,
+                            "mfa_method": method,
+                        },
+                    )
+                ]
+            )
+        attested = self.get_user(email) or {}
+        attested["was_already_attested"] = (
+            existing_status["mfa_attested_at"] is not None
+        )
+        return attested
+
+    def create_session(
+        self,
+        token: str,
+        email: str,
+        *,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        stored_created_at = created_at or _now_iso()
+        self._write(
+            [
+                (
+                    CREATE_SESSION_SQL,
+                    {
+                        "token": token,
+                        "email": email,
+                        "created_at": stored_created_at,
+                    },
+                )
+            ]
+        )
+        return session_expiry_metadata(stored_created_at)
+
+    def get_user_by_token(
+        self,
+        token: str,
+        *,
+        now: datetime | None = None,
+        ttl_hours: float | None = None,
+    ) -> dict[str, Any] | None:
+        row = self._fetchone(GET_USER_BY_TOKEN_SQL, {"token": token})
+        if row is None:
+            return None
+        user = postgres_session_user_from_row(row)
+        if user["disabled_at"] is not None:
+            self.revoke_session(token)
+            return None
+        metadata = session_expiry_metadata(
+            user["session_created_at"],
+            ttl_hours=ttl_hours,
+        )
+        expires_at = _parse_utc_datetime(metadata["session_expires_at"])
+        if expires_at <= (now or datetime.now(timezone.utc)):
+            self.revoke_session(token)
+            return None
+        user.update(metadata)
+        return user
+
+    def revoke_session(self, token: str) -> bool:
+        rowcounts = self._write_with_rowcounts(
+            [(DELETE_SESSION_BY_TOKEN_SQL, {"token": token})]
+        )
+        return bool(rowcounts and rowcounts[0] > 0)
+
+    def list_active_sessions(
+        self,
+        *,
+        staff_only: bool = False,
+        now: datetime | None = None,
+        ttl_hours: float | None = None,
+    ) -> list[dict[str, Any]]:
+        now = now or datetime.now(timezone.utc)
+        rows = self._fetchall(LIST_ACTIVE_SESSIONS_SQL)
+        active_sessions: list[dict[str, Any]] = []
+        expired_or_disabled_tokens: list[str] = []
+        for row in rows:
+            session = postgres_active_session_from_row(row)
+            if session["disabled_at"] is not None:
+                expired_or_disabled_tokens.append(str(session["token"]))
+                continue
+            if staff_only and session["role"] not in STAFF_ROLES:
+                continue
+            metadata = session_expiry_metadata(
+                session["session_created_at"],
+                ttl_hours=ttl_hours,
+            )
+            expires_at = _parse_utc_datetime(metadata["session_expires_at"])
+            if expires_at <= now:
+                expired_or_disabled_tokens.append(str(session["token"]))
+                continue
+            session.update(metadata)
+            session["session_id"] = hashlib.sha256(
+                str(session["token"]).encode("utf-8")
+            ).hexdigest()
+            active_sessions.append(session)
+
+        for token in expired_or_disabled_tokens:
+            self.revoke_session(token)
+        return active_sessions
+
+    def revoke_session_by_id(
+        self,
+        session_id: str,
+        *,
+        staff_only: bool = False,
+    ) -> dict[str, Any] | None:
+        normalized_session_id = session_id.strip().lower()
+        for session in self.list_active_sessions(staff_only=staff_only):
+            if session["session_id"] != normalized_session_id:
+                continue
+            if self.revoke_session(str(session["token"])):
+                return session
+            return None
+        return None
 
     def get_model_version(self, version: str) -> dict[str, Any] | None:
         row = self._fetchone(GET_MODEL_VERSION_SQL, {"version": version})

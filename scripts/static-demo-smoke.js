@@ -472,17 +472,19 @@ async function main() {
     || !postgresqlReadinessInitial.disposable_migration_ci_present
     || postgresqlReadinessInitial.repository_adapter_contract_status !== "partial_method_groups"
     || postgresqlReadinessInitial.repository_adapter_contract_method_count !== 52
-    || postgresqlReadinessInitial.repository_adapter_implemented_method_count !== 11
-    || postgresqlReadinessInitial.repository_adapter_completed_method_group_count !== 3
+    || postgresqlReadinessInitial.repository_adapter_implemented_method_count !== 22
+    || postgresqlReadinessInitial.repository_adapter_completed_method_group_count !== 4
+    || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("identity_access")
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("organizations")
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("model_registry")
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("audit")
-    || postgresqlReadinessInitial.repository_adapter_stage !== "model_registry_audit_organizations_groups_v1"
+    || postgresqlReadinessInitial.repository_adapter_stage !== "model_registry_audit_organizations_identity_groups_v1"
     || !postgresqlReadinessInitial.repository_adapter_model_registry_read_present
     || !postgresqlReadinessInitial.repository_adapter_model_registry_write_present
     || !postgresqlReadinessInitial.repository_adapter_model_registry_group_present
     || !postgresqlReadinessInitial.repository_adapter_audit_group_present
     || !postgresqlReadinessInitial.repository_adapter_organization_group_present
+    || !postgresqlReadinessInitial.repository_adapter_identity_access_group_present
     || !postgresqlReadinessInitial.migration_artifacts?.some((artifact) => artifact.path === "migrations/postgresql/0001_initial_schema.sql")
     || postgresqlParityChecks.get("postgresql_schema_inventory")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_versioned_migration_artifacts")?.status !== "pass"
@@ -493,6 +495,7 @@ async function main() {
     || postgresqlParityChecks.get("postgresql_model_registry_method_group_adapter")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_audit_method_group_adapter")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_organization_method_group_adapter")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_identity_access_method_group_adapter")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "blocker"
     || postgresqlBlockers.has("postgresql_versioned_migrations_missing")
     || postgresqlBlockers.has("postgresql_disposable_migration_ci_missing")
