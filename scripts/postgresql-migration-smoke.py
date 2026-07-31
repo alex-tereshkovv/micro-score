@@ -643,7 +643,7 @@ def apply_migration_and_verify(
         psql_bin=psql_bin,
         database_url=database_url,
         sql="""
-            SELECT event_type || ':' || metadata_json->>'message_id'
+            SELECT event_type || ':' || (metadata_json->>'message_id')
             FROM staff_invite_delivery_events
             WHERE event_id = 'ci-smoke-invite-event';
         """,
