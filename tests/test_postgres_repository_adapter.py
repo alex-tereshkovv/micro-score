@@ -16,6 +16,8 @@ from microscore_api.database import MicroScoreRepository  # noqa: E402
 from microscore_api.postgres_repository import (  # noqa: E402
     AUDIT_EVENT_COLUMNS,
     ACTIVE_SESSION_COLUMNS,
+    APPLICATION_COLUMNS,
+    APPLICATION_DECISION_COLUMNS,
     LIST_USER_COLUMNS,
     MODEL_VERSION_COLUMNS,
     ORGANIZATION_COLUMNS,
@@ -29,9 +31,11 @@ from microscore_api.postgres_repository import (  # noqa: E402
     STAFF_INVITE_DELIVERY_OUTBOX_COLUMNS,
     SESSION_USER_COLUMNS,
     USER_COLUMNS,
+    InvalidApplicationTransitionError,
     PostgresRepositoryAdapter,
     PostgresRepositoryAdapterSkeleton,
     REPOSITORY_METHOD_GROUPS,
+    application_lifecycle_method_group_parity_snapshot,
     audit_method_group_parity_snapshot,
     identity_access_method_group_parity_snapshot,
     model_registry_method_group_parity_snapshot,
@@ -75,6 +79,8 @@ class FakePostgresConnection:
         staff_invite_rows: list[tuple[object, ...]] | None = None,
         staff_invite_delivery_attempt_rows: list[tuple[object, ...]] | None = None,
         staff_invite_delivery_event_rows: list[tuple[object, ...]] | None = None,
+        application_rows: list[tuple[object, ...]] | None = None,
+        application_decision_rows: list[tuple[object, ...]] | None = None,
     ) -> None:
         self.rows = rows
         self.audit_rows = list(audit_rows or [])
@@ -93,6 +99,8 @@ class FakePostgresConnection:
         self.staff_invite_delivery_event_rows = list(
             staff_invite_delivery_event_rows or []
         )
+        self.application_rows = list(application_rows or [])
+        self.application_decision_rows = list(application_decision_rows or [])
         self.user_organization_rows = dict(user_organization_rows or {})
         for row in self.user_rows:
             self.user_organization_rows.setdefault(
@@ -849,6 +857,175 @@ class FakePostgresConnection:
             reverse=True,
         )
 
+    @staticmethod
+    def _row_application_id(row: tuple[object, ...]) -> object:
+        return row[APPLICATION_COLUMNS.index("id")]
+
+    @staticmethod
+    def _row_application_borrower_email(row: tuple[object, ...]) -> object:
+        return row[APPLICATION_COLUMNS.index("borrower_email")]
+
+    @staticmethod
+    def _row_application_organization_id(row: tuple[object, ...]) -> object:
+        return row[APPLICATION_COLUMNS.index("organization_id")]
+
+    @staticmethod
+    def _replace_application_column(
+        row: tuple[object, ...],
+        column: str,
+        value: object,
+    ) -> tuple[object, ...]:
+        values = list(row)
+        values[APPLICATION_COLUMNS.index(column)] = value
+        return tuple(values)
+
+    def _insert_application(self, params: dict[str, object]) -> None:
+        application_id = params["application_id"]
+        if any(
+            self._row_application_id(row) == application_id
+            for row in self.application_rows
+        ):
+            raise ValueError(f"duplicate application: {application_id}")
+        values = {
+            "id": application_id,
+            "borrower_email": params["borrower_email"],
+            "status": "submitted",
+            "requested_amount": params["requested_amount"],
+            "purpose": params["purpose"],
+            "district": params["district"],
+            "settlement_type": params["settlement_type"],
+            "organization_id": params["organization_id"],
+            "behavioral_signals_json": params["behavioral_signals_json"],
+            "score_result_json": None,
+            "created_at": params["created_at"],
+            "scored_at": None,
+        }
+        self.application_rows.append(
+            tuple(values[column] for column in APPLICATION_COLUMNS)
+        )
+
+    def _application_by_id(
+        self,
+        application_id: object,
+    ) -> tuple[object, ...] | None:
+        for row in self.application_rows:
+            if self._row_application_id(row) == application_id:
+                return row
+        return None
+
+    def _ordered_application_rows(
+        self,
+        rows: list[tuple[object, ...]] | None = None,
+    ) -> list[tuple[object, ...]]:
+        created_at_index = APPLICATION_COLUMNS.index("created_at")
+        return sorted(
+            list(self.application_rows if rows is None else rows),
+            key=lambda row: str(row[created_at_index] or ""),
+            reverse=True,
+        )
+
+    def _update_application_row(
+        self,
+        application_id: object,
+        replacements: dict[str, object],
+    ) -> int:
+        updated_rows: list[tuple[object, ...]] = []
+        rowcount = 0
+        for row in self.application_rows:
+            if self._row_application_id(row) != application_id:
+                updated_rows.append(row)
+                continue
+            for column, value in replacements.items():
+                row = self._replace_application_column(row, column, value)
+            updated_rows.append(row)
+            rowcount += 1
+        self.application_rows = updated_rows
+        return rowcount
+
+    def _clear_applications(self) -> int:
+        deleted_count = len(self.application_rows)
+        self.application_rows = []
+        self.application_decision_rows = []
+        return deleted_count
+
+    def _application_score_state_rows(
+        self,
+        application_id: object,
+    ) -> list[tuple[object, ...]]:
+        application = self._application_by_id(application_id)
+        if application is None:
+            return []
+        return [
+            (
+                application[APPLICATION_COLUMNS.index("status")],
+                application[APPLICATION_COLUMNS.index("score_result_json")],
+            )
+        ]
+
+    @staticmethod
+    def _row_application_decision_id(row: tuple[object, ...]) -> object:
+        return row[APPLICATION_DECISION_COLUMNS.index("id")]
+
+    @staticmethod
+    def _row_application_decision_application_id(row: tuple[object, ...]) -> object:
+        return row[APPLICATION_DECISION_COLUMNS.index("application_id")]
+
+    def _insert_application_decision(self, params: dict[str, object]) -> None:
+        next_id = (
+            max(
+                (
+                    int(row[APPLICATION_DECISION_COLUMNS.index("id")])
+                    for row in self.application_decision_rows
+                ),
+                default=0,
+            )
+            + 1
+        )
+        values = {
+            "id": next_id,
+            "application_id": params["application_id"],
+            "actor_email": params["actor_email"],
+            "decision": params["decision"],
+            "policy_name": params["policy_name"],
+            "note": params["note"],
+            "created_at": params["created_at"],
+        }
+        self.application_decision_rows.append(
+            tuple(values[column] for column in APPLICATION_DECISION_COLUMNS)
+        )
+
+    def _application_decision_rows(
+        self,
+        application_id: object,
+        *,
+        reverse: bool = False,
+    ) -> list[tuple[object, ...]]:
+        rows = [
+            row
+            for row in self.application_decision_rows
+            if self._row_application_decision_application_id(row) == application_id
+        ]
+        return sorted(
+            rows,
+            key=lambda row: int(row[APPLICATION_DECISION_COLUMNS.index("id")]),
+            reverse=reverse,
+        )
+
+    def _application_timeline_rows(
+        self,
+        application_id: object,
+    ) -> list[tuple[object, ...]]:
+        entity_type_index = AUDIT_EVENT_COLUMNS.index("entity_type")
+        entity_id_index = AUDIT_EVENT_COLUMNS.index("entity_id")
+        id_index = AUDIT_EVENT_COLUMNS.index("id")
+        rows = [
+            row
+            for row in self.audit_rows
+            if row[entity_type_index] == "loan_application"
+            and row[entity_id_index] == application_id
+        ]
+        return sorted(rows, key=lambda row: int(row[id_index]))
+
     def execute(
         self,
         sql: str,
@@ -888,11 +1065,22 @@ class FakePostgresConnection:
             self._insert_delivery_event(params)
             rows = []
             rowcount = 1
+        elif "INSERT INTO loan_applications" in sql:
+            self._insert_application(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO application_decisions" in sql:
+            self._insert_application_decision(params)
+            rows = []
+            rowcount = 1
         elif "DELETE FROM sessions" in sql and "WHERE token" in sql:
             rowcount = self._delete_session_by_token(params["token"])
             rows = []
         elif "DELETE FROM sessions" in sql and "WHERE email" in sql:
             rowcount = self._delete_sessions_by_email(params["email"])
+            rows = []
+        elif "DELETE FROM loan_applications" in sql:
+            rowcount = self._clear_applications()
             rows = []
         elif "UPDATE users" in sql and "disabled_at = %(disabled_at)s" in sql:
             rowcount = self._update_user_row(
@@ -929,6 +1117,28 @@ class FakePostgresConnection:
             self._update_user_organization(params)
             rows = []
             rowcount = 1
+        elif "UPDATE loan_applications" in sql and "score_result_json" in sql:
+            rowcount = self._update_application_row(
+                params["application_id"],
+                {
+                    "status": params["status"],
+                    "score_result_json": params["score_result_json"],
+                    "scored_at": params["scored_at"],
+                },
+            )
+            rows = []
+        elif "UPDATE loan_applications" in sql and "SET status = %(status)s" in sql:
+            rowcount = self._update_application_row(
+                params["application_id"],
+                {"status": params["status"]},
+            )
+            rows = []
+        elif "UPDATE loan_applications" in sql and "organization_id" in sql:
+            rowcount = self._update_application_row(
+                params["application_id"],
+                {"organization_id": params["organization_id"]},
+            )
+            rows = []
         elif "UPDATE staff_invites" in sql and "accepted_at = %(accepted_at)s" in sql:
             rowcount = self._update_staff_invite_row(
                 params["token"],
@@ -1023,6 +1233,42 @@ class FakePostgresConnection:
                 self._staff_invite_select_row(row)
                 for row in self._ordered_staff_invite_rows()
             ]
+        elif "SELECT COUNT(*) AS count" in sql and "FROM loan_applications" in sql:
+            rows = [(len(self.application_rows),)]
+        elif "SELECT status, score_result_json" in sql and "FROM loan_applications" in sql:
+            rows = self._application_score_state_rows(params["application_id"])
+        elif "FROM application_decisions" in sql and "ORDER BY id DESC" in sql:
+            rows = self._application_decision_rows(
+                params["application_id"],
+                reverse=True,
+            )[:1]
+        elif "FROM application_decisions" in sql:
+            rows = self._application_decision_rows(params["application_id"])
+        elif "FROM audit_events" in sql and "entity_type = 'loan_application'" in sql:
+            rows = self._application_timeline_rows(params["application_id"])
+        elif "FROM loan_applications" in sql and "WHERE id = %(application_id)s" in sql:
+            application = self._application_by_id(params["application_id"])
+            rows = [application] if application else []
+        elif "FROM loan_applications" in sql and "WHERE organization_id = %(organization_id)s" in sql:
+            rows = self._ordered_application_rows(
+                [
+                    row
+                    for row in self.application_rows
+                    if self._row_application_organization_id(row)
+                    == params["organization_id"]
+                ]
+            )
+        elif "FROM loan_applications" in sql and "WHERE borrower_email = %(borrower_email)s" in sql:
+            rows = self._ordered_application_rows(
+                [
+                    row
+                    for row in self.application_rows
+                    if self._row_application_borrower_email(row)
+                    == params["borrower_email"]
+                ]
+            )
+        elif "FROM loan_applications" in sql:
+            rows = self._ordered_application_rows()
         elif "FROM sessions" in sql and "WHERE sessions.token" in sql:
             rows = self._session_user_rows_for_token(params["token"])
         elif "FROM sessions" in sql and "ORDER BY sessions.created_at DESC" in sql:
@@ -1186,6 +1432,20 @@ def _postgres_staff_invite_delivery_event_row(
     return tuple(values[column] for column in STAFF_INVITE_DELIVERY_EVENT_COLUMNS)
 
 
+def _postgres_application_row(application: dict[str, object]) -> tuple[object, ...]:
+    values = dict(application)
+    values["behavioral_signals_json"] = values.pop("behavioral_signals")
+    values["score_result_json"] = values.pop("score_result")
+    values.pop("decision_result", None)
+    return tuple(values[column] for column in APPLICATION_COLUMNS)
+
+
+def _postgres_application_decision_row(
+    decision: dict[str, object],
+) -> tuple[object, ...]:
+    return tuple(decision[column] for column in APPLICATION_DECISION_COLUMNS)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -1213,26 +1473,27 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(summary["status"], "partial_method_groups")
         self.assertEqual(
             summary["stage"],
-            "model_registry_audit_organizations_identity_invites_groups_v1",
+            "model_registry_audit_organizations_identity_invites_applications_groups_v1",
         )
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 37)
-        self.assertEqual(summary["pending_method_count"], 15)
-        self.assertEqual(summary["completed_method_group_count"], 5)
+        self.assertEqual(summary["implemented_method_count"], 47)
+        self.assertEqual(summary["pending_method_count"], 5)
+        self.assertEqual(summary["completed_method_group_count"], 6)
         self.assertEqual(
             summary["completed_method_groups"],
             [
                 "identity_access",
                 "organizations",
                 "staff_invites_delivery",
+                "application_lifecycle",
                 "model_registry",
                 "audit",
             ],
         )
-        self.assertEqual(summary["read_only_method_count"], 17)
-        self.assertEqual(summary["write_method_count"], 20)
+        self.assertEqual(summary["read_only_method_count"], 22)
+        self.assertEqual(summary["write_method_count"], 25)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -1273,6 +1534,16 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "list_staff_invite_delivery_outbox_attempts",
                 "update_staff_invite_delivery_attempt_status",
                 "update_staff_invite_delivery_worker_state",
+                "create_application",
+                "get_application",
+                "list_applications",
+                "list_borrower_applications",
+                "assign_application_organization",
+                "update_application_score",
+                "record_application_decision",
+                "list_application_decisions",
+                "list_application_timeline",
+                "clear_applications",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -1300,8 +1571,11 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         )
         self.assertEqual(groups["staff_invites_delivery"]["pending_method_count"], 0)
         self.assertFalse(groups["staff_invites_delivery"]["pending_methods"])
+        self.assertEqual(groups["application_lifecycle"]["implemented_method_count"], 10)
+        self.assertEqual(groups["application_lifecycle"]["pending_method_count"], 0)
+        self.assertFalse(groups["application_lifecycle"]["pending_methods"])
         self.assertIn(
-            "model registry, audit, organization, identity/session, and staff invite delivery",
+            "model registry, audit, organization, identity/session, staff invite delivery, and application lifecycle",
             summary["limitation"],
         )
 
@@ -2174,6 +2448,320 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 )
             )
 
+    def test_application_lifecycle_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection([], query_log)
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            for repository in (sqlite_repository, adapter):
+                repository.create_organization(
+                    organization_id="application-mfi",
+                    name="Application Lifecycle MFI",
+                    region="Pavlodar",
+                )
+                repository.create_user(
+                    "application-borrower@example.com",
+                    "borrower-hash",
+                    "borrower",
+                    None,
+                )
+                repository.create_user(
+                    "application-analyst@example.com",
+                    "analyst-hash",
+                    "mfi_analyst",
+                    "application-mfi",
+                )
+
+            application_payload = {
+                "application_id": "application-lifecycle-1",
+                "borrower_email": "application-borrower@example.com",
+                "requested_amount": 245_600.0,
+                "purpose": "inventory financing",
+                "district": "Pavlodar city",
+                "settlement_type": "urban",
+                "behavioral_signals": {
+                    "mobile_banking_logins": 18,
+                    "late_payment_count": 0,
+                    "gender": "Female",
+                    "employment_status": "Self-Employed",
+                    "pavlodar_district": "Pavlodar city",
+                    "settlement_type": "urban",
+                },
+                "consent_version": "synthetic-test-v1",
+                "organization_id": None,
+            }
+            sqlite_created = sqlite_repository.create_application(**application_payload)
+            postgres_created = adapter.create_application(**application_payload)
+            for key in (
+                "id",
+                "borrower_email",
+                "status",
+                "requested_amount",
+                "purpose",
+                "district",
+                "settlement_type",
+                "organization_id",
+                "behavioral_signals",
+                "score_result",
+                "decision_result",
+            ):
+                self.assertEqual(postgres_created[key], sqlite_created[key])
+
+            for repository in (sqlite_repository, adapter):
+                repository.assign_application_organization(
+                    "application-lifecycle-1",
+                    "application-mfi",
+                )
+
+            self.assertEqual(
+                adapter.get_application("application-lifecycle-1")[
+                    "organization_id"
+                ],
+                sqlite_repository.get_application("application-lifecycle-1")[
+                    "organization_id"
+                ],
+            )
+            self.assertEqual(
+                [row["id"] for row in adapter.list_applications("application-mfi")],
+                [
+                    row["id"]
+                    for row in sqlite_repository.list_applications("application-mfi")
+                ],
+            )
+            self.assertEqual(
+                [
+                    row["id"]
+                    for row in adapter.list_borrower_applications(
+                        "application-borrower@example.com"
+                    )
+                ],
+                [
+                    row["id"]
+                    for row in sqlite_repository.list_borrower_applications(
+                        "application-borrower@example.com"
+                    )
+                ],
+            )
+
+            score_result = {
+                "model_version": "application-v1",
+                "risk_band": "medium",
+                "high_risk_probability": 0.44,
+                "recommendation": {
+                    "code": "manual_review",
+                    "title": "Manual review",
+                },
+                "proxy_sensitivity": {
+                    "max_probability_delta": 0.07,
+                },
+            }
+            sqlite_scored = sqlite_repository.update_application_score(
+                application_id="application-lifecycle-1",
+                score_result=score_result,
+                actor_email="application-analyst@example.com",
+            )
+            postgres_scored = adapter.update_application_score(
+                application_id="application-lifecycle-1",
+                score_result=score_result,
+                actor_email="application-analyst@example.com",
+            )
+            self.assertEqual(postgres_scored["status"], sqlite_scored["status"])
+            self.assertEqual(
+                postgres_scored["score_result"],
+                sqlite_scored["score_result"],
+            )
+            self.assertEqual(postgres_scored["status"], "scored")
+
+            rescored_result = {**score_result, "risk_band": "low", "high_risk_probability": 0.28}
+            sqlite_rescored = sqlite_repository.update_application_score(
+                application_id="application-lifecycle-1",
+                score_result=rescored_result,
+                actor_email="application-analyst@example.com",
+            )
+            postgres_rescored = adapter.update_application_score(
+                application_id="application-lifecycle-1",
+                score_result=rescored_result,
+                actor_email="application-analyst@example.com",
+            )
+            self.assertEqual(
+                postgres_rescored["score_result"]["risk_band"],
+                sqlite_rescored["score_result"]["risk_band"],
+            )
+            self.assertEqual(postgres_rescored["status"], "scored")
+
+            sqlite_review = sqlite_repository.record_application_decision(
+                application_id="application-lifecycle-1",
+                actor_email="application-analyst@example.com",
+                decision="review",
+                policy_name="manual-review-v1",
+                note="Needs a second look",
+            )
+            postgres_review = adapter.record_application_decision(
+                application_id="application-lifecycle-1",
+                actor_email="application-analyst@example.com",
+                decision="review",
+                policy_name="manual-review-v1",
+                note="Needs a second look",
+            )
+            self.assertEqual(postgres_review["status"], sqlite_review["status"])
+            self.assertEqual(postgres_review["status"], "under_review")
+
+            sqlite_approved = sqlite_repository.record_application_decision(
+                application_id="application-lifecycle-1",
+                actor_email="application-analyst@example.com",
+                decision="approve",
+                policy_name="manual-review-v1",
+                note="Approved after review",
+            )
+            postgres_approved = adapter.record_application_decision(
+                application_id="application-lifecycle-1",
+                actor_email="application-analyst@example.com",
+                decision="approve",
+                policy_name="manual-review-v1",
+                note="Approved after review",
+            )
+            self.assertEqual(postgres_approved["status"], sqlite_approved["status"])
+            self.assertEqual(postgres_approved["decision_result"]["decision"], "approve")
+
+            unscored_payload = {
+                **application_payload,
+                "application_id": "application-lifecycle-unscored",
+                "purpose": "equipment repair",
+            }
+            sqlite_repository.create_application(**unscored_payload)
+            adapter.create_application(**unscored_payload)
+            with self.assertRaisesRegex(ValueError, "Score the application"):
+                sqlite_repository.record_application_decision(
+                    application_id="application-lifecycle-unscored",
+                    actor_email="application-analyst@example.com",
+                    decision="approve",
+                    policy_name="manual-review-v1",
+                    note="too early",
+                )
+            with self.assertRaisesRegex(ValueError, "Score the application"):
+                adapter.record_application_decision(
+                    application_id="application-lifecycle-unscored",
+                    actor_email="application-analyst@example.com",
+                    decision="approve",
+                    policy_name="manual-review-v1",
+                    note="too early",
+                )
+            with self.assertRaisesRegex(ValueError, "Cannot score"):
+                sqlite_repository.update_application_score(
+                    application_id="application-lifecycle-1",
+                    score_result=score_result,
+                    actor_email="application-analyst@example.com",
+                )
+            with self.assertRaises(InvalidApplicationTransitionError):
+                adapter.update_application_score(
+                    application_id="application-lifecycle-1",
+                    score_result=score_result,
+                    actor_email="application-analyst@example.com",
+                )
+            with self.assertRaisesRegex(ValueError, "Cannot record decline"):
+                sqlite_repository.record_application_decision(
+                    application_id="application-lifecycle-1",
+                    actor_email="application-analyst@example.com",
+                    decision="decline",
+                    policy_name="manual-review-v1",
+                    note="terminal guard",
+                )
+            with self.assertRaisesRegex(
+                InvalidApplicationTransitionError,
+                "Cannot record decline",
+            ):
+                adapter.record_application_decision(
+                    application_id="application-lifecycle-1",
+                    actor_email="application-analyst@example.com",
+                    decision="decline",
+                    policy_name="manual-review-v1",
+                    note="terminal guard",
+                )
+
+            self.assertIsNone(adapter.get_application("missing-application"))
+            self.assertIsNone(
+                adapter.update_application_score(
+                    application_id="missing-application",
+                    score_result=score_result,
+                    actor_email="application-analyst@example.com",
+                )
+            )
+            self.assertIsNone(
+                adapter.record_application_decision(
+                    application_id="missing-application",
+                    actor_email="application-analyst@example.com",
+                    decision="approve",
+                    policy_name="manual-review-v1",
+                    note="missing",
+                )
+            )
+
+            self.assertEqual(
+                application_lifecycle_method_group_parity_snapshot(
+                    adapter,
+                    application_id="application-lifecycle-1",
+                    borrower_email="application-borrower@example.com",
+                    organization_id="application-mfi",
+                ),
+                application_lifecycle_method_group_parity_snapshot(
+                    sqlite_repository,
+                    application_id="application-lifecycle-1",
+                    borrower_email="application-borrower@example.com",
+                    organization_id="application-mfi",
+                ),
+            )
+            self.assertEqual(
+                [row["decision"] for row in adapter.list_application_decisions("application-lifecycle-1")],
+                [
+                    row["decision"]
+                    for row in sqlite_repository.list_application_decisions(
+                        "application-lifecycle-1"
+                    )
+                ],
+            )
+            self.assertEqual(
+                [row["action"] for row in adapter.list_application_timeline("application-lifecycle-1")],
+                [
+                    row["action"]
+                    for row in sqlite_repository.list_application_timeline(
+                        "application-lifecycle-1"
+                    )
+                ],
+            )
+
+            self.assertEqual(
+                adapter.clear_applications(actor_email="application-analyst@example.com"),
+                sqlite_repository.clear_applications(
+                    actor_email="application-analyst@example.com"
+                ),
+            )
+            self.assertEqual(adapter.list_applications(), [])
+            self.assertEqual(sqlite_repository.list_applications(), [])
+            self.assertEqual(adapter.list_application_decisions("application-lifecycle-1"), [])
+
+            self.assertGreaterEqual(fake_connection.commits, 12)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(
+                any("INSERT INTO loan_applications" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("UPDATE loan_applications" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("INSERT INTO application_decisions" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("FROM application_decisions" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("entity_type = 'loan_application'" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any("DELETE FROM loan_applications" in sql for sql, _params in query_log)
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -2321,6 +2909,51 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             adapter.get_staff_invite_delivery_event("blocked-event")
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.list_staff_invite_delivery_events("blocked-invite-token")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_application(
+                application_id="blocked-application",
+                borrower_email="blocked-borrower@example.com",
+                requested_amount=10_000.0,
+                purpose="blocked",
+                district="Pavlodar city",
+                settlement_type="urban",
+                behavioral_signals={},
+                consent_version="blocked-v1",
+                organization_id="blocked-mfi",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_application("blocked-application")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_applications()
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_applications("blocked-mfi")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_borrower_applications("blocked-borrower@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.assign_application_organization(
+                "blocked-application",
+                "blocked-mfi",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.update_application_score(
+                application_id="blocked-application",
+                score_result={},
+                actor_email="blocked-admin@example.com",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.record_application_decision(
+                application_id="blocked-application",
+                actor_email="blocked-admin@example.com",
+                decision="approve",
+                policy_name=None,
+                note="blocked",
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_application_decisions("blocked-application")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_application_timeline("blocked-application")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.clear_applications(actor_email="blocked-admin@example.com")
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()

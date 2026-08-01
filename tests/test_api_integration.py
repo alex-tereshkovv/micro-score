@@ -904,13 +904,13 @@ class ApiIntegrationTests(unittest.TestCase):
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_implemented_method_count"
             ],
-            37,
+            47,
         )
         self.assertEqual(
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_completed_method_group_count"
             ],
-            5,
+            6,
         )
         self.assertEqual(
             checks["storage_backend"]["evidence"][
@@ -920,6 +920,7 @@ class ApiIntegrationTests(unittest.TestCase):
                 "identity_access",
                 "organizations",
                 "staff_invites_delivery",
+                "application_lifecycle",
                 "model_registry",
                 "audit",
             ],
@@ -928,7 +929,7 @@ class ApiIntegrationTests(unittest.TestCase):
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_stage"
             ],
-            "model_registry_audit_organizations_identity_invites_groups_v1",
+            "model_registry_audit_organizations_identity_invites_applications_groups_v1",
         )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
@@ -978,7 +979,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(payload["repository_adapter_contract_present"])
         self.assertEqual(
             payload["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v7",
+            "postgresql-repository-adapter-v8",
         )
         self.assertEqual(
             payload["repository_adapter_module"],
@@ -986,20 +987,21 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["repository_adapter_stage"],
-            "model_registry_audit_organizations_identity_invites_groups_v1",
+            "model_registry_audit_organizations_identity_invites_applications_groups_v1",
         )
         self.assertEqual(payload["repository_adapter_contract_method_count"], 52)
-        self.assertEqual(payload["repository_adapter_implemented_method_count"], 37)
-        self.assertEqual(payload["repository_adapter_pending_method_count"], 15)
-        self.assertEqual(payload["repository_adapter_read_only_method_count"], 17)
-        self.assertEqual(payload["repository_adapter_write_method_count"], 20)
-        self.assertEqual(payload["repository_adapter_completed_method_group_count"], 5)
+        self.assertEqual(payload["repository_adapter_implemented_method_count"], 47)
+        self.assertEqual(payload["repository_adapter_pending_method_count"], 5)
+        self.assertEqual(payload["repository_adapter_read_only_method_count"], 22)
+        self.assertEqual(payload["repository_adapter_write_method_count"], 25)
+        self.assertEqual(payload["repository_adapter_completed_method_group_count"], 6)
         self.assertEqual(
             payload["repository_adapter_completed_method_groups"],
             [
                 "identity_access",
                 "organizations",
                 "staff_invites_delivery",
+                "application_lifecycle",
                 "model_registry",
                 "audit",
             ],
@@ -1012,6 +1014,9 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(payload["repository_adapter_identity_access_group_present"])
         self.assertTrue(
             payload["repository_adapter_staff_invites_delivery_group_present"]
+        )
+        self.assertTrue(
+            payload["repository_adapter_application_lifecycle_group_present"]
         )
         self.assertIn(
             "list_model_versions",
@@ -1035,6 +1040,10 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertIn(
             "record_staff_invite_delivery_event",
+            payload["repository_adapter_implemented_methods"],
+        )
+        self.assertIn(
+            "record_application_decision",
             payload["repository_adapter_implemented_methods"],
         )
         adapter_groups = {
@@ -1069,6 +1078,15 @@ class ApiIntegrationTests(unittest.TestCase):
             0,
         )
         self.assertFalse(adapter_groups["staff_invites_delivery"]["pending_methods"])
+        self.assertEqual(
+            adapter_groups["application_lifecycle"]["implemented_method_count"],
+            10,
+        )
+        self.assertEqual(
+            adapter_groups["application_lifecycle"]["pending_method_count"],
+            0,
+        )
+        self.assertFalse(adapter_groups["application_lifecycle"]["pending_methods"])
         artifact = payload["migration_artifacts"][0]
         self.assertEqual(
             artifact["path"],
@@ -1128,6 +1146,12 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(
             parity[
                 "postgresql_staff_invites_delivery_method_group_adapter"
+            ]["status"],
+            "pass",
+        )
+        self.assertEqual(
+            parity[
+                "postgresql_application_lifecycle_method_group_adapter"
             ]["status"],
             "pass",
         )

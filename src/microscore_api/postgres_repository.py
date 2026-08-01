@@ -18,12 +18,23 @@ import os
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v7"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v8"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
 POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_invites_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_invites_applications_groups_v1"
 DEFAULT_SESSION_TTL_HOURS = 8.0
 STAFF_ROLES = {"admin", "mfi_analyst"}
+DECISION_VALUES = ("approve", "review", "decline")
+DECISION_WORKFLOW_STATUSES = {
+    "approve": "approved",
+    "review": "under_review",
+    "decline": "declined",
+}
+TERMINAL_APPLICATION_STATUSES = {"approved", "declined"}
+DECISION_TRANSITIONS = {
+    "scored": {"approve", "review", "decline"},
+    "under_review": {"approve", "decline"},
+}
 POSTGRESQL_MODEL_REGISTRY_READ_METHODS = (
     "get_model_version",
     "get_active_model_version",
@@ -124,20 +135,52 @@ POSTGRESQL_STAFF_INVITE_METHODS = (
     "update_staff_invite_delivery_attempt_status",
     "update_staff_invite_delivery_worker_state",
 )
+POSTGRESQL_APPLICATION_LIFECYCLE_READ_METHODS = (
+    "get_application",
+    "list_applications",
+    "list_borrower_applications",
+    "list_application_decisions",
+    "list_application_timeline",
+)
+POSTGRESQL_APPLICATION_LIFECYCLE_WRITE_METHODS = (
+    "create_application",
+    "assign_application_organization",
+    "update_application_score",
+    "record_application_decision",
+    "clear_applications",
+)
+POSTGRESQL_APPLICATION_LIFECYCLE_METHODS = (
+    "create_application",
+    "get_application",
+    "list_applications",
+    "list_borrower_applications",
+    "assign_application_organization",
+    "update_application_score",
+    "record_application_decision",
+    "list_application_decisions",
+    "list_application_timeline",
+    "clear_applications",
+)
 POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_MODEL_REGISTRY_METHODS,
     *POSTGRESQL_AUDIT_METHODS,
     *POSTGRESQL_ORGANIZATION_METHODS,
     *POSTGRESQL_IDENTITY_METHODS,
     *POSTGRESQL_STAFF_INVITE_METHODS,
+    *POSTGRESQL_APPLICATION_LIFECYCLE_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v7 implements the model registry, audit, "
-    "organization, identity/session, and staff invite delivery method groups through an injected "
-    "DB-API compatible connection factory. Runtime backend selection remains "
-    "disabled until tenant-scoped application, simulation, and analytics flows have "
+    "PostgreSQL Repository Adapter v8 implements the model registry, audit, "
+    "organization, identity/session, staff invite delivery, and application "
+    "lifecycle method groups through an injected DB-API compatible connection "
+    "factory. Runtime backend selection remains disabled until tenant-scoped "
+    "simulation and analytics flows have "
     "repository parity coverage."
 )
+
+
+class InvalidApplicationTransitionError(ValueError):
+    """Raised when an application lifecycle transition is not allowed."""
 USER_COLUMNS = (
     "email",
     "password_hash",
@@ -720,6 +763,185 @@ VALUES (
     %(metadata_json)s::jsonb
 )
 """
+APPLICATION_COLUMNS = (
+    "id",
+    "borrower_email",
+    "status",
+    "requested_amount",
+    "purpose",
+    "district",
+    "settlement_type",
+    "organization_id",
+    "behavioral_signals_json",
+    "score_result_json",
+    "created_at",
+    "scored_at",
+)
+APPLICATION_SELECT = """
+SELECT
+    id,
+    borrower_email,
+    status,
+    requested_amount,
+    purpose,
+    district,
+    settlement_type,
+    organization_id,
+    behavioral_signals_json,
+    score_result_json,
+    created_at,
+    scored_at
+FROM loan_applications
+"""
+GET_APPLICATION_SQL = APPLICATION_SELECT + "WHERE id = %(application_id)s"
+LIST_APPLICATIONS_SQL = (
+    APPLICATION_SELECT
+    + """
+ORDER BY created_at DESC
+"""
+)
+LIST_APPLICATIONS_BY_ORGANIZATION_SQL = (
+    APPLICATION_SELECT
+    + """
+WHERE organization_id = %(organization_id)s
+ORDER BY created_at DESC
+"""
+)
+LIST_BORROWER_APPLICATIONS_SQL = (
+    APPLICATION_SELECT
+    + """
+WHERE borrower_email = %(borrower_email)s
+ORDER BY created_at DESC
+"""
+)
+CREATE_APPLICATION_SQL = """
+INSERT INTO loan_applications (
+    id,
+    borrower_email,
+    status,
+    requested_amount,
+    purpose,
+    district,
+    settlement_type,
+    organization_id,
+    behavioral_signals_json,
+    score_result_json,
+    created_at,
+    scored_at
+)
+VALUES (
+    %(application_id)s,
+    %(borrower_email)s,
+    'submitted',
+    %(requested_amount)s,
+    %(purpose)s,
+    %(district)s,
+    %(settlement_type)s,
+    %(organization_id)s,
+    %(behavioral_signals_json)s::jsonb,
+    NULL,
+    %(created_at)s,
+    NULL
+)
+"""
+ASSIGN_APPLICATION_ORGANIZATION_SQL = """
+UPDATE loan_applications
+SET organization_id = %(organization_id)s
+WHERE id = %(application_id)s
+"""
+COUNT_APPLICATIONS_SQL = """
+SELECT COUNT(*) AS count
+FROM loan_applications
+"""
+DELETE_APPLICATIONS_SQL = """
+DELETE FROM loan_applications
+"""
+GET_APPLICATION_SCORE_STATE_SQL = """
+SELECT status, score_result_json
+FROM loan_applications
+WHERE id = %(application_id)s
+"""
+UPDATE_APPLICATION_SCORE_SQL = """
+UPDATE loan_applications
+SET
+    status = %(status)s,
+    score_result_json = %(score_result_json)s::jsonb,
+    scored_at = %(scored_at)s
+WHERE id = %(application_id)s
+"""
+APPLICATION_DECISION_COLUMNS = (
+    "id",
+    "application_id",
+    "actor_email",
+    "decision",
+    "policy_name",
+    "note",
+    "created_at",
+)
+LIST_APPLICATION_DECISIONS_SQL = """
+SELECT
+    id,
+    application_id,
+    actor_email,
+    decision,
+    policy_name,
+    note,
+    created_at
+FROM application_decisions
+WHERE application_id = %(application_id)s
+ORDER BY id ASC
+"""
+GET_LATEST_APPLICATION_DECISION_SQL = """
+SELECT
+    id,
+    application_id,
+    actor_email,
+    decision,
+    policy_name,
+    note,
+    created_at
+FROM application_decisions
+WHERE application_id = %(application_id)s
+ORDER BY id DESC
+LIMIT 1
+"""
+RECORD_APPLICATION_DECISION_SQL = """
+INSERT INTO application_decisions (
+    application_id,
+    actor_email,
+    decision,
+    policy_name,
+    note,
+    created_at
+)
+VALUES (
+    %(application_id)s,
+    %(actor_email)s,
+    %(decision)s,
+    %(policy_name)s,
+    %(note)s,
+    %(created_at)s
+)
+"""
+UPDATE_APPLICATION_STATUS_SQL = """
+UPDATE loan_applications
+SET status = %(status)s
+WHERE id = %(application_id)s
+"""
+LIST_APPLICATION_TIMELINE_SQL = """
+SELECT
+    id,
+    actor_email,
+    action,
+    entity_type,
+    entity_id,
+    details_json,
+    created_at
+FROM audit_events
+WHERE entity_type = 'loan_application'
+  AND entity_id = %(application_id)s
+ORDER BY id ASC
+"""
 MODEL_VERSION_COLUMNS = (
     "version",
     "model_name",
@@ -1008,6 +1230,7 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_ORGANIZATION_READ_METHODS,
         *POSTGRESQL_IDENTITY_READ_METHODS,
         *POSTGRESQL_STAFF_INVITE_READ_METHODS,
+        *POSTGRESQL_APPLICATION_LIFECYCLE_READ_METHODS,
     )
     write_methods = (
         *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -1015,6 +1238,7 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_ORGANIZATION_WRITE_METHODS,
         *POSTGRESQL_IDENTITY_WRITE_METHODS,
         *POSTGRESQL_STAFF_INVITE_WRITE_METHODS,
+        *POSTGRESQL_APPLICATION_LIFECYCLE_WRITE_METHODS,
     )
     completed_groups = [
         group.key
@@ -1211,6 +1435,24 @@ def postgres_staff_invite_delivery_event_from_row(row: object) -> dict[str, Any]
     return event
 
 
+def postgres_application_decision_from_row(row: object) -> dict[str, Any]:
+    return _row_to_mapping(row, APPLICATION_DECISION_COLUMNS)
+
+
+def postgres_application_from_row(row: object) -> dict[str, Any]:
+    application = _row_to_mapping(row, APPLICATION_COLUMNS)
+    if application.get("requested_amount") is not None:
+        application["requested_amount"] = float(application["requested_amount"])
+    application["behavioral_signals"] = (
+        _coerce_json(application.pop("behavioral_signals_json"), {}) or {}
+    )
+    application["score_result"] = _coerce_json(
+        application.pop("score_result_json"),
+        None,
+    )
+    return application
+
+
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
     versions = getattr(repository, "list_model_versions")()
     active = getattr(repository, "get_active_model_version")()
@@ -1395,6 +1637,82 @@ def staff_invites_delivery_method_group_parity_snapshot(
         "event_metadata_keys": [
             sorted((event.get("metadata") or {}).keys())
             for event in events
+        ],
+        "method_group_complete": True,
+    }
+
+
+def _application_state(
+    application: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if application is None:
+        return None
+    score_result = application.get("score_result") or {}
+    decision_result = application.get("decision_result") or {}
+    return {
+        "id": application["id"],
+        "borrower_email": application["borrower_email"],
+        "status": application["status"],
+        "requested_amount": float(application["requested_amount"]),
+        "purpose": application["purpose"],
+        "district": application.get("district"),
+        "settlement_type": application.get("settlement_type"),
+        "organization_id": application.get("organization_id"),
+        "behavioral_signal_keys": sorted(
+            (application.get("behavioral_signals") or {}).keys()
+        ),
+        "has_score": bool(application.get("score_result")),
+        "risk_band": score_result.get("risk_band"),
+        "model_version": score_result.get("model_version"),
+        "decision": decision_result.get("decision"),
+        "policy_name": decision_result.get("policy_name"),
+    }
+
+
+def application_lifecycle_method_group_parity_snapshot(
+    repository: object,
+    *,
+    application_id: str,
+    borrower_email: str,
+    organization_id: str,
+) -> dict[str, object]:
+    applications = getattr(repository, "list_applications")()
+    organization_applications = getattr(repository, "list_applications")(
+        organization_id,
+    )
+    borrower_applications = getattr(repository, "list_borrower_applications")(
+        borrower_email,
+    )
+    decisions = getattr(repository, "list_application_decisions")(application_id)
+    timeline = getattr(repository, "list_application_timeline")(application_id)
+    return {
+        "method_group": "application_lifecycle",
+        "implemented_methods": list(POSTGRESQL_APPLICATION_LIFECYCLE_METHODS),
+        "application_count": len(applications),
+        "application_ids": sorted(application["id"] for application in applications),
+        "application_states": [
+            _application_state(application)
+            for application in sorted(
+                applications,
+                key=lambda item: str(item["id"]),
+            )
+        ],
+        "lookup": _application_state(
+            getattr(repository, "get_application")(application_id)
+        ),
+        "organization_application_ids": sorted(
+            application["id"] for application in organization_applications
+        ),
+        "borrower_application_ids": sorted(
+            application["id"] for application in borrower_applications
+        ),
+        "decision_count": len(decisions),
+        "decision_values": [decision["decision"] for decision in decisions],
+        "decision_policies": [decision.get("policy_name") for decision in decisions],
+        "timeline_count": len(timeline),
+        "timeline_actions": [event["action"] for event in timeline],
+        "timeline_detail_keys": [
+            sorted((event.get("details") or {}).keys()) for event in timeline
         ],
         "method_group_complete": True,
     }
@@ -2189,6 +2507,268 @@ class PostgresRepositoryAdapter:
         for event in events:
             event["was_duplicate"] = False
         return events
+
+    def create_application(
+        self,
+        *,
+        application_id: str,
+        borrower_email: str,
+        requested_amount: float,
+        purpose: str,
+        district: str | None,
+        settlement_type: str | None,
+        behavioral_signals: dict[str, Any],
+        consent_version: str | None = None,
+        organization_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_APPLICATION_SQL,
+                    {
+                        "application_id": application_id,
+                        "borrower_email": borrower_email,
+                        "requested_amount": requested_amount,
+                        "purpose": purpose,
+                        "district": district,
+                        "settlement_type": settlement_type,
+                        "organization_id": organization_id,
+                        "behavioral_signals_json": _json_dumps(behavioral_signals),
+                        "created_at": _now_iso(),
+                    },
+                )
+            ]
+        )
+        self.record_audit_event(
+            actor_email=borrower_email,
+            action="application_created",
+            entity_type="loan_application",
+            entity_id=application_id,
+            details={
+                "requested_amount": requested_amount,
+                "consent_confirmed": consent_version is not None,
+                "consent_version": consent_version,
+                "organization_id": organization_id,
+            },
+        )
+        return self.get_application(application_id) or {}
+
+    def _latest_application_decision(
+        self,
+        application_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_LATEST_APPLICATION_DECISION_SQL,
+            {"application_id": application_id},
+        )
+        return postgres_application_decision_from_row(row) if row else None
+
+    def _application_from_row(self, row: object) -> dict[str, Any]:
+        application = postgres_application_from_row(row)
+        application["decision_result"] = self._latest_application_decision(
+            str(application["id"])
+        )
+        return application
+
+    def get_application(self, application_id: str) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_APPLICATION_SQL,
+            {"application_id": application_id},
+        )
+        return self._application_from_row(row) if row else None
+
+    def list_applications(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if organization_id is None:
+            rows = self._fetchall(LIST_APPLICATIONS_SQL)
+        else:
+            rows = self._fetchall(
+                LIST_APPLICATIONS_BY_ORGANIZATION_SQL,
+                {"organization_id": organization_id},
+            )
+        return [self._application_from_row(row) for row in rows]
+
+    def list_borrower_applications(
+        self,
+        borrower_email: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            self._application_from_row(row)
+            for row in self._fetchall(
+                LIST_BORROWER_APPLICATIONS_SQL,
+                {"borrower_email": borrower_email},
+            )
+        ]
+
+    def assign_application_organization(
+        self,
+        application_id: str,
+        organization_id: str,
+    ) -> None:
+        self._write(
+            [
+                (
+                    ASSIGN_APPLICATION_ORGANIZATION_SQL,
+                    {
+                        "application_id": application_id,
+                        "organization_id": organization_id,
+                    },
+                )
+            ]
+        )
+
+    def clear_applications(self, *, actor_email: str) -> int:
+        row = self._fetchone(COUNT_APPLICATIONS_SQL)
+        deleted_count = int(_row_to_mapping(row, ("count",)).get("count") or 0)
+        self._write([(DELETE_APPLICATIONS_SQL, {})])
+        self.record_audit_event(
+            actor_email=actor_email,
+            action="applications_cleared",
+            entity_type="loan_application",
+            entity_id=None,
+            details={"deleted_count": deleted_count},
+        )
+        return deleted_count
+
+    def update_application_score(
+        self,
+        *,
+        application_id: str,
+        score_result: dict[str, Any],
+        actor_email: str,
+    ) -> dict[str, Any] | None:
+        current = self._fetchone(
+            GET_APPLICATION_SCORE_STATE_SQL,
+            {"application_id": application_id},
+        )
+        if current is None:
+            return None
+        current_state = _row_to_mapping(current, ("status", "score_result_json"))
+        previous_status = str(current_state["status"])
+        if previous_status in TERMINAL_APPLICATION_STATUSES:
+            raise InvalidApplicationTransitionError(
+                f"Cannot score an application after it is {previous_status}"
+            )
+        next_status = "scored" if previous_status == "submitted" else previous_status
+        action = (
+            "application_scored"
+            if current_state["score_result_json"] is None
+            else "application_rescored"
+        )
+        self._write(
+            [
+                (
+                    UPDATE_APPLICATION_SCORE_SQL,
+                    {
+                        "application_id": application_id,
+                        "status": next_status,
+                        "score_result_json": _json_dumps(score_result),
+                        "scored_at": _now_iso(),
+                    },
+                )
+            ]
+        )
+        self.record_audit_event(
+            actor_email=actor_email,
+            action=action,
+            entity_type="loan_application",
+            entity_id=application_id,
+            details={
+                "model_version": score_result.get("model_version"),
+                "risk_band": score_result.get("risk_band"),
+                "previous_status": previous_status,
+                "status": next_status,
+            },
+        )
+        return self.get_application(application_id)
+
+    def record_application_decision(
+        self,
+        *,
+        application_id: str,
+        actor_email: str,
+        decision: str,
+        policy_name: str | None,
+        note: str,
+    ) -> dict[str, Any] | None:
+        current = self._fetchone(
+            GET_APPLICATION_SCORE_STATE_SQL,
+            {"application_id": application_id},
+        )
+        if current is None:
+            return None
+        current_state = _row_to_mapping(current, ("status", "score_result_json"))
+        previous_status = str(current_state["status"])
+        if current_state["score_result_json"] is None:
+            raise InvalidApplicationTransitionError(
+                "Score the application before recording an MFI decision"
+            )
+        if decision not in DECISION_TRANSITIONS.get(previous_status, set()):
+            raise InvalidApplicationTransitionError(
+                f"Cannot record {decision} while application status is {previous_status}"
+            )
+        next_status = DECISION_WORKFLOW_STATUSES[decision]
+        self._write(
+            [
+                (
+                    RECORD_APPLICATION_DECISION_SQL,
+                    {
+                        "application_id": application_id,
+                        "actor_email": actor_email,
+                        "decision": decision,
+                        "policy_name": policy_name,
+                        "note": note,
+                        "created_at": _now_iso(),
+                    },
+                ),
+                (
+                    UPDATE_APPLICATION_STATUS_SQL,
+                    {
+                        "application_id": application_id,
+                        "status": next_status,
+                    },
+                ),
+            ]
+        )
+        self.record_audit_event(
+            actor_email=actor_email,
+            action="application_decision_recorded",
+            entity_type="loan_application",
+            entity_id=application_id,
+            details={
+                "decision": decision,
+                "policy_name": policy_name,
+                "previous_status": previous_status,
+                "status": next_status,
+            },
+        )
+        return self.get_application(application_id)
+
+    def list_application_decisions(
+        self,
+        application_id: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            postgres_application_decision_from_row(row)
+            for row in self._fetchall(
+                LIST_APPLICATION_DECISIONS_SQL,
+                {"application_id": application_id},
+            )
+        ]
+
+    def list_application_timeline(
+        self,
+        application_id: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            postgres_audit_event_from_row(row)
+            for row in self._fetchall(
+                LIST_APPLICATION_TIMELINE_SQL,
+                {"application_id": application_id},
+            )
+        ]
 
 
 @dataclass(frozen=True)

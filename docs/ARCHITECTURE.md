@@ -200,8 +200,8 @@ while the research is still pre-pilot.
 - No PostgreSQL repository backend, managed database secret, deployment, or
   repository-level disposable PostgreSQL parity CI yet. A versioned 0001 schema
   draft exists, is applied in disposable migration-smoke CI, and has a
-  `postgresql-repository-adapter-v7` surface with
-  `model_registry_audit_organizations_identity_invites_groups_v1` covering `create_model_version`,
+  `postgresql-repository-adapter-v8` surface with
+  `model_registry_audit_organizations_identity_invites_applications_groups_v1` covering `create_model_version`,
   `get_model_version`, `get_active_model_version`, `list_model_versions`, and
   `activate_model_version`, plus `record_audit_event`, `list_audit_events`,
   `create_organization`, `get_organization`, `list_organizations`, and
@@ -209,7 +209,8 @@ while the research is still pre-pilot.
   `create_user` through `revoke_session_by_id`, plus staff invite delivery,
   outbox worker-state, and idempotent webhook event methods from
   `create_staff_invite` through
-  `update_staff_invite_delivery_worker_state`; tenant-scoped application,
+  `update_staff_invite_delivery_worker_state`, plus tenant-scoped application
+  lifecycle methods from `create_application` through `clear_applications`;
   simulation, analytics flows and full backend selection remain blocked.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.

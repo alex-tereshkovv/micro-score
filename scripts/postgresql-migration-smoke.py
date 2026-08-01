@@ -21,6 +21,7 @@ from microscore_api.database import (  # noqa: E402
     REQUIRED_SCHEMA_TABLES,
 )
 from microscore_api.postgres_repository import (  # noqa: E402
+    POSTGRESQL_APPLICATION_LIFECYCLE_METHODS,
     POSTGRESQL_AUDIT_METHODS,
     POSTGRESQL_IDENTITY_METHODS,
     POSTGRESQL_MODEL_REGISTRY_METHODS,
@@ -88,6 +89,9 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
         "expected_identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
         "expected_staff_invite_methods": len(POSTGRESQL_STAFF_INVITE_METHODS),
+        "expected_application_lifecycle_methods": len(
+            POSTGRESQL_APPLICATION_LIFECYCLE_METHODS
+        ),
     }
 
 
@@ -381,7 +385,96 @@ def apply_migration_and_verify(
                 NOW()
             )
             ON CONFLICT (id) DO UPDATE
-            SET score_result_json = EXCLUDED.score_result_json;
+            SET
+                borrower_email = EXCLUDED.borrower_email,
+                status = EXCLUDED.status,
+                requested_amount = EXCLUDED.requested_amount,
+                purpose = EXCLUDED.purpose,
+                district = EXCLUDED.district,
+                settlement_type = EXCLUDED.settlement_type,
+                organization_id = EXCLUDED.organization_id,
+                behavioral_signals_json = EXCLUDED.behavioral_signals_json,
+                score_result_json = EXCLUDED.score_result_json,
+                scored_at = EXCLUDED.scored_at;
+
+            DELETE FROM application_decisions
+            WHERE application_id = 'ci-smoke-application';
+
+            INSERT INTO application_decisions (
+                application_id,
+                actor_email,
+                decision,
+                policy_name,
+                note,
+                created_at
+            )
+            VALUES (
+                'ci-smoke-application',
+                'ci-smoke-analyst@example.com',
+                'review',
+                'ci-smoke-policy',
+                'migration smoke manual review',
+                NOW()
+            );
+
+            UPDATE loan_applications
+            SET status = 'under_review'
+            WHERE id = 'ci-smoke-application';
+
+            INSERT INTO application_decisions (
+                application_id,
+                actor_email,
+                decision,
+                policy_name,
+                note,
+                created_at
+            )
+            VALUES (
+                'ci-smoke-application',
+                'ci-smoke-analyst@example.com',
+                'approve',
+                'ci-smoke-policy',
+                'migration smoke approval',
+                NOW()
+            );
+
+            UPDATE loan_applications
+            SET status = 'approved'
+            WHERE id = 'ci-smoke-application';
+
+            INSERT INTO audit_events (
+                actor_email,
+                action,
+                entity_type,
+                entity_id,
+                details_json,
+                created_at
+            )
+            VALUES
+                (
+                    'ci-smoke-borrower@example.com',
+                    'application_created',
+                    'loan_application',
+                    'ci-smoke-application',
+                    '{"method_group": "application_lifecycle", "status": "submitted"}'::jsonb,
+                    NOW()
+                ),
+                (
+                    'ci-smoke-analyst@example.com',
+                    'application_scored',
+                    'loan_application',
+                    'ci-smoke-application',
+                    '{"method_group": "application_lifecycle", "status": "scored"}'::jsonb,
+                    NOW()
+                ),
+                (
+                    'ci-smoke-analyst@example.com',
+                    'application_decision_recorded',
+                    'loan_application',
+                    'ci-smoke-application',
+                    '{"method_group": "application_lifecycle", "decision": "approve"}'::jsonb,
+                    NOW()
+                );
 
             UPDATE model_versions
             SET lifecycle_status = 'inactive', is_active = FALSE
@@ -537,6 +630,47 @@ def apply_migration_and_verify(
             WHERE id = 'ci-smoke-application';
         """,
     )
+    application_lifecycle_status = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT status || ':' || (score_result_json->>'risk_band')
+            FROM loan_applications
+            WHERE id = 'ci-smoke-application';
+        """,
+    )
+    application_decision_count = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT COUNT(*)::text
+            FROM application_decisions
+            WHERE application_id = 'ci-smoke-application';
+        """,
+    )
+    application_latest_decision = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT decision || ':' || COALESCE(policy_name, '')
+            FROM application_decisions
+            WHERE application_id = 'ci-smoke-application'
+            ORDER BY id DESC
+            LIMIT 1;
+        """,
+    )
+    application_timeline_latest_action = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT action
+            FROM audit_events
+            WHERE entity_type = 'loan_application'
+                AND entity_id = 'ci-smoke-application'
+            ORDER BY id DESC
+            LIMIT 1;
+        """,
+    )
     active_model_version = query_rows(
         psql_bin=psql_bin,
         database_url=database_url,
@@ -688,6 +822,26 @@ def apply_migration_and_verify(
     )
     assert_catalog_subset(expected=["low"], actual=jsonb_value, label="JSONB smoke row")
     assert_catalog_subset(
+        expected=["approved:low"],
+        actual=application_lifecycle_status,
+        label="application lifecycle status",
+    )
+    assert_catalog_subset(
+        expected=["2"],
+        actual=application_decision_count,
+        label="application decision count",
+    )
+    assert_catalog_subset(
+        expected=["approve:ci-smoke-policy"],
+        actual=application_latest_decision,
+        label="application latest decision",
+    )
+    assert_catalog_subset(
+        expected=["application_decision_recorded"],
+        actual=application_timeline_latest_action,
+        label="application timeline latest action",
+    )
+    assert_catalog_subset(
         expected=["ci-smoke-model-candidate"],
         actual=active_model_version,
         label="active model registry row",
@@ -779,6 +933,11 @@ def apply_migration_and_verify(
         "organization_methods": len(POSTGRESQL_ORGANIZATION_METHODS),
         "identity_methods": len(POSTGRESQL_IDENTITY_METHODS),
         "staff_invite_methods": len(POSTGRESQL_STAFF_INVITE_METHODS),
+        "application_lifecycle_methods": len(POSTGRESQL_APPLICATION_LIFECYCLE_METHODS),
+        "application_lifecycle_status": application_lifecycle_status[0],
+        "application_decision_count": application_decision_count[0],
+        "application_latest_decision": application_latest_decision[0],
+        "application_timeline_latest_action": application_timeline_latest_action[0],
         "organization_directory": organization_directory[0],
         "organization_assignment": organization_assignment[0],
         "identity_mfa_method": identity_mfa_method[0],
