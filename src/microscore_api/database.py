@@ -23,6 +23,7 @@ from .postgres_repository import (
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
     POSTGRESQL_ORGANIZATION_METHODS,
+    POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS,
     POSTGRESQL_STAFF_INVITE_METHODS,
     repository_contract_summary,
 )
@@ -87,8 +88,8 @@ POSTGRESQL_MIGRATION_CHECKLIST = (
     "Map JSON text columns to jsonb or an explicitly versioned text strategy.",
     "Preserve organization_id tenant scoping for queues, review packets, "
     "analytics, and simulations.",
-    "Port session, staff invite, audit, model registry, and simulation "
-    "repositories behind the same API.",
+    "Port session, staff invite, audit, model registry, simulation, and "
+    "analytics repositories behind the same API.",
     "Run SQLite parity tests plus PostgreSQL integration tests against a disposable database.",
 )
 POSTGRESQL_READINESS_LIMITATION = (
@@ -710,11 +711,11 @@ class MicroScoreRepository:
                     "status": "planned",
                     "detail": (
                         "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter has complete model registry, audit, "
-                        "organization, identity/session, and staff invite delivery "
-                        "and application lifecycle method groups, but "
-                        "tenant-scoped simulation and analytics flows still need "
-                        "parity coverage."
+                        "The adapter now implements every SQLite repository method "
+                        "group, including tenant-scoped portfolio simulation and "
+                        "analytics flows, but runtime backend selection still needs "
+                        "a managed database connection, production migration runner, "
+                        "and repository-level disposable PostgreSQL parity CI."
                     ),
                 },
                 {
@@ -724,7 +725,8 @@ class MicroScoreRepository:
                         "The PostgreSQL adapter groups SQLite repository method "
                         "families and implements complete model registry, audit, "
                         "organization, identity/session, staff invite delivery, "
-                        "and application lifecycle method groups."
+                        "application lifecycle, portfolio simulation, and analytics "
+                        "method groups."
                     ),
                 },
                 {
@@ -790,6 +792,16 @@ class MicroScoreRepository:
                         "decisions, decision history, audit timeline, and "
                         "application clearing as the sixth complete repository "
                         "method group."
+                    ),
+                },
+                {
+                    "id": "postgresql_portfolio_analytics_method_group_adapter",
+                    "status": "ready",
+                    "detail": (
+                        "The PostgreSQL adapter covers portfolio Monte Carlo run "
+                        "persistence, tenant-scoped simulation history, segment "
+                        "analytics, and decision analytics as the seventh complete "
+                        "repository method group."
                     ),
                 },
             ],
@@ -989,6 +1001,10 @@ class MicroScoreRepository:
             method in repository_adapter_implemented_methods
             for method in POSTGRESQL_APPLICATION_LIFECYCLE_METHODS
         )
+        repository_adapter_portfolio_analytics_group_present = all(
+            method in repository_adapter_implemented_methods
+            for method in POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS
+        )
         present_artifacts = [
             artifact for artifact in migration_artifacts if artifact["present"]
         ]
@@ -1099,10 +1115,17 @@ class MicroScoreRepository:
                 ),
                 "postgres_requirement": "Preserve organization_id scoping in indexes, repository queries, and optional row-level security.",
                 "action": (
-                    "Use the completed organization, staff invite, and "
+                    "Use the completed organization, staff invite, application, "
+                    "and portfolio analytics adapter groups as tenant-boundary "
+                    "evidence while designing optional row-level security."
+                    if tenant_index_covered
+                    and repository_adapter_organization_group_present
+                    and repository_adapter_staff_invites_delivery_group_present
+                    and repository_adapter_application_lifecycle_group_present
+                    and repository_adapter_portfolio_analytics_group_present
+                    else "Use the completed organization, staff invite, and "
                     "application adapter groups as tenant-boundary evidence, "
-                    "then add repository parity tests for analytics and "
-                    "simulations."
+                    "then complete portfolio simulation and analytics parity."
                     if tenant_index_covered
                     and repository_adapter_organization_group_present
                     and repository_adapter_staff_invites_delivery_group_present
@@ -1161,7 +1184,11 @@ class MicroScoreRepository:
                     "families before backend selection can be enabled."
                 ),
                 "action": (
-                    "Keep microscore_api.postgres_repository as the incremental "
+                    "Promote microscore_api.postgres_repository from injected "
+                    "adapter parity into disposable PostgreSQL repository CI."
+                    if repository_adapter_contract_present
+                    and repository_adapter_contract.get("pending_method_count", 0) == 0
+                    else "Keep microscore_api.postgres_repository as the incremental "
                     "adapter surface until every method family is implemented and parity-tested."
                     if repository_adapter_contract_present
                     else "Create a contract-only PostgreSQL adapter skeleton before repository implementation."
@@ -1256,8 +1283,8 @@ class MicroScoreRepository:
                 ),
                 "action": (
                     "Use the completed organization adapter group as the tenant "
-                    "boundary foundation while preserving application and invite "
-                    "tenant scoping before simulation and analytics parity."
+                    "boundary foundation while promoting repository-level "
+                    "disposable PostgreSQL parity CI."
                     if repository_adapter_organization_group_present
                     else "Complete create/get/list organization and user assignment parity."
                 ),
@@ -1281,7 +1308,8 @@ class MicroScoreRepository:
                 ),
                 "action": (
                     "Use the completed identity access adapter group as the "
-                    "security foundation before simulation and analytics parity."
+                    "security foundation while promoting repository-level "
+                    "disposable PostgreSQL parity CI."
                     if repository_adapter_identity_access_group_present
                     else "Complete users, MFA, and session lifecycle parity on the PostgreSQL adapter."
                 ),
@@ -1306,8 +1334,8 @@ class MicroScoreRepository:
                 ),
                 "action": (
                     "Use the completed staff invite delivery group as the "
-                    "tenant-scoped access onboarding foundation before "
-                    "simulation and analytics parity."
+                    "tenant-scoped access onboarding foundation while promoting "
+                    "repository-level disposable PostgreSQL parity CI."
                     if repository_adapter_staff_invites_delivery_group_present
                     else "Complete staff invite delivery parity on the PostgreSQL adapter."
                 ),
@@ -1332,10 +1360,36 @@ class MicroScoreRepository:
                 ),
                 "action": (
                     "Use the completed application lifecycle group as the core "
-                    "loan workflow foundation before portfolio simulation and "
-                    "analytics parity."
+                    "loan workflow foundation before promoting portfolio analytics "
+                    "into disposable PostgreSQL repository CI."
                     if repository_adapter_application_lifecycle_group_present
                     else "Complete borrower application lifecycle parity on the PostgreSQL adapter."
+                ),
+            },
+            {
+                "key": "postgresql_portfolio_analytics_method_group_adapter",
+                "status": (
+                    "pass"
+                    if repository_adapter_portfolio_analytics_group_present
+                    else "planned"
+                ),
+                "sqlite_evidence": (
+                    f"{len(POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS)} portfolio "
+                    "simulation and analytics method(s) have PostgreSQL query "
+                    "specs plus SQLite-vs-adapter parity coverage."
+                ),
+                "postgres_requirement": (
+                    "The adapter must preserve Monte Carlo run persistence, "
+                    "organization-scoped simulation history, scored-application "
+                    "segment analytics, latest-decision analytics, policy rows, "
+                    "risk/district/recommendation breakdowns, and proxy-sensitivity "
+                    "buckets."
+                ),
+                "action": (
+                    "Promote the fully implemented adapter surface into "
+                    "repository-level disposable PostgreSQL parity CI."
+                    if repository_adapter_portfolio_analytics_group_present
+                    else "Complete portfolio simulation and analytics parity on the PostgreSQL adapter."
                 ),
             },
             {
@@ -1343,19 +1397,16 @@ class MicroScoreRepository:
                 "status": "blocker",
                 "sqlite_evidence": (
                     "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; the adapter has complete model registry, audit, "
-                    "organization, identity/session, staff invite delivery, "
-                    "and application lifecycle method groups but does not yet "
-                    "cover the full repository contract."
+                    "at startup; the adapter now covers the full repository "
+                    "method contract through injected PostgreSQL parity specs."
                     if repository_adapter_contract_present
                     else "Runtime repository supports sqlite only and rejects postgresql at startup."
                 ),
                 "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
                 "action": (
-                    "Expand the PostgreSQL adapter from model registry, audit, "
-                    "organization, identity/session, staff invite delivery, "
-                    "and application lifecycle flows to tenant-scoped "
-                    "simulations and analytics."
+                    "Build the runtime PostgreSQL repository backend from the "
+                    "completed adapter method groups, wire managed configuration, "
+                    "and keep SQLite fallback explicit."
                 ),
             },
             {
@@ -1542,6 +1593,9 @@ class MicroScoreRepository:
             ),
             "repository_adapter_application_lifecycle_group_present": (
                 repository_adapter_application_lifecycle_group_present
+            ),
+            "repository_adapter_portfolio_analytics_group_present": (
+                repository_adapter_portfolio_analytics_group_present
             ),
             "repository_adapter_contract_groups": repository_adapter_contract.get(
                 "method_groups", []

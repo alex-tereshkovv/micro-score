@@ -166,17 +166,17 @@ git diff --check
   `/admin/storage/postgresql-readiness`, schema inventory, JSON-column mapping
   coverage, the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
   tenant-scope parity checks, disposable migration-smoke CI evidence through
-  `scripts/postgresql-migration-smoke.py`, the partial method-groups
-  `microscore_api.postgres_repository` adapter v8
-  (`model_registry_audit_organizations_identity_invites_applications_groups_v1`,
-  47 implemented methods out of 52, six completed method groups), missing
+  `scripts/postgresql-migration-smoke.py`, the fully grouped
+  `microscore_api.postgres_repository` adapter v9
+  (`all_repository_method_groups_v1`, 52 implemented methods out of 52, seven
+  completed method groups), missing
   `MICROSCORE_DATABASE_URL`, and blockers for the unimplemented PostgreSQL
   repository backend and repository-level PostgreSQL parity CI.
 - Storage readiness remains explicit: SQLite is the prototype backend,
   PostgreSQL migration remains blocked/planned even with the 0001 draft,
   migration-smoke CI, and completed model registry, audit, organization,
-  identity/session, staff invite delivery, and application lifecycle adapter
-  groups present, and no
+  identity/session, staff invite delivery, application lifecycle, portfolio
+  simulation, and analytics adapter groups present, and no
   release should imply production storage readiness until a real backend,
   managed database connection, production migration runner, and repository
   parity CI gate exist.

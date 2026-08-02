@@ -28,6 +28,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     POSTGRESQL_MODEL_REGISTRY_READ_METHODS,
     POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
     POSTGRESQL_ORGANIZATION_METHODS,
+    POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS,
     POSTGRESQL_STAFF_INVITE_METHODS,
 )
 
@@ -91,6 +92,9 @@ def validate_migration_text(path: Path) -> dict[str, object]:
         "expected_staff_invite_methods": len(POSTGRESQL_STAFF_INVITE_METHODS),
         "expected_application_lifecycle_methods": len(
             POSTGRESQL_APPLICATION_LIFECYCLE_METHODS
+        ),
+        "expected_portfolio_analytics_methods": len(
+            POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS
         ),
     }
 
@@ -476,6 +480,33 @@ def apply_migration_and_verify(
                     NOW()
                 );
 
+            INSERT INTO portfolio_simulations (
+                id,
+                organization_id,
+                actor_email,
+                portfolio_fingerprint,
+                request_json,
+                result_json,
+                created_at
+            )
+            VALUES (
+                'ci-smoke-simulation',
+                'ci-smoke-mfi',
+                'ci-smoke-analyst@example.com',
+                'ci-smoke-portfolio-fingerprint',
+                '{"iterations": 500, "seed": 991, "scenarios": ["baseline", "adverse", "severe"]}'::jsonb,
+                '{"scenario_results": [{"scenario": "baseline"}, {"scenario": "adverse"}, {"scenario": "severe"}], "warnings": ["postgresql migration smoke"]}'::jsonb,
+                NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET
+                organization_id = EXCLUDED.organization_id,
+                actor_email = EXCLUDED.actor_email,
+                portfolio_fingerprint = EXCLUDED.portfolio_fingerprint,
+                request_json = EXCLUDED.request_json,
+                result_json = EXCLUDED.result_json,
+                created_at = EXCLUDED.created_at;
+
             UPDATE model_versions
             SET lifecycle_status = 'inactive', is_active = FALSE
             WHERE version IN ('ci-smoke-model', 'ci-smoke-model-candidate');
@@ -671,6 +702,27 @@ def apply_migration_and_verify(
             LIMIT 1;
         """,
     )
+    portfolio_simulation_jsonb = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT
+                organization_id
+                || ':' || (request_json->>'seed')
+                || ':' || jsonb_array_length(result_json->'scenario_results')::text
+            FROM portfolio_simulations
+            WHERE id = 'ci-smoke-simulation';
+        """,
+    )
+    portfolio_simulation_scope_count = query_rows(
+        psql_bin=psql_bin,
+        database_url=database_url,
+        sql="""
+            SELECT COUNT(*)::text
+            FROM portfolio_simulations
+            WHERE organization_id = 'ci-smoke-mfi';
+        """,
+    )
     active_model_version = query_rows(
         psql_bin=psql_bin,
         database_url=database_url,
@@ -842,6 +894,16 @@ def apply_migration_and_verify(
         label="application timeline latest action",
     )
     assert_catalog_subset(
+        expected=["ci-smoke-mfi:991:3"],
+        actual=portfolio_simulation_jsonb,
+        label="portfolio simulation JSONB row",
+    )
+    assert_catalog_subset(
+        expected=["1"],
+        actual=portfolio_simulation_scope_count,
+        label="portfolio simulation organization scope",
+    )
+    assert_catalog_subset(
         expected=["ci-smoke-model-candidate"],
         actual=active_model_version,
         label="active model registry row",
@@ -938,6 +1000,9 @@ def apply_migration_and_verify(
         "application_decision_count": application_decision_count[0],
         "application_latest_decision": application_latest_decision[0],
         "application_timeline_latest_action": application_timeline_latest_action[0],
+        "portfolio_analytics_methods": len(POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS),
+        "portfolio_simulation_jsonb": portfolio_simulation_jsonb[0],
+        "portfolio_simulation_scope_count": portfolio_simulation_scope_count[0],
         "organization_directory": organization_directory[0],
         "organization_assignment": organization_assignment[0],
         "identity_mfa_method": identity_mfa_method[0],

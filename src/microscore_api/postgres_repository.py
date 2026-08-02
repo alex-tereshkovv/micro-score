@@ -18,13 +18,14 @@ import os
 from typing import Any, NoReturn
 
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v8"
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v9"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
-POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "partial_method_groups"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "model_registry_audit_organizations_identity_invites_applications_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "implemented"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "all_repository_method_groups_v1"
 DEFAULT_SESSION_TTL_HOURS = 8.0
 STAFF_ROLES = {"admin", "mfi_analyst"}
 DECISION_VALUES = ("approve", "review", "decline")
+PROXY_SENSITIVITY_THRESHOLD = 0.2
 DECISION_WORKFLOW_STATUSES = {
     "approve": "approved",
     "review": "under_review",
@@ -161,6 +162,22 @@ POSTGRESQL_APPLICATION_LIFECYCLE_METHODS = (
     "list_application_timeline",
     "clear_applications",
 )
+POSTGRESQL_PORTFOLIO_ANALYTICS_READ_METHODS = (
+    "get_portfolio_simulation",
+    "list_portfolio_simulations",
+    "segment_analytics",
+    "decision_analytics",
+)
+POSTGRESQL_PORTFOLIO_ANALYTICS_WRITE_METHODS = (
+    "create_portfolio_simulation",
+)
+POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS = (
+    "create_portfolio_simulation",
+    "get_portfolio_simulation",
+    "list_portfolio_simulations",
+    "segment_analytics",
+    "decision_analytics",
+)
 POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_MODEL_REGISTRY_METHODS,
     *POSTGRESQL_AUDIT_METHODS,
@@ -168,14 +185,16 @@ POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_IDENTITY_METHODS,
     *POSTGRESQL_STAFF_INVITE_METHODS,
     *POSTGRESQL_APPLICATION_LIFECYCLE_METHODS,
+    *POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v8 implements the model registry, audit, "
-    "organization, identity/session, staff invite delivery, and application "
-    "lifecycle method groups through an injected DB-API compatible connection "
-    "factory. Runtime backend selection remains disabled until tenant-scoped "
-    "simulation and analytics flows have "
-    "repository parity coverage."
+    "PostgreSQL Repository Adapter v9 implements every SQLite repository "
+    "method group through an injected DB-API compatible connection factory, "
+    "including model registry, audit, organization, identity/session, staff "
+    "invite delivery, application lifecycle, portfolio simulation, and MFI "
+    "analytics flows. Runtime backend selection remains disabled until a "
+    "managed PostgreSQL connection, production migration runner, and "
+    "repository-level disposable PostgreSQL parity CI are implemented."
 )
 
 
@@ -942,6 +961,65 @@ WHERE entity_type = 'loan_application'
   AND entity_id = %(application_id)s
 ORDER BY id ASC
 """
+PORTFOLIO_SIMULATION_COLUMNS = (
+    "id",
+    "organization_id",
+    "actor_email",
+    "portfolio_fingerprint",
+    "request_json",
+    "result_json",
+    "created_at",
+)
+PORTFOLIO_SIMULATION_SELECT = """
+SELECT
+    id,
+    organization_id,
+    actor_email,
+    portfolio_fingerprint,
+    request_json,
+    result_json,
+    created_at
+FROM portfolio_simulations
+"""
+GET_PORTFOLIO_SIMULATION_SQL = (
+    PORTFOLIO_SIMULATION_SELECT
+    + """
+WHERE id = %(simulation_id)s
+"""
+)
+LIST_PORTFOLIO_SIMULATIONS_SQL = (
+    PORTFOLIO_SIMULATION_SELECT
+    + """
+ORDER BY created_at DESC
+"""
+)
+LIST_PORTFOLIO_SIMULATIONS_BY_ORGANIZATION_SQL = (
+    PORTFOLIO_SIMULATION_SELECT
+    + """
+WHERE organization_id = %(organization_id)s
+ORDER BY created_at DESC
+"""
+)
+CREATE_PORTFOLIO_SIMULATION_SQL = """
+INSERT INTO portfolio_simulations (
+    id,
+    organization_id,
+    actor_email,
+    portfolio_fingerprint,
+    request_json,
+    result_json,
+    created_at
+)
+VALUES (
+    %(simulation_id)s,
+    %(organization_id)s,
+    %(actor_email)s,
+    %(portfolio_fingerprint)s,
+    %(request_json)s::jsonb,
+    %(result_json)s::jsonb,
+    %(created_at)s
+)
+"""
 MODEL_VERSION_COLUMNS = (
     "version",
     "model_name",
@@ -1231,6 +1309,7 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_IDENTITY_READ_METHODS,
         *POSTGRESQL_STAFF_INVITE_READ_METHODS,
         *POSTGRESQL_APPLICATION_LIFECYCLE_READ_METHODS,
+        *POSTGRESQL_PORTFOLIO_ANALYTICS_READ_METHODS,
     )
     write_methods = (
         *POSTGRESQL_MODEL_REGISTRY_WRITE_METHODS,
@@ -1239,6 +1318,7 @@ def repository_contract_summary() -> dict[str, object]:
         *POSTGRESQL_IDENTITY_WRITE_METHODS,
         *POSTGRESQL_STAFF_INVITE_WRITE_METHODS,
         *POSTGRESQL_APPLICATION_LIFECYCLE_WRITE_METHODS,
+        *POSTGRESQL_PORTFOLIO_ANALYTICS_WRITE_METHODS,
     )
     completed_groups = [
         group.key
@@ -1451,6 +1531,213 @@ def postgres_application_from_row(row: object) -> dict[str, Any]:
         None,
     )
     return application
+
+
+def postgres_portfolio_simulation_from_row(row: object) -> dict[str, Any]:
+    simulation = _row_to_mapping(row, PORTFOLIO_SIMULATION_COLUMNS)
+    simulation["request"] = _coerce_json(simulation.pop("request_json"), {}) or {}
+    simulation["result"] = _coerce_json(simulation.pop("result_json"), {}) or {}
+    return simulation
+
+
+def _safe_rate(count: int, total: int) -> float:
+    if total == 0:
+        return 0.0
+    return count / total
+
+
+def _mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _high_risk_probability(record: Mapping[str, Any]) -> float | None:
+    score = record.get("score_result") or {}
+    probability = score.get("high_risk_probability")
+    if probability is None:
+        return None
+    return float(probability)
+
+
+def _proxy_sensitivity_delta(record: Mapping[str, Any]) -> float | None:
+    score = record.get("score_result") or {}
+    delta = score.get("proxy_sensitivity_delta")
+    if delta is None:
+        return None
+    return float(delta)
+
+
+def _high_risk_probabilities(records: list[dict[str, Any]]) -> list[float]:
+    return [
+        probability
+        for record in records
+        if (probability := _high_risk_probability(record)) is not None
+    ]
+
+
+def _proxy_sensitivity_deltas(records: list[dict[str, Any]]) -> list[float]:
+    return [
+        delta
+        for record in records
+        if (delta := _proxy_sensitivity_delta(record)) is not None
+    ]
+
+
+def _proxy_sensitivity_bucket(record: Mapping[str, Any]) -> str:
+    score = record.get("score_result") or {}
+    delta = _proxy_sensitivity_delta(record)
+    warnings = " ".join(score.get("warnings") or []).lower()
+    if delta is None:
+        return "not_recorded"
+    if (
+        delta >= PROXY_SENSITIVITY_THRESHOLD
+        or "sensitive to late_payment_count" in warnings
+    ):
+        return "proxy_sensitive"
+    return "not_proxy_sensitive"
+
+
+def _recommendation(record: Mapping[str, Any]) -> tuple[str, str]:
+    score = record.get("score_result") or {}
+    decision_support = score.get("decision_support") or {}
+    code = str(decision_support.get("recommendation_code") or "not_recorded")
+    title = str(decision_support.get("title") or "Not recorded")
+    return code, title
+
+
+def _decision_risk_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        score = record.get("score_result") or {}
+        risk_band = score.get("risk_band")
+        if risk_band not in {"low", "medium", "high"}:
+            continue
+        groups.setdefault(str(risk_band), []).append(record)
+
+    rows: list[dict[str, Any]] = []
+    for risk_band in ("low", "medium", "high"):
+        group = groups.get(risk_band, [])
+        for decision in DECISION_VALUES:
+            matches = [
+                record
+                for record in group
+                if record["decision_result"]["decision"] == decision
+            ]
+            if not matches:
+                continue
+            rows.append(
+                {
+                    "risk_band": risk_band,
+                    "decision": decision,
+                    "count": len(matches),
+                    "rate_within_risk_band": _safe_rate(len(matches), len(group)),
+                    "mean_high_risk_probability": _mean(
+                        _high_risk_probabilities(matches)
+                    ),
+                }
+            )
+    return rows
+
+
+def _decision_district_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        signals = record.get("behavioral_signals") or {}
+        district = (
+            record.get("district")
+            or signals.get("pavlodar_district")
+            or "unknown"
+        )
+        groups.setdefault(str(district), []).append(record)
+
+    rows: list[dict[str, Any]] = []
+    for district, group in sorted(groups.items()):
+        for decision in DECISION_VALUES:
+            matches = [
+                record
+                for record in group
+                if record["decision_result"]["decision"] == decision
+            ]
+            if not matches:
+                continue
+            rows.append(
+                {
+                    "district": district,
+                    "decision": decision,
+                    "count": len(matches),
+                    "rate_within_district": _safe_rate(len(matches), len(group)),
+                    "mean_high_risk_probability": _mean(
+                        _high_risk_probabilities(matches)
+                    ),
+                }
+            )
+    return rows
+
+
+def _decision_recommendation_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in records:
+        groups.setdefault(_recommendation(record), []).append(record)
+
+    rows: list[dict[str, Any]] = []
+    for (code, title), group in sorted(groups.items()):
+        for decision in DECISION_VALUES:
+            matches = [
+                record
+                for record in group
+                if record["decision_result"]["decision"] == decision
+            ]
+            if not matches:
+                continue
+            rows.append(
+                {
+                    "recommendation_code": code,
+                    "recommendation_title": title,
+                    "decision": decision,
+                    "count": len(matches),
+                    "rate_within_recommendation": _safe_rate(
+                        len(matches),
+                        len(group),
+                    ),
+                    "mean_high_risk_probability": _mean(
+                        _high_risk_probabilities(matches)
+                    ),
+                }
+            )
+    return rows
+
+
+def _decision_proxy_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        groups.setdefault(_proxy_sensitivity_bucket(record), []).append(record)
+
+    rows: list[dict[str, Any]] = []
+    for bucket, group in sorted(groups.items()):
+        for decision in DECISION_VALUES:
+            matches = [
+                record
+                for record in group
+                if record["decision_result"]["decision"] == decision
+            ]
+            if not matches:
+                continue
+            rows.append(
+                {
+                    "proxy_sensitivity_bucket": bucket,
+                    "decision": decision,
+                    "count": len(matches),
+                    "rate_within_bucket": _safe_rate(len(matches), len(group)),
+                    "mean_high_risk_probability": _mean(
+                        _high_risk_probabilities(matches)
+                    ),
+                    "mean_proxy_sensitivity_delta": _mean(
+                        _proxy_sensitivity_deltas(matches)
+                    ),
+                }
+            )
+    return rows
 
 
 def model_registry_read_parity_snapshot(repository: object) -> dict[str, object]:
@@ -1714,6 +2001,78 @@ def application_lifecycle_method_group_parity_snapshot(
         "timeline_detail_keys": [
             sorted((event.get("details") or {}).keys()) for event in timeline
         ],
+        "method_group_complete": True,
+    }
+
+
+def _portfolio_simulation_state(
+    simulation: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if simulation is None:
+        return None
+    request_payload = simulation.get("request") or {}
+    result_payload = simulation.get("result") or {}
+    scenario_results = result_payload.get("scenario_results") or []
+    return {
+        "id": simulation["id"],
+        "organization_id": simulation.get("organization_id"),
+        "actor_email": simulation.get("actor_email"),
+        "portfolio_fingerprint": simulation.get("portfolio_fingerprint"),
+        "request_keys": sorted(request_payload.keys()),
+        "scenario_count": len(scenario_results),
+        "scenario_names": sorted(
+            str(scenario.get("scenario"))
+            for scenario in scenario_results
+            if scenario.get("scenario") is not None
+        ),
+        "warning_count": len(result_payload.get("warnings") or []),
+    }
+
+
+def portfolio_analytics_method_group_parity_snapshot(
+    repository: object,
+    *,
+    simulation_id: str,
+    organization_id: str,
+) -> dict[str, object]:
+    simulations = getattr(repository, "list_portfolio_simulations")()
+    organization_simulations = getattr(repository, "list_portfolio_simulations")(
+        organization_id,
+    )
+    segments = getattr(repository, "segment_analytics")(organization_id)
+    decisions = getattr(repository, "decision_analytics")(organization_id)
+    return {
+        "method_group": "portfolio_analytics",
+        "implemented_methods": list(POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS),
+        "simulation_count": len(simulations),
+        "simulation_ids": [simulation["id"] for simulation in simulations],
+        "simulation_states": [
+            _portfolio_simulation_state(simulation) for simulation in simulations
+        ],
+        "lookup": _portfolio_simulation_state(
+            getattr(repository, "get_portfolio_simulation")(simulation_id)
+        ),
+        "organization_simulation_ids": [
+            simulation["id"] for simulation in organization_simulations
+        ],
+        "segment_rows": [
+            (
+                row["segment_feature"],
+                row["segment_value"],
+                row["n"],
+                row["avg_high_risk_probability"],
+                row["high_risk_share"],
+            )
+            for row in segments
+        ],
+        "decision_application_count": decisions["application_count"],
+        "decided_application_count": decisions["decided_application_count"],
+        "decision_rows": decisions["decision_rows"],
+        "policy_rows": decisions["policy_rows"],
+        "risk_rows": decisions["risk_rows"],
+        "district_rows": decisions["district_rows"],
+        "recommendation_rows": decisions["recommendation_rows"],
+        "proxy_rows": decisions["proxy_rows"],
         "method_group_complete": True,
     }
 
@@ -2769,6 +3128,159 @@ class PostgresRepositoryAdapter:
                 {"application_id": application_id},
             )
         ]
+
+    def create_portfolio_simulation(
+        self,
+        *,
+        simulation_id: str,
+        organization_id: str | None,
+        actor_email: str,
+        portfolio_fingerprint: str,
+        request_payload: dict[str, Any],
+        result_payload: dict[str, Any],
+        created_at: str,
+    ) -> dict[str, Any]:
+        self._write(
+            [
+                (
+                    CREATE_PORTFOLIO_SIMULATION_SQL,
+                    {
+                        "simulation_id": simulation_id,
+                        "organization_id": organization_id,
+                        "actor_email": actor_email,
+                        "portfolio_fingerprint": portfolio_fingerprint,
+                        "request_json": _json_dumps(request_payload),
+                        "result_json": _json_dumps(result_payload),
+                        "created_at": created_at,
+                    },
+                )
+            ]
+        )
+        return self.get_portfolio_simulation(simulation_id) or {}
+
+    def get_portfolio_simulation(
+        self,
+        simulation_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._fetchone(
+            GET_PORTFOLIO_SIMULATION_SQL,
+            {"simulation_id": simulation_id},
+        )
+        return postgres_portfolio_simulation_from_row(row) if row else None
+
+    def list_portfolio_simulations(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if organization_id is None:
+            rows = self._fetchall(LIST_PORTFOLIO_SIMULATIONS_SQL)
+        else:
+            rows = self._fetchall(
+                LIST_PORTFOLIO_SIMULATIONS_BY_ORGANIZATION_SQL,
+                {"organization_id": organization_id},
+            )
+        return [postgres_portfolio_simulation_from_row(row) for row in rows]
+
+    def segment_analytics(
+        self,
+        organization_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        scored = [
+            item
+            for item in self.list_applications(organization_id)
+            if item.get("score_result")
+        ]
+        segments: dict[tuple[str, str], list[float]] = {}
+
+        for item in scored:
+            signals = item["behavioral_signals"]
+            segment_values = {
+                "settlement_type": (
+                    item.get("settlement_type")
+                    or signals.get("settlement_type")
+                    or "unknown"
+                ),
+                "pavlodar_district": (
+                    item.get("district")
+                    or signals.get("pavlodar_district")
+                    or "unknown"
+                ),
+                "gender": signals.get("gender") or "unknown",
+                "employment_status": signals.get("employment_status") or "unknown",
+            }
+            probability = item["score_result"]["high_risk_probability"]
+            for feature, value in segment_values.items():
+                segments.setdefault((feature, str(value)), []).append(probability)
+
+        rows: list[dict[str, Any]] = []
+        for (feature, value), probabilities in sorted(segments.items()):
+            rows.append(
+                {
+                    "segment_feature": feature,
+                    "segment_value": value,
+                    "n": len(probabilities),
+                    "avg_high_risk_probability": sum(probabilities)
+                    / len(probabilities),
+                    "high_risk_share": sum(
+                        probability >= 0.65 for probability in probabilities
+                    )
+                    / len(probabilities),
+                }
+            )
+        return rows
+
+    def decision_analytics(
+        self,
+        organization_id: str | None = None,
+    ) -> dict[str, Any]:
+        applications = self.list_applications(organization_id)
+        decision_records = [
+            application
+            for application in applications
+            if application.get("decision_result")
+        ]
+        decisions = [
+            application["decision_result"] for application in decision_records
+        ]
+        total_decisions = len(decisions)
+
+        decision_rows: list[dict[str, Any]] = []
+        for decision in DECISION_VALUES:
+            count = sum(item["decision"] == decision for item in decisions)
+            decision_rows.append(
+                {
+                    "decision": decision,
+                    "count": count,
+                    "rate": _safe_rate(count, total_decisions),
+                }
+            )
+
+        policy_counts: dict[tuple[str, str], int] = {}
+        for item in decisions:
+            key = (item["policy_name"] or "not_recorded", item["decision"])
+            policy_counts[key] = policy_counts.get(key, 0) + 1
+
+        policy_rows = [
+            {
+                "policy_name": policy_name,
+                "decision": decision,
+                "count": count,
+                "rate": _safe_rate(count, total_decisions),
+            }
+            for (policy_name, decision), count in sorted(policy_counts.items())
+        ]
+
+        return {
+            "application_count": len(applications),
+            "decided_application_count": total_decisions,
+            "decision_rows": decision_rows,
+            "policy_rows": policy_rows,
+            "risk_rows": _decision_risk_rows(decision_records),
+            "district_rows": _decision_district_rows(decision_records),
+            "recommendation_rows": _decision_recommendation_rows(decision_records),
+            "proxy_rows": _decision_proxy_rows(decision_records),
+            "note": "Decision analytics summarize the latest human MFI decision per application.",
+        }
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     LIST_USER_COLUMNS,
     MODEL_VERSION_COLUMNS,
     ORGANIZATION_COLUMNS,
+    PORTFOLIO_SIMULATION_COLUMNS,
     POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
     POSTGRESQL_REPOSITORY_ADAPTER_MODULE,
     POSTGRESQL_REPOSITORY_ADAPTER_STATUS,
@@ -41,6 +42,7 @@ from microscore_api.postgres_repository import (  # noqa: E402
     model_registry_method_group_parity_snapshot,
     model_registry_read_parity_snapshot,
     organization_method_group_parity_snapshot,
+    portfolio_analytics_method_group_parity_snapshot,
     repository_contract_methods,
     repository_contract_summary,
     staff_invites_delivery_method_group_parity_snapshot,
@@ -81,6 +83,7 @@ class FakePostgresConnection:
         staff_invite_delivery_event_rows: list[tuple[object, ...]] | None = None,
         application_rows: list[tuple[object, ...]] | None = None,
         application_decision_rows: list[tuple[object, ...]] | None = None,
+        portfolio_simulation_rows: list[tuple[object, ...]] | None = None,
     ) -> None:
         self.rows = rows
         self.audit_rows = list(audit_rows or [])
@@ -101,6 +104,7 @@ class FakePostgresConnection:
         )
         self.application_rows = list(application_rows or [])
         self.application_decision_rows = list(application_decision_rows or [])
+        self.portfolio_simulation_rows = list(portfolio_simulation_rows or [])
         self.user_organization_rows = dict(user_organization_rows or {})
         for row in self.user_rows:
             self.user_organization_rows.setdefault(
@@ -1026,6 +1030,54 @@ class FakePostgresConnection:
         ]
         return sorted(rows, key=lambda row: int(row[id_index]))
 
+    @staticmethod
+    def _row_portfolio_simulation_id(row: tuple[object, ...]) -> object:
+        return row[PORTFOLIO_SIMULATION_COLUMNS.index("id")]
+
+    @staticmethod
+    def _row_portfolio_simulation_organization_id(row: tuple[object, ...]) -> object:
+        return row[PORTFOLIO_SIMULATION_COLUMNS.index("organization_id")]
+
+    def _insert_portfolio_simulation(self, params: dict[str, object]) -> None:
+        simulation_id = params["simulation_id"]
+        if any(
+            self._row_portfolio_simulation_id(row) == simulation_id
+            for row in self.portfolio_simulation_rows
+        ):
+            raise ValueError(f"duplicate portfolio simulation: {simulation_id}")
+        values = {
+            "id": simulation_id,
+            "organization_id": params["organization_id"],
+            "actor_email": params["actor_email"],
+            "portfolio_fingerprint": params["portfolio_fingerprint"],
+            "request_json": params["request_json"],
+            "result_json": params["result_json"],
+            "created_at": params["created_at"],
+        }
+        self.portfolio_simulation_rows.append(
+            tuple(values[column] for column in PORTFOLIO_SIMULATION_COLUMNS)
+        )
+
+    def _portfolio_simulation_by_id(
+        self,
+        simulation_id: object,
+    ) -> tuple[object, ...] | None:
+        for row in self.portfolio_simulation_rows:
+            if self._row_portfolio_simulation_id(row) == simulation_id:
+                return row
+        return None
+
+    def _ordered_portfolio_simulation_rows(
+        self,
+        rows: list[tuple[object, ...]] | None = None,
+    ) -> list[tuple[object, ...]]:
+        created_at_index = PORTFOLIO_SIMULATION_COLUMNS.index("created_at")
+        return sorted(
+            list(self.portfolio_simulation_rows if rows is None else rows),
+            key=lambda row: str(row[created_at_index] or ""),
+            reverse=True,
+        )
+
     def execute(
         self,
         sql: str,
@@ -1071,6 +1123,10 @@ class FakePostgresConnection:
             rowcount = 1
         elif "INSERT INTO application_decisions" in sql:
             self._insert_application_decision(params)
+            rows = []
+            rowcount = 1
+        elif "INSERT INTO portfolio_simulations" in sql:
+            self._insert_portfolio_simulation(params)
             rows = []
             rowcount = 1
         elif "DELETE FROM sessions" in sql and "WHERE token" in sql:
@@ -1233,6 +1289,20 @@ class FakePostgresConnection:
                 self._staff_invite_select_row(row)
                 for row in self._ordered_staff_invite_rows()
             ]
+        elif "FROM portfolio_simulations" in sql and "WHERE id = %(simulation_id)s" in sql:
+            simulation = self._portfolio_simulation_by_id(params["simulation_id"])
+            rows = [simulation] if simulation else []
+        elif "FROM portfolio_simulations" in sql and "WHERE organization_id = %(organization_id)s" in sql:
+            rows = self._ordered_portfolio_simulation_rows(
+                [
+                    row
+                    for row in self.portfolio_simulation_rows
+                    if self._row_portfolio_simulation_organization_id(row)
+                    == params["organization_id"]
+                ]
+            )
+        elif "FROM portfolio_simulations" in sql:
+            rows = self._ordered_portfolio_simulation_rows()
         elif "SELECT COUNT(*) AS count" in sql and "FROM loan_applications" in sql:
             rows = [(len(self.application_rows),)]
         elif "SELECT status, score_result_json" in sql and "FROM loan_applications" in sql:
@@ -1446,6 +1516,15 @@ def _postgres_application_decision_row(
     return tuple(decision[column] for column in APPLICATION_DECISION_COLUMNS)
 
 
+def _postgres_portfolio_simulation_row(
+    simulation: dict[str, object],
+) -> tuple[object, ...]:
+    values = dict(simulation)
+    values["request_json"] = values.pop("request")
+    values["result_json"] = values.pop("result")
+    return tuple(values[column] for column in PORTFOLIO_SIMULATION_COLUMNS)
+
+
 class PostgresRepositoryAdapterTests(unittest.TestCase):
     def test_repository_contract_methods_exist_on_sqlite_repository(self) -> None:
         sqlite_methods = {
@@ -1461,7 +1540,7 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             with self.subTest(method=method):
                 self.assertIn(method, sqlite_methods)
 
-    def test_repository_contract_summary_is_partial_method_groups(self) -> None:
+    def test_repository_contract_summary_is_implemented_method_groups(self) -> None:
         summary = repository_contract_summary()
 
         self.assertEqual(summary["module"], POSTGRESQL_REPOSITORY_ADAPTER_MODULE)
@@ -1470,17 +1549,17 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION,
         )
         self.assertEqual(summary["status"], POSTGRESQL_REPOSITORY_ADAPTER_STATUS)
-        self.assertEqual(summary["status"], "partial_method_groups")
+        self.assertEqual(summary["status"], "implemented")
         self.assertEqual(
             summary["stage"],
-            "model_registry_audit_organizations_identity_invites_applications_groups_v1",
+            "all_repository_method_groups_v1",
         )
         self.assertTrue(summary["present"])
         self.assertFalse(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
-        self.assertEqual(summary["implemented_method_count"], 47)
-        self.assertEqual(summary["pending_method_count"], 5)
-        self.assertEqual(summary["completed_method_group_count"], 6)
+        self.assertEqual(summary["implemented_method_count"], 52)
+        self.assertEqual(summary["pending_method_count"], 0)
+        self.assertEqual(summary["completed_method_group_count"], 7)
         self.assertEqual(
             summary["completed_method_groups"],
             [
@@ -1489,11 +1568,12 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "staff_invites_delivery",
                 "application_lifecycle",
                 "model_registry",
+                "portfolio_analytics",
                 "audit",
             ],
         )
-        self.assertEqual(summary["read_only_method_count"], 22)
-        self.assertEqual(summary["write_method_count"], 25)
+        self.assertEqual(summary["read_only_method_count"], 26)
+        self.assertEqual(summary["write_method_count"], 26)
         self.assertEqual(
             summary["implemented_methods"],
             [
@@ -1544,6 +1624,11 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 "list_application_decisions",
                 "list_application_timeline",
                 "clear_applications",
+                "create_portfolio_simulation",
+                "get_portfolio_simulation",
+                "list_portfolio_simulations",
+                "segment_analytics",
+                "decision_analytics",
             ],
         )
         self.assertEqual(len(summary["method_groups"]), len(REPOSITORY_METHOD_GROUPS))
@@ -1574,8 +1659,11 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(groups["application_lifecycle"]["implemented_method_count"], 10)
         self.assertEqual(groups["application_lifecycle"]["pending_method_count"], 0)
         self.assertFalse(groups["application_lifecycle"]["pending_methods"])
+        self.assertEqual(groups["portfolio_analytics"]["implemented_method_count"], 5)
+        self.assertEqual(groups["portfolio_analytics"]["pending_method_count"], 0)
+        self.assertFalse(groups["portfolio_analytics"]["pending_methods"])
         self.assertIn(
-            "model registry, audit, organization, identity/session, staff invite delivery, and application lifecycle",
+            "portfolio simulation, and MFI analytics",
             summary["limitation"],
         )
 
@@ -2762,6 +2850,296 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
                 any("DELETE FROM loan_applications" in sql for sql, _params in query_log)
             )
 
+    def test_portfolio_analytics_adapter_matches_sqlite_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sqlite_repository = MicroScoreRepository(Path(tmpdir) / "microscore.sqlite3")
+            query_log: list[tuple[str, dict[str, object]]] = []
+            fake_connection = FakePostgresConnection([], query_log)
+            adapter = PostgresRepositoryAdapter(lambda: fake_connection)
+
+            for repository in (sqlite_repository, adapter):
+                repository.create_organization(
+                    organization_id="analytics-mfi",
+                    name="Analytics MFI",
+                    region="Pavlodar",
+                )
+                repository.create_organization(
+                    organization_id="analytics-other-mfi",
+                    name="Other Analytics MFI",
+                    region="Ekibastuz",
+                )
+                repository.create_user(
+                    "analytics-borrower-low@example.com",
+                    "hash",
+                    "borrower",
+                )
+                repository.create_user(
+                    "analytics-borrower-high@example.com",
+                    "hash",
+                    "borrower",
+                )
+                repository.create_user(
+                    "analytics-other-borrower@example.com",
+                    "hash",
+                    "borrower",
+                )
+                repository.create_user(
+                    "analytics-analyst@example.com",
+                    "hash",
+                    "mfi_analyst",
+                    "analytics-mfi",
+                )
+                repository.create_user(
+                    "analytics-other-analyst@example.com",
+                    "hash",
+                    "mfi_analyst",
+                    "analytics-other-mfi",
+                )
+
+            applications = [
+                {
+                    "application_id": "analytics-app-low",
+                    "borrower_email": "analytics-borrower-low@example.com",
+                    "requested_amount": 120000.0,
+                    "purpose": "analytics low risk",
+                    "district": "Pavlodar city",
+                    "settlement_type": "urban",
+                    "organization_id": "analytics-mfi",
+                    "behavioral_signals": {
+                        "gender": "Female",
+                        "employment_status": "Employed",
+                        "pavlodar_district": "Pavlodar city",
+                    },
+                    "score_result": {
+                        "risk_band": "low",
+                        "high_risk_probability": 0.24,
+                        "model_version": "analytics-v1",
+                        "decision_support": {
+                            "recommendation_code": "approve_manual",
+                            "title": "Approve with manual checks",
+                        },
+                        "proxy_sensitivity_delta": 0.08,
+                        "warnings": [],
+                    },
+                    "decision": "approve",
+                    "policy_name": "balanced_policy",
+                    "actor_email": "analytics-analyst@example.com",
+                },
+                {
+                    "application_id": "analytics-app-high",
+                    "borrower_email": "analytics-borrower-high@example.com",
+                    "requested_amount": 180000.0,
+                    "purpose": "analytics high risk",
+                    "district": "Aksu",
+                    "settlement_type": "industrial_city",
+                    "organization_id": "analytics-mfi",
+                    "behavioral_signals": {
+                        "gender": "Male",
+                        "employment_status": "Self-Employed",
+                        "pavlodar_district": "Aksu",
+                    },
+                    "score_result": {
+                        "risk_band": "high",
+                        "high_risk_probability": 0.78,
+                        "model_version": "analytics-v1",
+                        "decision_support": {
+                            "recommendation_code": "manual_review",
+                            "title": "Manual review required",
+                        },
+                        "proxy_sensitivity_delta": 0.26,
+                        "warnings": ["Sensitive to late_payment_count"],
+                    },
+                    "decision": "decline",
+                    "policy_name": "balanced_policy",
+                    "actor_email": "analytics-analyst@example.com",
+                },
+                {
+                    "application_id": "analytics-app-other",
+                    "borrower_email": "analytics-other-borrower@example.com",
+                    "requested_amount": 90000.0,
+                    "purpose": "analytics other org",
+                    "district": "Ekibastuz",
+                    "settlement_type": "industrial_city",
+                    "organization_id": "analytics-other-mfi",
+                    "behavioral_signals": {
+                        "gender": "Other",
+                        "employment_status": "Unemployed",
+                        "pavlodar_district": "Ekibastuz",
+                    },
+                    "score_result": {
+                        "risk_band": "medium",
+                        "high_risk_probability": 0.52,
+                        "model_version": "analytics-v1",
+                        "decision_support": {
+                            "recommendation_code": "review_income",
+                            "title": "Review income stability",
+                        },
+                        "proxy_sensitivity_delta": 0.03,
+                        "warnings": [],
+                    },
+                    "decision": "review",
+                    "policy_name": "other_policy",
+                    "actor_email": "analytics-other-analyst@example.com",
+                },
+            ]
+
+            for application in applications:
+                create_payload = {
+                    key: application[key]
+                    for key in (
+                        "application_id",
+                        "borrower_email",
+                        "requested_amount",
+                        "purpose",
+                        "district",
+                        "settlement_type",
+                        "organization_id",
+                        "behavioral_signals",
+                    )
+                }
+                for repository in (sqlite_repository, adapter):
+                    repository.create_application(**create_payload)
+                    repository.update_application_score(
+                        application_id=application["application_id"],
+                        score_result=application["score_result"],
+                        actor_email=application["actor_email"],
+                    )
+                    repository.record_application_decision(
+                        application_id=application["application_id"],
+                        actor_email=application["actor_email"],
+                        decision=application["decision"],
+                        policy_name=application["policy_name"],
+                        note="analytics parity decision",
+                    )
+
+            simulations = [
+                {
+                    "simulation_id": "analytics-sim-new",
+                    "organization_id": "analytics-mfi",
+                    "actor_email": "analytics-analyst@example.com",
+                    "portfolio_fingerprint": "analytics-fingerprint-new",
+                    "request_payload": {
+                        "iterations": 500,
+                        "seed": 991,
+                        "scenarios": ["baseline", "adverse", "severe"],
+                    },
+                    "result_payload": {
+                        "scenario_results": [
+                            {"scenario": "baseline", "expected_loss": 1200.0},
+                            {"scenario": "adverse", "expected_loss": 1800.0},
+                            {"scenario": "severe", "expected_loss": 2500.0},
+                        ],
+                        "warnings": ["synthetic simulation only"],
+                    },
+                    "created_at": "2026-08-02T10:00:00+00:00",
+                },
+                {
+                    "simulation_id": "analytics-sim-old",
+                    "organization_id": "analytics-mfi",
+                    "actor_email": "analytics-analyst@example.com",
+                    "portfolio_fingerprint": "analytics-fingerprint-old",
+                    "request_payload": {
+                        "iterations": 250,
+                        "seed": 42,
+                        "scenarios": ["baseline"],
+                    },
+                    "result_payload": {
+                        "scenario_results": [
+                            {"scenario": "baseline", "expected_loss": 900.0},
+                        ],
+                        "warnings": [],
+                    },
+                    "created_at": "2026-08-01T10:00:00+00:00",
+                },
+                {
+                    "simulation_id": "analytics-sim-other",
+                    "organization_id": "analytics-other-mfi",
+                    "actor_email": "analytics-other-analyst@example.com",
+                    "portfolio_fingerprint": "analytics-fingerprint-other",
+                    "request_payload": {
+                        "iterations": 125,
+                        "seed": 7,
+                        "scenarios": ["baseline"],
+                    },
+                    "result_payload": {
+                        "scenario_results": [
+                            {"scenario": "baseline", "expected_loss": 700.0},
+                        ],
+                        "warnings": ["other org"],
+                    },
+                    "created_at": "2026-08-03T10:00:00+00:00",
+                },
+            ]
+
+            for simulation in simulations:
+                sqlite_created = sqlite_repository.create_portfolio_simulation(
+                    **simulation
+                )
+                postgres_created = adapter.create_portfolio_simulation(**simulation)
+                self.assertEqual(postgres_created, sqlite_created)
+
+            self.assertEqual(
+                [row["id"] for row in adapter.list_portfolio_simulations("analytics-mfi")],
+                ["analytics-sim-new", "analytics-sim-old"],
+            )
+            self.assertEqual(
+                adapter.get_portfolio_simulation("analytics-sim-new"),
+                sqlite_repository.get_portfolio_simulation("analytics-sim-new"),
+            )
+            self.assertIsNone(adapter.get_portfolio_simulation("missing-simulation"))
+            self.assertEqual(
+                adapter.segment_analytics("analytics-mfi"),
+                sqlite_repository.segment_analytics("analytics-mfi"),
+            )
+            self.assertEqual(
+                adapter.decision_analytics("analytics-mfi"),
+                sqlite_repository.decision_analytics("analytics-mfi"),
+            )
+            self.assertEqual(
+                portfolio_analytics_method_group_parity_snapshot(
+                    adapter,
+                    simulation_id="analytics-sim-new",
+                    organization_id="analytics-mfi",
+                ),
+                portfolio_analytics_method_group_parity_snapshot(
+                    sqlite_repository,
+                    simulation_id="analytics-sim-new",
+                    organization_id="analytics-mfi",
+                ),
+            )
+
+            analytics = adapter.decision_analytics("analytics-mfi")
+            self.assertEqual(analytics["application_count"], 2)
+            self.assertEqual(analytics["decided_application_count"], 2)
+            self.assertTrue(
+                any(row["decision"] == "approve" for row in analytics["decision_rows"])
+            )
+            self.assertTrue(
+                any(
+                    row["proxy_sensitivity_bucket"] == "proxy_sensitive"
+                    and row["decision"] == "decline"
+                    for row in analytics["proxy_rows"]
+                )
+            )
+            self.assertGreaterEqual(fake_connection.commits, 25)
+            self.assertEqual(fake_connection.rollbacks, 0)
+            self.assertTrue(
+                any(
+                    "INSERT INTO portfolio_simulations" in sql
+                    for sql, _params in query_log
+                )
+            )
+            self.assertTrue(
+                any("FROM portfolio_simulations" in sql for sql, _params in query_log)
+            )
+            self.assertTrue(
+                any(
+                    "WHERE organization_id = %(organization_id)s" in sql
+                    and "FROM loan_applications" in sql
+                    for sql, _params in query_log
+                )
+            )
+
     def test_partial_adapter_refuses_runtime_without_connection_factory(self) -> None:
         adapter = PostgresRepositoryAdapter()
 
@@ -2954,6 +3332,24 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
             adapter.list_application_timeline("blocked-application")
         with self.assertRaisesRegex(RuntimeError, "connection_factory"):
             adapter.clear_applications(actor_email="blocked-admin@example.com")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.create_portfolio_simulation(
+                simulation_id="blocked-simulation",
+                organization_id="blocked-mfi",
+                actor_email="blocked-admin@example.com",
+                portfolio_fingerprint="blocked-fingerprint",
+                request_payload={},
+                result_payload={},
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.get_portfolio_simulation("blocked-simulation")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.list_portfolio_simulations("blocked-mfi")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.segment_analytics("blocked-mfi")
+        with self.assertRaisesRegex(RuntimeError, "connection_factory"):
+            adapter.decision_analytics("blocked-mfi")
 
     def test_adapter_skeleton_refuses_runtime_connection(self) -> None:
         adapter = PostgresRepositoryAdapterSkeleton()

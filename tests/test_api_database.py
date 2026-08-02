@@ -148,6 +148,10 @@ class ApiDatabaseTests(unittest.TestCase):
             "postgresql_application_lifecycle_method_group_adapter",
             capability_ids,
         )
+        self.assertIn(
+            "postgresql_portfolio_analytics_method_group_adapter",
+            capability_ids,
+        )
         self.assertEqual(readiness["postgresql_migration_status"], "planned")
         self.assertTrue(
             any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
@@ -177,12 +181,12 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(readiness["disposable_migration_ci_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_status"],
-            "partial_method_groups",
+            "implemented",
         )
         self.assertTrue(readiness["repository_adapter_contract_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v8",
+            "postgresql-repository-adapter-v9",
         )
         self.assertEqual(
             readiness["repository_adapter_module"],
@@ -190,16 +194,16 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(
             readiness["repository_adapter_stage"],
-            "model_registry_audit_organizations_identity_invites_applications_groups_v1",
+            "all_repository_method_groups_v1",
         )
         self.assertEqual(readiness["repository_adapter_contract_method_count"], 52)
-        self.assertEqual(readiness["repository_adapter_implemented_method_count"], 47)
-        self.assertEqual(readiness["repository_adapter_pending_method_count"], 5)
-        self.assertEqual(readiness["repository_adapter_read_only_method_count"], 22)
-        self.assertEqual(readiness["repository_adapter_write_method_count"], 25)
+        self.assertEqual(readiness["repository_adapter_implemented_method_count"], 52)
+        self.assertEqual(readiness["repository_adapter_pending_method_count"], 0)
+        self.assertEqual(readiness["repository_adapter_read_only_method_count"], 26)
+        self.assertEqual(readiness["repository_adapter_write_method_count"], 26)
         self.assertEqual(
             readiness["repository_adapter_completed_method_group_count"],
-            6,
+            7,
         )
         self.assertEqual(
             readiness["repository_adapter_completed_method_groups"],
@@ -209,6 +213,7 @@ class ApiDatabaseTests(unittest.TestCase):
                 "staff_invites_delivery",
                 "application_lifecycle",
                 "model_registry",
+                "portfolio_analytics",
                 "audit",
             ],
         )
@@ -223,6 +228,9 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertTrue(
             readiness["repository_adapter_application_lifecycle_group_present"]
+        )
+        self.assertTrue(
+            readiness["repository_adapter_portfolio_analytics_group_present"]
         )
         self.assertIn(
             "get_active_model_version",
@@ -252,14 +260,23 @@ class ApiDatabaseTests(unittest.TestCase):
             "record_application_decision",
             readiness["repository_adapter_implemented_methods"],
         )
+        self.assertIn(
+            "decision_analytics",
+            readiness["repository_adapter_implemented_methods"],
+        )
         adapter_groups = {
             group["key"]: group
             for group in readiness["repository_adapter_contract_groups"]
         }
         self.assertIn("application_lifecycle", adapter_groups)
+        self.assertIn("portfolio_analytics", adapter_groups)
         self.assertIn(
             "create_application",
             adapter_groups["application_lifecycle"]["methods"],
+        )
+        self.assertIn(
+            "create_portfolio_simulation",
+            adapter_groups["portfolio_analytics"]["methods"],
         )
         self.assertEqual(
             adapter_groups["model_registry"]["implemented_method_count"],
@@ -294,6 +311,15 @@ class ApiDatabaseTests(unittest.TestCase):
             0,
         )
         self.assertFalse(adapter_groups["application_lifecycle"]["pending_methods"])
+        self.assertEqual(
+            adapter_groups["portfolio_analytics"]["implemented_method_count"],
+            5,
+        )
+        self.assertEqual(
+            adapter_groups["portfolio_analytics"]["pending_method_count"],
+            0,
+        )
+        self.assertFalse(adapter_groups["portfolio_analytics"]["pending_methods"])
         self.assertEqual(len(readiness["migration_artifacts"]), 1)
         artifact = readiness["migration_artifacts"][0]
         self.assertEqual(
@@ -368,6 +394,12 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(
             parity_keys[
                 "postgresql_application_lifecycle_method_group_adapter"
+            ]["status"],
+            "pass",
+        )
+        self.assertEqual(
+            parity_keys[
+                "postgresql_portfolio_analytics_method_group_adapter"
             ]["status"],
             "pass",
         )

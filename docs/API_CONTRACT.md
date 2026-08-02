@@ -1290,18 +1290,20 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `postgresql_organization_method_group_adapter`,
   `postgresql_identity_access_method_group_adapter`,
   `postgresql_staff_invites_delivery_method_group_adapter`,
+  `postgresql_application_lifecycle_method_group_adapter`,
+  `postgresql_portfolio_analytics_method_group_adapter`,
   `postgresql_repository_backend`, and `postgresql_disposable_ci`;
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
   service and applies `0001_initial_schema.sql`;
-- `repository_adapter_contract_*`: an incremental PostgreSQL adapter in
+- `repository_adapter_contract_*`: a fully grouped PostgreSQL adapter surface in
   `microscore_api.postgres_repository`, including
-  `repository_adapter_contract_status=partial_method_groups`,
-  `repository_adapter_stage=model_registry_audit_organizations_identity_invites_applications_groups_v1`, method-family groups,
+  `repository_adapter_contract_status=implemented`,
+  `repository_adapter_stage=all_repository_method_groups_v1`, method-family groups,
   `repository_adapter_contract_method_count=52`,
-  `repository_adapter_implemented_method_count=47`,
-  `repository_adapter_pending_method_count=5`,
-  `repository_adapter_completed_method_group_count=6`, the completed identity
+  `repository_adapter_implemented_method_count=52`,
+  `repository_adapter_pending_method_count=0`,
+  `repository_adapter_completed_method_group_count=7`, the completed identity
   access method group (`create_user`, `get_user`, `list_users`,
   `disable_user`, `reactivate_user`, `attest_user_mfa`, `create_session`,
   `get_user_by_token`, `list_active_sessions`, `revoke_session`,
@@ -1325,7 +1327,11 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `list_applications`, `list_borrower_applications`,
   `assign_application_organization`, `update_application_score`,
   `record_application_decision`, `list_application_decisions`,
-  `list_application_timeline`, and `clear_applications`);
+  `list_application_timeline`, and `clear_applications`), plus the completed
+  portfolio simulation and analytics method group
+  (`create_portfolio_simulation`, `get_portfolio_simulation`,
+  `list_portfolio_simulations`, `segment_analytics`, and
+  `decision_analytics`);
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
 - migration blockers including `postgresql_repository_backend_not_implemented`,
@@ -1333,8 +1339,7 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 
 The response is intentionally `blocked` even when the versioned migration draft
 is present and applied in disposable CI, and even when the PostgreSQL repository
-adapter has completed model registry, audit, organization, and identity/session
-method groups.
+adapter has completed every SQLite repository method group.
 `0001_initial_schema.sql` is a reviewed DDL contract and CI smoke target, not a
 production migration runner. The adapter v6 proves PostgreSQL boolean/JSONB row
 materialization, active-version write semantics, append-only audit review, and
