@@ -1788,10 +1788,26 @@ label {
 
 .simulation-form {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   align-items: end;
   margin-bottom: 18px;
+}
+
+.simulation-form > label,
+.simulation-form > button {
+  min-width: 0;
+}
+
+.simulation-form input,
+.simulation-form select {
+  min-width: 0;
+}
+
+#runSimulation {
+  grid-column: 1 / -1;
+  width: 100%;
+  white-space: normal;
 }
 
 .simulation-results {
