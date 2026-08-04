@@ -983,6 +983,10 @@ textarea:focus {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  border-color: rgba(196, 212, 217, 0.82);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 249, 0.94));
+  box-shadow: 0 28px 70px rgba(13, 37, 48, 0.16);
 }
 
 .panel-heading {
@@ -1510,6 +1514,80 @@ label {
 
 .portfolio-panel {
   border-top: 3px solid var(--blue);
+}
+
+.mfi-command-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 16px;
+  border: 1px solid rgba(196, 212, 217, 0.72);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 8% 10%, rgba(7, 139, 132, 0.12), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 249, 0.86));
+  padding: 16px;
+}
+
+.mfi-command-copy h4 {
+  margin: 6px 0 0;
+  font-size: 19px;
+  line-height: 1.18;
+}
+
+.mfi-command-copy p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mfi-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mfi-flow-steps li {
+  min-width: 0;
+  border: 1px solid rgba(196, 212, 217, 0.72);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 12px;
+}
+
+.mfi-flow-steps span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(7, 139, 132, 0.1);
+  color: var(--teal-dark);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.mfi-flow-steps strong,
+.mfi-flow-steps em {
+  display: block;
+}
+
+.mfi-flow-steps strong {
+  margin-top: 9px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.mfi-flow-steps em {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
 }
 
 .portfolio-overview {
@@ -3176,6 +3254,10 @@ tr.selected {
     grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
 
+  .mfi-command-strip {
+    grid-template-columns: 1fr;
+  }
+
   .simulation-form {
     grid-template-columns: repeat(3, minmax(150px, 1fr));
   }
@@ -3269,6 +3351,7 @@ tr.selected {
 
   .metric-grid,
   .workspace-hero-metrics,
+  .mfi-flow-steps,
   .reviewer-snapshot,
   .sidebar-summary,
   .portfolio-metrics,

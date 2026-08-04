@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260804-mfi-form-flow-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260804-mfi-command-flow-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -324,6 +324,38 @@
                 <span id="modelStatusPill" class="pill muted">Model status unknown</span>
                 <span class="pill muted">Live queue</span>
               </div>
+            </div>
+            <div class="mfi-command-strip" aria-label="MFI analyst workflow">
+              <div class="mfi-command-copy">
+                <p class="eyebrow">Analyst command flow</p>
+                <h4>Keep the portfolio context visible while the right inspector stays focused on one borrower.</h4>
+                <p>
+                  Pick an application from the queue, review the locked evidence packet,
+                  compare policy impact, then stress-test the portfolio with Monte Carlo scenarios.
+                </p>
+              </div>
+              <ol class="mfi-flow-steps">
+                <li>
+                  <span>01</span>
+                  <strong>Queue</strong>
+                  <em>Select application</em>
+                </li>
+                <li>
+                  <span>02</span>
+                  <strong>Risk</strong>
+                  <em>Inspect evidence</em>
+                </li>
+                <li>
+                  <span>03</span>
+                  <strong>Policy</strong>
+                  <em>Compare actions</em>
+                </li>
+                <li>
+                  <span>04</span>
+                  <strong>Monte Carlo</strong>
+                  <em>Stress portfolio</em>
+                </li>
+              </ol>
             </div>
             <div id="portfolioOverview" class="portfolio-overview empty">Load applications to view portfolio analytics.</div>
           </section>
@@ -737,8 +769,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260804-mfi-form-flow-v1"></script>
+    <script src="./mock-api.js?v=20260804-mfi-command-flow-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260804-mfi-form-flow-v1"></script>
+    <script src="./app.js?v=20260804-mfi-command-flow-v1"></script>
   </body>
 </html>
