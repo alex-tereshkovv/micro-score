@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260804-frontend-foundation-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260804-mfi-workspace-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -313,7 +313,7 @@
           </section>
         </section>
 
-        <section id="mfiView" class="view-grid" aria-labelledby="mfi-title">
+        <section id="mfiView" class="view-grid mfi-workspace" aria-labelledby="mfi-title">
           <section class="panel wide-panel portfolio-panel">
             <div class="panel-heading">
               <div>
@@ -344,7 +344,7 @@
             <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
           </section>
 
-          <section class="panel">
+          <section class="panel mfi-detail-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Risk</p>
@@ -737,8 +737,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260804-frontend-foundation-v1"></script>
+    <script src="./mock-api.js?v=20260804-mfi-workspace-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260804-frontend-foundation-v1"></script>
+    <script src="./app.js?v=20260804-mfi-workspace-v1"></script>
   </body>
 </html>
