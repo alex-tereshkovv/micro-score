@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260802-postgres-full-adapter-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260804-frontend-foundation-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -149,6 +149,32 @@
             <button id="logoutButton" class="secondary-button" type="button">Sign out</button>
           </div>
         </header>
+
+        <section class="workspace-hero" aria-label="Pre-pilot product summary">
+          <div class="workspace-hero-copy">
+            <p class="eyebrow">Pre-pilot operating picture</p>
+            <h3>One flow from consented application to human review and portfolio stress testing.</h3>
+            <p>
+              MicroScore is still synthetic and decision-support only, but the demo now
+              connects borrower status, analyst review, admin evidence, PostgreSQL readiness,
+              and Monte Carlo planning in one workspace.
+            </p>
+          </div>
+          <dl class="workspace-hero-metrics" aria-label="Prototype readiness highlights">
+            <div>
+              <dt>Storage contract</dt>
+              <dd>PG adapter 52/52</dd>
+            </div>
+            <div>
+              <dt>Use boundary</dt>
+              <dd>Human review only</dd>
+            </div>
+            <div>
+              <dt>Data mode</dt>
+              <dd>Synthetic demo</dd>
+            </div>
+          </dl>
+        </section>
 
         <section id="borrowerView" class="view-grid active-view" aria-labelledby="borrower-title">
           <section class="panel form-panel">
@@ -711,8 +737,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260802-postgres-full-adapter-v1"></script>
+    <script src="./mock-api.js?v=20260804-frontend-foundation-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260802-postgres-full-adapter-v1"></script>
+    <script src="./app.js?v=20260804-frontend-foundation-v1"></script>
   </body>
 </html>
