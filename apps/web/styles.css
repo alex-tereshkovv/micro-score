@@ -989,6 +989,15 @@ textarea:focus {
   box-shadow: 0 28px 70px rgba(13, 37, 48, 0.16);
 }
 
+.mfi-section-panel {
+  scroll-margin-top: 24px;
+}
+
+.mfi-section-panel:focus-visible {
+  outline: 3px solid rgba(7, 139, 132, 0.2);
+  outline-offset: 3px;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -1557,7 +1566,32 @@ label {
   border: 1px solid rgba(196, 212, 217, 0.72);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.76);
+  overflow: hidden;
+}
+
+.mfi-flow-steps button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
   padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.mfi-flow-steps button:hover {
+  background: rgba(7, 139, 132, 0.07);
+  transform: translateY(-1px);
+}
+
+.mfi-flow-steps button:focus-visible {
+  outline: 3px solid rgba(7, 139, 132, 0.2);
+  outline-offset: -3px;
 }
 
 .mfi-flow-steps span {

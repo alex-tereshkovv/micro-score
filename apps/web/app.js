@@ -66,6 +66,7 @@ const els = {
   logoutButton: document.querySelector("#logoutButton"),
   messageArea: document.querySelector("#messageArea"),
   demoButtons: document.querySelectorAll("[data-demo]"),
+  mfiSectionJumps: document.querySelectorAll("[data-mfi-jump]"),
   applicationForm: document.querySelector("#applicationForm"),
   applicationValidationSummary: document.querySelector("#applicationValidationSummary"),
   fillDemoApplication: document.querySelector("#fillDemoApplication"),
@@ -315,6 +316,15 @@ function navigateToRole(role) {
 function navigateToView(viewId) {
   const route = viewToRoute[viewId];
   if (route) navigateToRoute(route);
+}
+
+function scrollToMfiSection(targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (typeof target.focus === "function") {
+    target.focus({ preventScroll: true });
+  }
 }
 
 function applyRoute() {
@@ -3831,6 +3841,9 @@ function wireEvents() {
       enterDemoWorkspace(button.dataset.demo, button.dataset.role)
         .catch((error) => showMessage(error.message, "error"));
     });
+  });
+  els.mfiSectionJumps.forEach((button) => {
+    button.addEventListener("click", () => scrollToMfiSection(button.dataset.mfiJump));
   });
   els.fillDemoApplication.addEventListener("click", () => {
     fillApplicationForm(demoApplication);

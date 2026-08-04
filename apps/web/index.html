@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260804-mfi-command-flow-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260804-mfi-jump-nav-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -336,31 +336,39 @@
               </div>
               <ol class="mfi-flow-steps">
                 <li>
-                  <span>01</span>
-                  <strong>Queue</strong>
-                  <em>Select application</em>
+                  <button type="button" data-mfi-jump="mfiQueuePanel">
+                    <span>01</span>
+                    <strong>Queue</strong>
+                    <em>Select application</em>
+                  </button>
                 </li>
                 <li>
-                  <span>02</span>
-                  <strong>Risk</strong>
-                  <em>Inspect evidence</em>
+                  <button type="button" data-mfi-jump="mfiDetailPanel">
+                    <span>02</span>
+                    <strong>Risk</strong>
+                    <em>Inspect evidence</em>
+                  </button>
                 </li>
                 <li>
-                  <span>03</span>
-                  <strong>Policy</strong>
-                  <em>Compare actions</em>
+                  <button type="button" data-mfi-jump="policyLabPanel">
+                    <span>03</span>
+                    <strong>Policy</strong>
+                    <em>Compare actions</em>
+                  </button>
                 </li>
                 <li>
-                  <span>04</span>
-                  <strong>Monte Carlo</strong>
-                  <em>Stress portfolio</em>
+                  <button type="button" data-mfi-jump="monteCarloPanel">
+                    <span>04</span>
+                    <strong>Monte Carlo</strong>
+                    <em>Stress portfolio</em>
+                  </button>
                 </li>
               </ol>
             </div>
             <div id="portfolioOverview" class="portfolio-overview empty">Load applications to view portfolio analytics.</div>
           </section>
 
-          <section class="panel">
+          <section id="mfiQueuePanel" class="panel mfi-section-panel" tabindex="-1">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">MFI</p>
@@ -376,7 +384,7 @@
             <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
           </section>
 
-          <section class="panel mfi-detail-panel">
+          <section id="mfiDetailPanel" class="panel mfi-detail-panel mfi-section-panel" tabindex="-1">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Risk</p>
@@ -415,7 +423,7 @@
             </form>
           </section>
 
-          <section class="panel wide-panel">
+          <section id="segmentRiskPanel" class="panel wide-panel mfi-section-panel" tabindex="-1">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Analytics</p>
@@ -428,7 +436,7 @@
             <div id="segmentAnalytics" class="table-shell empty">No segment analytics loaded.</div>
           </section>
 
-          <section class="panel wide-panel policy-lab-panel">
+          <section id="policyLabPanel" class="panel wide-panel policy-lab-panel mfi-section-panel" tabindex="-1">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Policy Lab</p>
@@ -445,7 +453,7 @@
             <div id="decisionAudit" class="table-shell empty">No decision audit loaded.</div>
           </section>
 
-          <section class="panel wide-panel monte-carlo-panel">
+          <section id="monteCarloPanel" class="panel wide-panel monte-carlo-panel mfi-section-panel" tabindex="-1">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Monte Carlo Lab</p>
@@ -769,8 +777,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260804-mfi-command-flow-v1"></script>
+    <script src="./mock-api.js?v=20260804-mfi-jump-nav-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260804-mfi-command-flow-v1"></script>
+    <script src="./app.js?v=20260804-mfi-jump-nav-v1"></script>
   </body>
 </html>
