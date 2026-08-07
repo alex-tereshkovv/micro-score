@@ -15,6 +15,13 @@ const hostedStaticPage = !LOCAL_HOSTNAMES.has(window.location.hostname);
 const HIGH_PROXY_SENSITIVITY_DELTA = 0.15;
 const DEMO_CONSENT_VERSION = "synthetic-demo-v1";
 const portfolioDashboard = window.MicroScorePortfolioDashboard || {};
+const MFI_QUEUE_FILTER_DEFAULTS = Object.freeze({
+  search: "",
+  status: "all",
+  risk: "all",
+  district: "all",
+  sort: "priority",
+});
 
 function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/$/, "");
@@ -34,6 +41,7 @@ const state = {
   selectedReviewPacket: null,
   borrowerApplications: [],
   applications: [],
+  mfiQueueFilters: { ...MFI_QUEUE_FILTER_DEFAULTS },
   policyAnalytics: null,
   decisionAnalytics: null,
   portfolioSimulation: null,
@@ -78,6 +86,14 @@ const els = {
   refreshApplications: document.querySelector("#refreshApplications"),
   exportApplications: document.querySelector("#exportApplications"),
   selectedApplicationBrief: document.querySelector("#selectedApplicationBrief"),
+  mfiQueueControls: document.querySelector("#mfiQueueControls"),
+  mfiQueueSearch: document.querySelector("#mfiQueueSearch"),
+  mfiQueueStatus: document.querySelector("#mfiQueueStatus"),
+  mfiQueueRisk: document.querySelector("#mfiQueueRisk"),
+  mfiQueueDistrict: document.querySelector("#mfiQueueDistrict"),
+  mfiQueueSort: document.querySelector("#mfiQueueSort"),
+  mfiQueueSummary: document.querySelector("#mfiQueueSummary"),
+  clearMfiQueueFilters: document.querySelector("#clearMfiQueueFilters"),
   applicationsTable: document.querySelector("#applicationsTable"),
   scoreSelectedApplication: document.querySelector("#scoreSelectedApplication"),
   loadReviewPacket: document.querySelector("#loadReviewPacket"),
@@ -885,6 +901,7 @@ function resetApplicationViews() {
   state.selectedReviewPacket = null;
   state.borrowerApplications = [];
   state.applications = [];
+  state.mfiQueueFilters = { ...MFI_QUEUE_FILTER_DEFAULTS };
   state.policyAnalytics = null;
   state.decisionAnalytics = null;
   state.portfolioSimulation = null;
@@ -920,6 +937,8 @@ function resetApplicationViews() {
     "No applications loaded",
     "Refresh the queue or submit a borrower demo application.",
   );
+  syncMfiQueueFilterFields();
+  renderMfiQueueSummary([], []);
 
   setPanelState(
     els.scoreDetail,
@@ -1552,21 +1571,203 @@ async function attachApplicationTimeline(application) {
   return { ...application, timeline_events: timeline };
 }
 
+function mfiQueueRiskBand(application) {
+  return application.score_result?.risk_band || "unscored";
+}
+
+function mfiQueueSearchText(application) {
+  const decision = application.decision_result?.decision || "";
+  return [
+    application.id,
+    application.borrower_email,
+    application.status,
+    application.district,
+    application.settlement_type,
+    application.behavioral_signals?.settlement_type,
+    decision,
+    application.requested_amount,
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
+}
+
+function mfiQueueApplicationPriority(application) {
+  const status = application.status || "submitted";
+  if (status === "submitted") return 0;
+  if (status === "under_review") return 1;
+  if (status === "scored") {
+    const riskWeights = { high: 2, medium: 3, low: 4 };
+    return riskWeights[application.score_result?.risk_band] ?? 4;
+  }
+  return 5;
+}
+
+function sortMfiQueueApplications(applications) {
+  const sortMode = state.mfiQueueFilters.sort;
+  const sorted = [...applications];
+  sorted.sort((left, right) => {
+    if (sortMode === "risk_desc") {
+      return Number(right.score_result?.high_risk_probability || -1)
+        - Number(left.score_result?.high_risk_probability || -1);
+    }
+    if (sortMode === "amount_desc") {
+      return Number(right.requested_amount || 0) - Number(left.requested_amount || 0);
+    }
+    if (sortMode === "newest") {
+      return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+    }
+    return mfiQueueApplicationPriority(left) - mfiQueueApplicationPriority(right)
+      || Number(right.score_result?.high_risk_probability || -1)
+        - Number(left.score_result?.high_risk_probability || -1)
+      || new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+  });
+  return sorted;
+}
+
+function filteredMfiQueueApplications() {
+  const filters = state.mfiQueueFilters;
+  const search = filters.search.toLowerCase();
+  const filtered = state.applications.filter((application) => {
+    const district = application.district || "Unknown district";
+    const riskBand = mfiQueueRiskBand(application);
+    if (filters.status !== "all" && application.status !== filters.status) return false;
+    if (filters.risk !== "all" && riskBand !== filters.risk) return false;
+    if (filters.district !== "all" && district !== filters.district) return false;
+    if (search && !mfiQueueSearchText(application).includes(search)) return false;
+    return true;
+  });
+  return sortMfiQueueApplications(filtered);
+}
+
+function activeMfiQueueFilterCount() {
+  return Object.entries(state.mfiQueueFilters)
+    .filter(([key, value]) => value !== MFI_QUEUE_FILTER_DEFAULTS[key])
+    .length;
+}
+
+function syncMfiQueueFilterFields(applications = state.applications) {
+  const districts = [...new Set(
+    applications.map((application) => application.district || "Unknown district"),
+  )].sort((left, right) => left.localeCompare(right));
+  if (
+    state.mfiQueueFilters.district !== "all"
+    && !districts.includes(state.mfiQueueFilters.district)
+  ) {
+    state.mfiQueueFilters.district = "all";
+  }
+
+  els.mfiQueueDistrict.innerHTML = [
+    '<option value="all">All districts</option>',
+    ...districts.map((district) => `<option value="${escapeHtml(district)}">${escapeHtml(district)}</option>`),
+  ].join("");
+  els.mfiQueueSearch.value = state.mfiQueueFilters.search;
+  els.mfiQueueStatus.value = state.mfiQueueFilters.status;
+  els.mfiQueueRisk.value = state.mfiQueueFilters.risk;
+  els.mfiQueueDistrict.value = state.mfiQueueFilters.district;
+  els.mfiQueueSort.value = state.mfiQueueFilters.sort;
+  els.clearMfiQueueFilters.disabled = activeMfiQueueFilterCount() === 0;
+}
+
+function readMfiQueueFilters() {
+  state.mfiQueueFilters = {
+    search: els.mfiQueueSearch.value.trim(),
+    status: els.mfiQueueStatus.value,
+    risk: els.mfiQueueRisk.value,
+    district: els.mfiQueueDistrict.value,
+    sort: els.mfiQueueSort.value,
+  };
+}
+
+function renderMfiQueueSummary(applications = state.applications, visible = filteredMfiQueueApplications()) {
+  if (!applications.length) {
+    els.mfiQueueSummary.className = "mfi-queue-summary empty";
+    els.mfiQueueSummary.textContent = "Queue triage appears after applications load.";
+    return;
+  }
+
+  const notScored = applications.filter((application) => !application.score_result).length;
+  const highRisk = applications.filter((application) => application.score_result?.risk_band === "high").length;
+  const actionNeeded = applications.filter(
+    (application) => !["approved", "declined"].includes(application.status),
+  ).length;
+  const filterCount = activeMfiQueueFilterCount();
+  els.mfiQueueSummary.className = `mfi-queue-summary${filterCount ? " filters-active" : ""}`;
+  els.mfiQueueSummary.innerHTML = `
+    <span><strong>${visible.length}</strong> visible / ${applications.length} total</span>
+    <span><strong>${actionNeeded}</strong> action needed</span>
+    <span><strong>${notScored}</strong> not scored</span>
+    <span><strong>${highRisk}</strong> high risk</span>
+    <em>${filterCount ? `${filterCount} filter${filterCount === 1 ? "" : "s"} active` : "Showing full queue"}</em>
+  `;
+}
+
+function renderMfiQueue() {
+  const visible = filteredMfiQueueApplications();
+  syncMfiQueueFilterFields();
+  renderMfiQueueSummary(state.applications, visible);
+  renderApplicationsTable(visible);
+  return visible;
+}
+
+function clearMfiSelectionState(title = "No matching application", body = "Adjust filters or clear triage to select a borrower.") {
+  state.selectedApplicationId = "";
+  state.selectedReviewPacket = null;
+  renderSelectedApplicationBrief(null);
+  syncLifecycleControls(null);
+  setPanelState(
+    els.scoreDetail,
+    "result-block",
+    "empty",
+    title,
+    body,
+  );
+  setPanelState(
+    els.reviewPacket,
+    "result-block",
+    "empty",
+    "Open a review packet",
+    "Select a matching application to inspect governance evidence.",
+  );
+}
+
+function applyMfiQueueFilters() {
+  readMfiQueueFilters();
+  const visible = filteredMfiQueueApplications();
+  const selectedVisible = visible.some((application) => application.id === state.selectedApplicationId);
+  if (!selectedVisible && visible.length) {
+    state.selectedReviewPacket = null;
+    selectApplication(visible[0].id);
+    return;
+  }
+  if (!visible.length) {
+    renderMfiQueue();
+    clearMfiSelectionState();
+    return;
+  }
+  renderMfiQueue();
+}
+
 function renderApplicationsTable(applications) {
   if (!applications.length) {
+    const hasApplications = state.applications.length > 0;
     setPanelState(
       els.selectedApplicationBrief,
       "mfi-brief",
       "empty",
-      "No application selected",
-      "Submit a borrower demo application or reset static demo data.",
+      hasApplications ? "No matching application selected" : "No application selected",
+      hasApplications
+        ? "Adjust filters or clear triage to select a borrower."
+        : "Submit a borrower demo application or reset static demo data.",
     );
     setPanelState(
       els.applicationsTable,
-      "table-shell",
+      hasApplications ? "mfi-queue-list" : "table-shell",
       "empty",
-      "No applications loaded",
-      "Submit a borrower demo application or reset static demo data.",
+      hasApplications ? "No matching applications" : "No applications loaded",
+      hasApplications
+        ? "Clear filters or broaden the search to restore the queue."
+        : "Submit a borrower demo application or reset static demo data.",
     );
     return;
   }
@@ -1719,7 +1920,7 @@ function selectApplication(applicationId, options = {}) {
     : null;
   if (!packet) state.selectedReviewPacket = null;
   syncLifecycleControls(application, packet);
-  renderApplicationsTable(state.applications);
+  renderMfiQueue();
   renderSelectedApplicationBrief(application, packet);
   els.scoreDetail.classList.remove("empty");
   if (application) {
@@ -2105,11 +2306,26 @@ async function refreshApplications() {
       throw error;
     }
 
-    if (!state.selectedApplicationId && state.applications.length) {
-      state.selectedApplicationId = state.applications[0].id;
+    syncMfiQueueFilterFields(state.applications);
+    const visibleApplications = filteredMfiQueueApplications();
+    const selectedVisible = visibleApplications.some(
+      (application) => application.id === state.selectedApplicationId,
+    );
+    if (!selectedVisible) {
+      state.selectedApplicationId = visibleApplications[0]?.id || "";
+      state.selectedReviewPacket = null;
     }
-    renderApplicationsTable(state.applications);
-    if (state.selectedApplicationId) selectApplication(state.selectedApplicationId);
+    renderMfiQueue();
+    if (state.selectedApplicationId) {
+      selectApplication(state.selectedApplicationId);
+    } else {
+      clearMfiSelectionState(
+        state.applications.length ? "No matching application" : "No application selected",
+        state.applications.length
+          ? "Adjust filters or clear triage to select a borrower."
+          : "Submit or load an application to view its status timeline.",
+      );
+    }
     renderPortfolioOverview();
 
     const analyticsResults = await Promise.allSettled([
@@ -4023,6 +4239,20 @@ function wireEvents() {
   });
   els.refreshApplications.addEventListener("click", () => {
     refreshApplications().catch((error) => showMessage(error.message, "error"));
+  });
+  els.mfiQueueSearch.addEventListener("input", () => applyMfiQueueFilters());
+  [
+    els.mfiQueueStatus,
+    els.mfiQueueRisk,
+    els.mfiQueueDistrict,
+    els.mfiQueueSort,
+  ].forEach((field) => {
+    field.addEventListener("change", () => applyMfiQueueFilters());
+  });
+  els.clearMfiQueueFilters.addEventListener("click", () => {
+    state.mfiQueueFilters = { ...MFI_QUEUE_FILTER_DEFAULTS };
+    syncMfiQueueFilterFields();
+    applyMfiQueueFilters();
   });
   els.exportApplications.addEventListener("click", () => {
     exportApplicationsCsv().catch((error) => showMessage(error.message, "error"));

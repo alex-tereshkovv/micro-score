@@ -1562,6 +1562,79 @@ label {
   padding: 12px;
 }
 
+.mfi-queue-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.25fr) repeat(4, minmax(130px, 0.75fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+  border: 1px solid rgba(217, 228, 231, 0.84);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 251, 250, 0.88));
+  padding: 12px;
+}
+
+.mfi-queue-controls label {
+  min-width: 0;
+}
+
+.mfi-queue-controls input,
+.mfi-queue-controls select {
+  min-height: 44px;
+}
+
+.mfi-queue-controls .secondary-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.mfi-queue-search {
+  grid-column: span 2;
+}
+
+.mfi-queue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mfi-queue-summary span,
+.mfi-queue-summary em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(217, 228, 231, 0.82);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 5px 10px;
+  font-style: normal;
+}
+
+.mfi-queue-summary strong {
+  margin-right: 4px;
+  color: var(--ink);
+}
+
+.mfi-queue-summary.filters-active em {
+  border-color: rgba(7, 139, 132, 0.3);
+  background: rgba(232, 247, 243, 0.9);
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.mfi-queue-summary.empty {
+  display: block;
+  border: 1px dashed rgba(196, 212, 217, 0.9);
+  border-radius: 12px;
+  background: rgba(248, 251, 250, 0.72);
+  padding: 11px 12px;
+}
+
 .mfi-queue-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
@@ -3507,6 +3580,10 @@ tr.selected {
     grid-template-columns: 1fr;
   }
 
+  .mfi-queue-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .mfi-brief-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3586,6 +3663,7 @@ tr.selected {
   .mfi-decision-form,
   .mfi-brief-hero,
   .mfi-brief-action,
+  .mfi-queue-controls,
   .recorded-decision,
   .risk-readiness,
   .lifecycle-actions,
@@ -3610,6 +3688,7 @@ tr.selected {
   .mfi-brief-grid,
   .mfi-queue-card,
   .mfi-queue-card-meta,
+  .mfi-queue-search,
   .reviewer-snapshot,
   .sidebar-summary,
   .portfolio-metrics,
@@ -3648,6 +3727,10 @@ tr.selected {
 
   .mfi-brief-action .secondary-button {
     width: 100%;
+  }
+
+  .mfi-queue-search {
+    grid-column: auto;
   }
 
   .model-version-grid {

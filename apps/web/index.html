@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-brief-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-triage-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -383,6 +383,52 @@
             </div>
             <div id="selectedApplicationBrief" class="mfi-brief empty">
               Select an application to build an analyst brief.
+            </div>
+            <form id="mfiQueueControls" class="mfi-queue-controls" aria-label="Queue triage controls">
+              <label class="mfi-queue-search">
+                Search
+                <input id="mfiQueueSearch" type="search" placeholder="borrower, district, ID" autocomplete="off" />
+              </label>
+              <label>
+                Status
+                <select id="mfiQueueStatus">
+                  <option value="all">All statuses</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="scored">Scored</option>
+                  <option value="under_review">Under review</option>
+                  <option value="approved">Approved</option>
+                  <option value="declined">Declined</option>
+                </select>
+              </label>
+              <label>
+                Risk
+                <select id="mfiQueueRisk">
+                  <option value="all">All risks</option>
+                  <option value="unscored">Not scored</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+              <label>
+                District
+                <select id="mfiQueueDistrict">
+                  <option value="all">All districts</option>
+                </select>
+              </label>
+              <label>
+                Sort
+                <select id="mfiQueueSort">
+                  <option value="priority">Action priority</option>
+                  <option value="risk_desc">Highest risk</option>
+                  <option value="amount_desc">Largest amount</option>
+                  <option value="newest">Newest</option>
+                </select>
+              </label>
+              <button id="clearMfiQueueFilters" class="secondary-button" type="button">Clear</button>
+            </form>
+            <div id="mfiQueueSummary" class="mfi-queue-summary">
+              Queue triage appears after applications load.
             </div>
             <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
           </section>
@@ -780,8 +826,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260807-mfi-brief-v1"></script>
+    <script src="./mock-api.js?v=20260807-mfi-triage-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260807-mfi-brief-v1"></script>
+    <script src="./app.js?v=20260807-mfi-triage-v1"></script>
   </body>
 </html>
