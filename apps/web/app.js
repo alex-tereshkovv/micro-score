@@ -1554,27 +1554,41 @@ function renderApplicationsTable(applications) {
     );
     return;
   }
-  els.applicationsTable.className = "table-shell";
+  els.applicationsTable.className = "mfi-queue-list";
   const rows = applications
-    .map(
-      (application) => `
-        <tr class="selectable ${application.id === state.selectedApplicationId ? "selected" : ""}" data-application-id="${escapeHtml(application.id)}">
-          <td>${escapeHtml(application.status)}</td>
-          <td>${escapeHtml(application.borrower_email)}</td>
-          <td>${formatMoney(application.requested_amount)}</td>
-          <td>${escapeHtml(application.district || "-")}</td>
-          <td>${application.score_result ? formatPercent(application.score_result.high_risk_probability) : "-"}</td>
-          <td>${application.decision_result ? escapeHtml(formatPolicyName(application.decision_result.decision)) : "-"}</td>
-        </tr>
-      `,
-    )
+    .map((application) => {
+      const selected = application.id === state.selectedApplicationId;
+      const status = application.status || "submitted";
+      const riskBand = application.score_result?.risk_band || "pending";
+      const riskClass = String(riskBand).toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+      const riskLabel = application.score_result
+        ? `${formatPolicyName(riskBand)} · ${formatPercent(application.score_result.high_risk_probability)}`
+        : "Not scored";
+      const decision = application.decision_result
+        ? formatPolicyName(application.decision_result.decision)
+        : "Decision pending";
+      return `
+        <button class="mfi-queue-card ${selected ? "selected" : ""}" type="button" aria-pressed="${selected}" ${selected ? 'aria-current="true"' : ""} data-application-id="${escapeHtml(application.id)}">
+          <span class="mfi-queue-card-main">
+            <span class="mfi-queue-card-heading">
+              <strong>${escapeHtml(formatMoney(application.requested_amount))}</strong>
+              <em>${escapeHtml(application.borrower_email || "borrower")}</em>
+            </span>
+            <span class="mfi-queue-card-meta">
+              <span>${escapeHtml(application.district || "Unknown district")}</span>
+              <span>${escapeHtml(formatDisplayDate(application.created_at))}</span>
+              <span>${escapeHtml(decision)}</span>
+            </span>
+          </span>
+          <span class="mfi-queue-card-side">
+            <span class="pill status-${escapeHtml(status)}">${escapeHtml(formatPolicyName(status))}</span>
+            <span class="mfi-queue-risk risk-${escapeHtml(riskClass)}">${escapeHtml(riskLabel)}</span>
+          </span>
+        </button>
+      `;
+    })
     .join("");
-  els.applicationsTable.innerHTML = `
-    <table>
-      <thead><tr><th>Status</th><th>Borrower</th><th>Amount</th><th>District</th><th>Risk</th><th>Decision</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
+  els.applicationsTable.innerHTML = rows;
   els.applicationsTable.querySelectorAll("[data-application-id]").forEach((row) => {
     row.addEventListener("click", () => selectApplication(row.dataset.applicationId));
   });
