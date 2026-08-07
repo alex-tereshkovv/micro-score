@@ -1466,6 +1466,102 @@ label {
   min-height: 120px;
 }
 
+.mfi-brief {
+  margin-bottom: 14px;
+}
+
+.mfi-brief-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(7, 139, 132, 0.2);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(7, 139, 132, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 250, 0.92));
+  padding: 16px;
+  box-shadow: 0 18px 44px rgba(13, 37, 48, 0.1);
+}
+
+.mfi-brief-hero,
+.mfi-brief-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.mfi-brief-hero h4 {
+  margin: 2px 0 4px;
+  color: var(--ink);
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.mfi-brief-hero p,
+.mfi-brief-action p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mfi-brief-risk {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+
+.mfi-brief-risk strong {
+  font-size: 18px;
+}
+
+.mfi-brief-risk em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.mfi-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mfi-brief-grid div {
+  min-width: 0;
+  border: 1px solid rgba(217, 228, 231, 0.78);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 10px;
+}
+
+.mfi-brief-grid span,
+.mfi-brief-action span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mfi-brief-grid strong,
+.mfi-brief-action strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.mfi-brief-action {
+  border: 1px solid rgba(31, 122, 77, 0.2);
+  border-radius: 12px;
+  background: rgba(241, 251, 248, 0.84);
+  padding: 12px;
+}
+
 .mfi-queue-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
@@ -3411,6 +3507,10 @@ tr.selected {
     grid-template-columns: 1fr;
   }
 
+  .mfi-brief-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .simulation-form {
     grid-template-columns: repeat(3, minmax(150px, 1fr));
   }
@@ -3484,6 +3584,8 @@ tr.selected {
   .evidence-row,
   .decision-columns,
   .mfi-decision-form,
+  .mfi-brief-hero,
+  .mfi-brief-action,
   .recorded-decision,
   .risk-readiness,
   .lifecycle-actions,
@@ -3505,6 +3607,7 @@ tr.selected {
   .metric-grid,
   .workspace-hero-metrics,
   .mfi-flow-steps,
+  .mfi-brief-grid,
   .mfi-queue-card,
   .mfi-queue-card-meta,
   .reviewer-snapshot,
@@ -3536,6 +3639,15 @@ tr.selected {
 
   .lifecycle-progress li::after {
     display: none;
+  }
+
+  .mfi-brief-risk {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .mfi-brief-action .secondary-button {
+    width: 100%;
   }
 
   .model-version-grid {

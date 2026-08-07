@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-queue-cards-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-brief-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -380,6 +380,9 @@
                   <span aria-hidden="true">&#8635;</span>
                 </button>
               </div>
+            </div>
+            <div id="selectedApplicationBrief" class="mfi-brief empty">
+              Select an application to build an analyst brief.
             </div>
             <div id="applicationsTable" class="table-shell empty">No applications loaded.</div>
           </section>
@@ -777,8 +780,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260807-mfi-queue-cards-v1"></script>
+    <script src="./mock-api.js?v=20260807-mfi-brief-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260807-mfi-queue-cards-v1"></script>
+    <script src="./app.js?v=20260807-mfi-brief-v1"></script>
   </body>
 </html>

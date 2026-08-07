@@ -77,6 +77,7 @@ const els = {
   portfolioOverview: document.querySelector("#portfolioOverview"),
   refreshApplications: document.querySelector("#refreshApplications"),
   exportApplications: document.querySelector("#exportApplications"),
+  selectedApplicationBrief: document.querySelector("#selectedApplicationBrief"),
   applicationsTable: document.querySelector("#applicationsTable"),
   scoreSelectedApplication: document.querySelector("#scoreSelectedApplication"),
   loadReviewPacket: document.querySelector("#loadReviewPacket"),
@@ -905,6 +906,14 @@ function resetApplicationViews() {
   );
 
   setPanelState(
+    els.selectedApplicationBrief,
+    "mfi-brief",
+    "empty",
+    "No application selected",
+    "Choose a queue card to build the analyst brief.",
+  );
+
+  setPanelState(
     els.applicationsTable,
     "table-shell",
     "empty",
@@ -1546,6 +1555,13 @@ async function attachApplicationTimeline(application) {
 function renderApplicationsTable(applications) {
   if (!applications.length) {
     setPanelState(
+      els.selectedApplicationBrief,
+      "mfi-brief",
+      "empty",
+      "No application selected",
+      "Submit a borrower demo application or reset static demo data.",
+    );
+    setPanelState(
       els.applicationsTable,
       "table-shell",
       "empty",
@@ -1594,6 +1610,106 @@ function renderApplicationsTable(applications) {
   });
 }
 
+function analystBriefAction(application, packet = null) {
+  const actionPlan = packet ? reviewActionPlan(packet) : null;
+  if (actionPlan) {
+    return {
+      title: actionPlan.title,
+      body: actionPlan.body || "Use the review packet to confirm checklist blockers and allowed decisions.",
+      label: actionPlan.primary_label || "Open detail",
+    };
+  }
+  if (!application?.score_result) {
+    return {
+      title: "Score first",
+      body: "Run the score to unlock model probability, local explanation, checklist, and policy actions.",
+      label: "Score in detail",
+    };
+  }
+  if (["approved", "declined"].includes(application.status)) {
+    return {
+      title: "Terminal locked",
+      body: "A final MFI decision is recorded. Review the packet for audit evidence only.",
+      label: "Open packet",
+    };
+  }
+  return {
+    title: application.status === "under_review" ? "Finalize decision" : "Open review packet",
+    body: "Check affordability, proxy sensitivity, and required review steps before recording a decision.",
+    label: "Review detail",
+  };
+}
+
+function renderSelectedApplicationBrief(application, packet = null) {
+  if (!application) {
+    setPanelState(
+      els.selectedApplicationBrief,
+      "mfi-brief",
+      "empty",
+      "No application selected",
+      "Choose a queue card to build the analyst brief.",
+    );
+    return;
+  }
+
+  const signals = application.behavioral_signals || {};
+  const score = application.score_result;
+  const riskBand = score?.risk_band || "pending";
+  const riskClass = String(riskBand).toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  const probability = score ? formatPercent(score.high_risk_probability) : "Not scored";
+  const decision = application.decision_result
+    ? formatPolicyName(application.decision_result.decision)
+    : "Decision pending";
+  const income = Number(signals.annual_income || 0);
+  const amount = Number(application.requested_amount || 0);
+  const requestToIncome = income > 0 ? amount / income : null;
+  const latePayments = signals.late_payment_count ?? "-";
+  const digitalActivity = Number(signals.mobile_banking_logins || 0)
+    + Number(signals.online_transfer_frequency || 0);
+  const settlement = application.settlement_type || signals.settlement_type || "segment unknown";
+  const action = analystBriefAction(application, packet);
+
+  els.selectedApplicationBrief.className = `mfi-brief mfi-brief-ready risk-${escapeHtml(riskClass)}`;
+  els.selectedApplicationBrief.innerHTML = `
+    <article class="mfi-brief-card" aria-label="Selected application analyst brief">
+      <div class="mfi-brief-hero">
+        <div>
+          <p class="eyebrow">Selected application</p>
+          <h4>${escapeHtml(application.borrower_email || "borrower")}</h4>
+          <p>
+            ${escapeHtml(application.district || "Unknown district")} /
+            ${escapeHtml(formatPolicyName(settlement))} /
+            ${escapeHtml(formatDisplayDate(application.created_at))}
+          </p>
+        </div>
+        <div class="mfi-brief-risk">
+          <span class="pill status-${escapeHtml(application.status || "submitted")}">${escapeHtml(formatPolicyName(application.status || "submitted"))}</span>
+          <strong class="risk-${escapeHtml(riskClass)}">${score ? `${escapeHtml(formatPolicyName(riskBand))} risk` : "Not scored"}</strong>
+          <em>${escapeHtml(probability)}</em>
+        </div>
+      </div>
+      <div class="mfi-brief-grid">
+        <div><span>Requested</span><strong>${formatAmountUnits(application.requested_amount)}</strong></div>
+        <div><span>Annual income</span><strong>${formatAmountUnits(signals.annual_income)}</strong></div>
+        <div><span>Request / income</span><strong>${formatPercent(requestToIncome)}</strong></div>
+        <div><span>Late payments</span><strong>${escapeHtml(latePayments)}</strong></div>
+        <div><span>Digital activity</span><strong>${escapeHtml(digitalActivity)}</strong></div>
+        <div><span>Decision</span><strong>${escapeHtml(decision)}</strong></div>
+      </div>
+      <div class="mfi-brief-action">
+        <div>
+          <span>Next analyst move</span>
+          <strong>${escapeHtml(action.title)}</strong>
+          <p>${escapeHtml(action.body)}</p>
+        </div>
+        <button class="secondary-button" type="button" data-mfi-brief-jump="mfiDetailPanel">
+          ${escapeHtml(action.label)}
+        </button>
+      </div>
+    </article>
+  `;
+}
+
 function selectApplication(applicationId, options = {}) {
   const { loadDetail = true } = options;
   state.selectedApplicationId = applicationId;
@@ -1604,6 +1720,7 @@ function selectApplication(applicationId, options = {}) {
   if (!packet) state.selectedReviewPacket = null;
   syncLifecycleControls(application, packet);
   renderApplicationsTable(state.applications);
+  renderSelectedApplicationBrief(application, packet);
   els.scoreDetail.classList.remove("empty");
   if (application) {
     els.scoreDetail.className = "result-block";
@@ -1953,6 +2070,13 @@ async function refreshApplications() {
       "Refreshing portfolio",
       "Updating risk, district, policy, and decision summaries.",
     );
+    setPanelState(
+      els.selectedApplicationBrief,
+      "mfi-brief",
+      "loading",
+      "Preparing analyst brief",
+      "Loading the queue before selecting a borrower.",
+    );
 
     try {
       state.applications = await apiFetch("/mfi/applications");
@@ -1970,6 +2094,13 @@ async function refreshApplications() {
         "error",
         "Portfolio unavailable",
         "Analytics will appear after the queue loads successfully.",
+      );
+      setPanelState(
+        els.selectedApplicationBrief,
+        "mfi-brief",
+        "error",
+        "Brief unavailable",
+        "The analyst brief will appear after the queue loads successfully.",
       );
       throw error;
     }
@@ -2060,6 +2191,7 @@ async function loadReviewPacket(applicationId = state.selectedApplicationId) {
       state.selectedReviewPacket = packet;
       const application = state.applications.find((item) => item.id === applicationId);
       syncLifecycleControls(application, packet);
+      renderSelectedApplicationBrief(application, packet);
       els.reviewPacket.className = "result-block";
       els.reviewPacket.innerHTML = renderReviewPacket(packet);
       return packet;
@@ -3900,6 +4032,11 @@ function wireEvents() {
   });
   els.loadReviewPacket.addEventListener("click", () => {
     loadReviewPacket().catch((error) => showMessage(error.message, "error"));
+  });
+  els.selectedApplicationBrief.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mfi-brief-jump]");
+    if (!button) return;
+    scrollToMfiSection(button.dataset.mfiBriefJump);
   });
   els.decisionForm.addEventListener("submit", (event) => {
     event.preventDefault();
