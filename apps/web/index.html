@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-triage-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260807-mfi-inspector-tabs-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -444,32 +444,42 @@
                 <button id="scoreSelectedApplication" class="primary-button" type="button">Score</button>
               </div>
             </div>
-            <div id="scoreDetail" class="result-block empty">Select an application.</div>
-            <div id="reviewPacket" class="result-block empty">Open a review packet.</div>
-            <form id="decisionForm" class="mfi-decision-form">
-              <label>
-                Decision
-                <select name="decision">
-                  <option value="review">manual review</option>
-                  <option value="approve">approve</option>
-                  <option value="decline">decline</option>
-                </select>
-              </label>
-              <label>
-                Policy
-                <select name="policy_name">
-                  <option value="balanced_review">balanced review</option>
-                  <option value="lender_protective">lender protective</option>
-                  <option value="inclusion_first">inclusion first</option>
-                  <option value="starter_loan_review">starter loan review</option>
-                </select>
-              </label>
-              <label class="decision-note-field">
-                Note
-                <input name="note" type="text" maxlength="500" placeholder="review reason or next step" />
-              </label>
-              <button class="secondary-button submit-wide" type="submit">Save decision</button>
-            </form>
+            <div id="mfiInspectorTabs" class="mfi-inspector-tabs" role="tablist" aria-label="Risk workspace sections">
+              <button id="mfiInspectorTabSummary" class="active" type="button" role="tab" aria-selected="true" aria-controls="scoreDetail" data-mfi-inspector-tab="summary">Summary</button>
+              <button id="mfiInspectorTabEvidence" type="button" role="tab" aria-selected="false" aria-controls="reviewPacket" data-mfi-inspector-tab="evidence">Evidence</button>
+              <button id="mfiInspectorTabDecision" type="button" role="tab" aria-selected="false" aria-controls="mfiDecisionWorkspace" data-mfi-inspector-tab="decision">Decision</button>
+              <button id="mfiInspectorTabTimeline" type="button" role="tab" aria-selected="false" aria-controls="mfiTimelinePanel" data-mfi-inspector-tab="timeline">Timeline</button>
+            </div>
+            <div id="scoreDetail" class="result-block empty" role="tabpanel" aria-labelledby="mfiInspectorTabSummary" data-mfi-inspector-panel="summary">Select an application.</div>
+            <div id="reviewPacket" class="result-block empty" role="tabpanel" aria-labelledby="mfiInspectorTabEvidence" data-mfi-inspector-panel="evidence" hidden>Open a review packet.</div>
+            <section id="mfiDecisionWorkspace" class="mfi-decision-workspace" role="tabpanel" aria-labelledby="mfiInspectorTabDecision" data-mfi-inspector-panel="decision" hidden>
+              <div id="decisionHistoryPanel" class="result-block empty">Decision controls appear after selecting an application.</div>
+              <form id="decisionForm" class="mfi-decision-form">
+                <label>
+                  Decision
+                  <select name="decision">
+                    <option value="review">manual review</option>
+                    <option value="approve">approve</option>
+                    <option value="decline">decline</option>
+                  </select>
+                </label>
+                <label>
+                  Policy
+                  <select name="policy_name">
+                    <option value="balanced_review">balanced review</option>
+                    <option value="lender_protective">lender protective</option>
+                    <option value="inclusion_first">inclusion first</option>
+                    <option value="starter_loan_review">starter loan review</option>
+                  </select>
+                </label>
+                <label class="decision-note-field">
+                  Note
+                  <input name="note" type="text" maxlength="500" placeholder="review reason or next step" />
+                </label>
+                <button class="secondary-button submit-wide" type="submit">Save decision</button>
+              </form>
+            </section>
+            <div id="mfiTimelinePanel" class="result-block empty" role="tabpanel" aria-labelledby="mfiInspectorTabTimeline" data-mfi-inspector-panel="timeline" hidden>Timeline appears after opening a review packet.</div>
           </section>
 
           <section id="segmentRiskPanel" class="panel wide-panel mfi-section-panel" tabindex="-1">
@@ -826,8 +836,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260807-mfi-triage-v1"></script>
+    <script src="./mock-api.js?v=20260807-mfi-inspector-tabs-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260807-mfi-triage-v1"></script>
+    <script src="./app.js?v=20260807-mfi-inspector-tabs-v1"></script>
   </body>
 </html>

@@ -998,6 +998,51 @@ textarea:focus {
   outline-offset: 3px;
 }
 
+.mfi-inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(217, 228, 231, 0.86);
+  border-radius: 999px;
+  background: rgba(248, 251, 250, 0.92);
+  padding: 5px;
+}
+
+.mfi-inspector-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mfi-inspector-tabs button.active {
+  background: var(--teal);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(7, 139, 132, 0.18);
+}
+
+.mfi-inspector-tabs button:focus-visible {
+  outline: 3px solid rgba(7, 139, 132, 0.2);
+  outline-offset: 2px;
+}
+
+[data-mfi-inspector-panel][hidden] {
+  display: none !important;
+}
+
+.mfi-inspector-summary .review-action-plan {
+  margin-bottom: 0;
+}
+
+.mfi-decision-workspace {
+  display: grid;
+  gap: 12px;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -2924,7 +2969,6 @@ label {
   display: grid;
   grid-template-columns: minmax(110px, 0.65fr) minmax(140px, 0.85fr);
   gap: 10px;
-  margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
@@ -3121,6 +3165,7 @@ label {
 .lifecycle-actions,
 .affordability-panel,
 .review-action-plan,
+.decision-command-card,
 .decision-history-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -3128,17 +3173,20 @@ label {
   padding: 12px;
 }
 
-.review-action-plan {
+.review-action-plan,
+.decision-command-card {
   border-left: 4px solid var(--blue);
 }
 
-.review-action-plan h4 {
+.review-action-plan h4,
+.decision-command-card h4 {
   margin: 0 0 6px;
   color: var(--ink);
   font-size: 14px;
 }
 
-.review-action-plan p {
+.review-action-plan p,
+.decision-command-card p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -3578,6 +3626,11 @@ tr.selected {
 
   .mfi-command-strip {
     grid-template-columns: 1fr;
+  }
+
+  .mfi-inspector-tabs {
+    border-radius: 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .mfi-queue-controls {
