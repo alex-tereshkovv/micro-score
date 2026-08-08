@@ -46,6 +46,7 @@ const state = {
   policyAnalytics: null,
   decisionAnalytics: null,
   portfolioSimulation: null,
+  policySweep: [],
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -114,7 +115,9 @@ const els = {
   decisionAudit: document.querySelector("#decisionAudit"),
   simulationForm: document.querySelector("#simulationForm"),
   runSimulation: document.querySelector("#runSimulation"),
+  runPolicySweep: document.querySelector("#runPolicySweep"),
   simulationResults: document.querySelector("#simulationResults"),
+  policySweepResults: document.querySelector("#policySweepResults"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -1040,6 +1043,13 @@ function resetApplicationViews() {
     "empty",
     "No Monte Carlo run yet",
     "Run the simulation after scored applications are loaded.",
+  );
+  setPanelState(
+    els.policySweepResults,
+    "simulation-sweep-results",
+    "empty",
+    "No policy sweep yet",
+    "Run policy sweep to compare threshold strategies with the same seed and assumptions.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -2976,7 +2986,7 @@ function renderPolicyAnalytics(payload) {
   ]);
 }
 
-function simulationPayload() {
+function simulationPayload(overrides = {}) {
   const form = els.simulationForm;
   return {
     iterations: Number(form.elements.iterations.value),
@@ -2989,7 +2999,14 @@ function simulationPayload() {
     operating_cost_per_approved: Number(form.elements.operating_cost_per_approved.value),
     macro_volatility: Number(form.elements.macro_volatility.value),
     calibration_volatility: Number(form.elements.calibration_volatility.value),
+    ...overrides,
   };
+}
+
+function simulationPolicyOptions() {
+  return Array.from(els.simulationForm.elements.policy.options)
+    .map((option) => option.value)
+    .filter(Boolean);
 }
 
 async function runPortfolioSimulation() {
@@ -3017,6 +3034,43 @@ async function runPortfolioSimulation() {
       "error",
       "Simulation unavailable",
       error.message || "Monte Carlo simulation could not be completed.",
+    );
+    throw error;
+  }
+}
+
+async function runPolicySweep() {
+  const basePayload = simulationPayload();
+  const policies = simulationPolicyOptions();
+  setPanelState(
+    els.policySweepResults,
+    "simulation-sweep-results",
+    "loading",
+    "Running policy sweep",
+    `Comparing ${policies.length} threshold policies under the same seed, shocks, and assumptions.`,
+  );
+
+  try {
+    const runs = [];
+    for (const policy of policies) {
+      const payload = await apiFetch("/mfi/simulations/portfolio", {
+        method: "POST",
+        body: JSON.stringify(simulationPayload({ ...basePayload, policy })),
+      });
+      runs.push(payload);
+    }
+    state.policySweep = runs;
+    renderPolicySweep(runs, basePayload.policy);
+    await refreshSimulationHistory();
+    showMessage(`Compared ${runs.length} Monte Carlo policies with seed ${basePayload.seed}`, "ok");
+    return runs;
+  } catch (error) {
+    setPanelState(
+      els.policySweepResults,
+      "simulation-sweep-results",
+      "error",
+      "Policy sweep unavailable",
+      error.message || "Monte Carlo policy sweep could not be completed.",
     );
     throw error;
   }
@@ -3319,6 +3373,124 @@ function renderSimulationPolicyMemo(payload) {
         ${memo.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
       </ol>
     </section>
+  `;
+}
+
+function policySweepRows(payloads, selectedPolicy) {
+  const postureRank = { "memo-stable": 0, "memo-watch": 1, "memo-defensive": 2 };
+  return payloads.map((payload) => {
+    const memo = simulationPolicyMemo(payload);
+    const posture = simulationCockpitPosture(payload);
+    const baseline = posture.baseline || {};
+    const severe = posture.severe || baseline;
+    const baselineResult = Number(baseline.portfolio_result?.p50 || 0);
+    const severeResult = Number(severe.portfolio_result?.p50 || 0);
+    const severeLoss = Number(severe.probability_of_loss || 0);
+    const severeDownside = Number(severe.portfolio_result?.p05 || 0);
+    const capitalBuffer = Math.max(0, -severeDownside);
+    const approvedMean = Number(baseline.approved_count?.mean || severe.approved_count?.mean || 0);
+    const policy = payload.policy || {};
+    return {
+      payload,
+      memo,
+      policyName: policy.name,
+      policyLabel: formatPolicyName(policy.name),
+      className: memo.className,
+      selected: policy.name === selectedPolicy,
+      rank: postureRank[memo.className] ?? 9,
+      baselineResult,
+      severeResult,
+      severeLoss,
+      severeDownside,
+      capitalBuffer,
+      approvedMean,
+      approvalMix: `${formatMoney(policy.auto_approve_count || 0)} / ${formatMoney(policy.manual_review_count || 0)} / ${formatMoney(policy.auto_decline_count || 0)}`,
+    };
+  }).sort((left, right) => (
+    left.rank - right.rank
+    || left.severeLoss - right.severeLoss
+    || left.capitalBuffer - right.capitalBuffer
+    || right.baselineResult - left.baselineResult
+  ));
+}
+
+function renderPolicySweep(payloads, selectedPolicy) {
+  if (!payloads?.length) {
+    setPanelState(
+      els.policySweepResults,
+      "simulation-sweep-results",
+      "empty",
+      "No policy sweep yet",
+      "Run policy sweep to compare threshold strategies with the same seed and assumptions.",
+    );
+    return;
+  }
+
+  const rows = policySweepRows(payloads, selectedPolicy);
+  const leader = rows[0];
+  const selected = rows.find((row) => row.selected) || rows[0];
+  const selectedIsLeader = leader.policyName === selected.policyName;
+  const iterations = payloads[0]?.assumptions?.iterations || 0;
+  const seed = payloads[0]?.assumptions?.seed || "-";
+
+  els.policySweepResults.className = `simulation-sweep-results ${escapeHtml(leader.className)}`;
+  els.policySweepResults.innerHTML = `
+    <section class="simulation-sweep-hero" aria-label="Monte Carlo policy sweep frontier">
+      <div>
+        <span>Policy sweep frontier</span>
+        <strong>${escapeHtml(leader.policyLabel)} leads this stress comparison</strong>
+        <p>
+          Same seed, iterations, review approval, margin, LGD, macro volatility, and calibration volatility across every policy.
+          Use this to choose a threshold strategy before writing the review memo.
+        </p>
+      </div>
+      <div class="simulation-sweep-badges">
+        <span><em>Leader stance</em><strong>${escapeHtml(leader.memo.stance)}</strong></span>
+        <span><em>Selected policy</em><strong>${escapeHtml(selected.policyLabel)}</strong></span>
+        <span><em>Run design</em><strong>${formatMoney(iterations)} / ${escapeHtml(seed)}</strong></span>
+      </div>
+    </section>
+    <div class="simulation-comparison-shell">
+      <table class="simulation-sweep-table">
+        <thead>
+          <tr>
+            <th scope="col">Policy</th>
+            <th scope="col">Stance</th>
+            <th scope="col">Baseline median</th>
+            <th scope="col">Severe median</th>
+            <th scope="col">Severe loss</th>
+            <th scope="col">P05 buffer</th>
+            <th scope="col">Approved mean</th>
+            <th scope="col">Approve / review / decline</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, index) => `
+            <tr class="${escapeHtml(row.className)} ${row.selected ? "is-selected" : ""} ${index === 0 ? "is-frontier-leader" : ""}">
+              <th scope="row">
+                <span>${escapeHtml(row.policyLabel)}</span>
+                <em>${index === 0 ? "Frontier leader" : row.selected ? "Selected in form" : "Alternative policy"}</em>
+              </th>
+              <td>${escapeHtml(row.memo.stance)}<em>${escapeHtml(row.memo.title)}</em></td>
+              <td>${formatAmountUnits(row.baselineResult)}</td>
+              <td class="${row.severeResult < 0 ? "delta-bad" : "delta-good"}">${formatAmountUnits(row.severeResult)}</td>
+              <td>${formatPercent(row.severeLoss)}</td>
+              <td>${formatAmountUnits(row.capitalBuffer)}</td>
+              <td>${Number(row.approvedMean).toFixed(1)}</td>
+              <td>${escapeHtml(row.approvalMix)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="simulation-sweep-decision ${selectedIsLeader ? "leader-selected" : "leader-differs"}">
+      <strong>${selectedIsLeader ? "Selected policy is the current frontier leader." : "Selected policy is not the current frontier leader."}</strong>
+      <p>
+        ${selectedIsLeader
+          ? "Keep this policy as the benchmark, then re-run after changing pricing, LGD, or review capacity."
+          : `Compare ${escapeHtml(selected.policyLabel)} against ${escapeHtml(leader.policyLabel)} before committee review; the leader has the stronger stress posture in this run.`}
+      </p>
+    </div>
   `;
 }
 
@@ -4785,6 +4957,10 @@ function wireEvents() {
   els.simulationForm.addEventListener("submit", (event) => {
     event.preventDefault();
     withButtonBusy(els.runSimulation, "Simulating...", () => runPortfolioSimulation())
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.runPolicySweep.addEventListener("click", () => {
+    withButtonBusy(els.runPolicySweep, "Sweeping...", () => runPolicySweep())
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
