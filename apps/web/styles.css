@@ -2434,6 +2434,172 @@ label {
   color: var(--ink);
 }
 
+.simulation-policy-memo {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-policy-memo.memo-stable {
+  border-left-color: var(--green);
+}
+
+.simulation-policy-memo.memo-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-policy-memo.memo-defensive {
+  border-left-color: var(--red);
+}
+
+.simulation-policy-memo-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.simulation-policy-memo-heading > div:first-child > span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-policy-memo-heading > div:first-child > strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 19px;
+}
+
+.simulation-policy-memo-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-policy-memo-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-policy-memo-badges span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  padding: 9px;
+}
+
+.simulation-policy-memo-badges em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-policy-memo-badges strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+}
+
+.simulation-comparison-shell {
+  overflow-x: auto;
+}
+
+.simulation-comparison-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.simulation-comparison-table th,
+.simulation-comparison-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.simulation-comparison-table thead th {
+  background: #f7fbfb;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-comparison-table tbody tr:last-child th,
+.simulation-comparison-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.simulation-comparison-table tbody tr.directive-watch {
+  background: #fffaf0;
+}
+
+.simulation-comparison-table tbody tr.directive-defensive {
+  background: #fff5f5;
+}
+
+.simulation-comparison-table tbody th span,
+.simulation-comparison-table td {
+  font-weight: 800;
+}
+
+.simulation-comparison-table tbody th em,
+.simulation-comparison-table td em {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.simulation-comparison-table .delta-good {
+  color: var(--green);
+}
+
+.simulation-comparison-table .delta-bad {
+  color: var(--red);
+}
+
+.simulation-policy-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simulation-policy-actions li {
+  border-radius: 9px;
+  background: var(--surface-strong);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .simulation-history-heading {
   margin-top: 20px;
   margin-bottom: 10px;
@@ -3799,8 +3965,13 @@ tr.selected {
   }
 
   .simulation-cockpit-grid,
-  .simulation-cockpit-steps {
+  .simulation-cockpit-steps,
+  .simulation-policy-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .simulation-policy-memo-heading {
+    grid-template-columns: 1fr;
   }
 
   .simulation-history-row {
@@ -3913,6 +4084,9 @@ tr.selected {
   .simulation-cockpit-hero,
   .simulation-cockpit-grid,
   .simulation-cockpit-steps,
+  .simulation-policy-memo-heading,
+  .simulation-policy-memo-badges,
+  .simulation-policy-actions,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
   }

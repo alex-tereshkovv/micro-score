@@ -455,9 +455,27 @@ function formatAmountUnits(value) {
   return `${sign}${formatMoney(Math.abs(Number(value)))} units`;
 }
 
+function formatSignedAmountUnits(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  const sign = Number(value) > 0 ? "+" : "";
+  return `${sign}${formatAmountUnits(value)}`;
+}
+
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
   return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function formatSignedPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  const sign = Number(value) > 0 ? "+" : "";
+  return `${sign}${formatPercent(value)}`;
+}
+
+function formatSignedFixed(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  const sign = Number(value) > 0 ? "+" : "";
+  return `${sign}${Number(value).toFixed(digits)}`;
 }
 
 function formatSessionExpiry(value) {
@@ -3169,10 +3187,146 @@ function renderSimulationCockpit(payload) {
   `;
 }
 
+function simulationPolicyMemo(payload) {
+  const posture = simulationCockpitPosture(payload);
+  const baselineLoss = Number(posture.baseline?.probability_of_loss || 0);
+  const lossSpread = posture.severeLoss - baselineLoss;
+  const capitalBuffer = Math.max(0, -Number(posture.severeDownside || 0));
+
+  if (posture.className === "cockpit-defensive") {
+    return {
+      className: "memo-defensive",
+      title: "Do not expand without a risk owner",
+      body: "The severe path can consume capital. Treat this as a committee escalation until pricing, LGD, and approval limits are re-tested.",
+      stance: "Escalate",
+      capitalBuffer,
+      lossSpread,
+      actions: [
+        "Freeze automatic expansion for this policy.",
+        "Reprice or reduce exposure before approving a pilot limit.",
+        "Run an alternate threshold policy before committee review.",
+      ],
+    };
+  }
+
+  if (posture.className === "cockpit-watch") {
+    return {
+      className: "memo-watch",
+      title: "Use policy with explicit guardrails",
+      body: "The policy is usable, but stress movement is large enough to require documented limits, monitoring triggers, and manual-review capacity.",
+      stance: "Guarded rollout",
+      capitalBuffer,
+      lossSpread,
+      actions: [
+        "Set a severe-loss trigger before rollout.",
+        "Check district and settlement concentration before increasing limits.",
+        "Re-run after changing margin, LGD, or review approval rate.",
+      ],
+    };
+  }
+
+  return {
+    className: "memo-stable",
+    title: "Policy is acceptable for controlled rollout",
+    body: "Scenario spread remains explainable. Use the severe case as the capital buffer and keep the seed/fingerprint attached to the review packet.",
+    stance: "Controlled rollout",
+    capitalBuffer,
+    lossSpread,
+    actions: [
+      "Attach this seed and fingerprint to the approval memo.",
+      "Use severe P05 as the planning capital buffer.",
+      "Re-run after model activation or policy threshold changes.",
+    ],
+  };
+}
+
+function simulationScenarioComparisonRows(payload) {
+  const scenarios = payload.scenarios || [];
+  const lookup = simulationScenarioLookup(payload);
+  const baseline = lookup.baseline || scenarios[0] || {};
+  const baselineResult = Number(baseline.portfolio_result?.p50 || 0);
+  const baselineLoss = Number(baseline.probability_of_loss || 0);
+  const baselineDefaults = Number(baseline.default_count?.mean || 0);
+
+  return scenarios.map((row) => {
+    const directive = simulationScenarioDirective(row);
+    const medianResult = Number(row.portfolio_result?.p50 || 0);
+    const lossProbability = Number(row.probability_of_loss || 0);
+    const defaultMean = Number(row.default_count?.mean || 0);
+    const capitalBuffer = Math.max(0, -Number(row.portfolio_result?.p05 || 0));
+    return {
+      scenario: row.scenario,
+      className: directive.className,
+      title: directive.title,
+      medianResult,
+      deltaResult: medianResult - baselineResult,
+      lossProbability,
+      lossDelta: lossProbability - baselineLoss,
+      defaultMean,
+      defaultDelta: defaultMean - baselineDefaults,
+      capitalBuffer,
+    };
+  });
+}
+
+function renderSimulationPolicyMemo(payload) {
+  if (!payload?.scenarios?.length) return "";
+
+  const memo = simulationPolicyMemo(payload);
+  const rows = simulationScenarioComparisonRows(payload);
+
+  return `
+    <section class="simulation-policy-memo ${escapeHtml(memo.className)}" aria-label="Monte Carlo policy comparison memo">
+      <div class="simulation-policy-memo-heading">
+        <div>
+          <span>Policy comparison memo</span>
+          <strong>${escapeHtml(memo.title)}</strong>
+          <p>${escapeHtml(memo.body)}</p>
+        </div>
+        <div class="simulation-policy-memo-badges">
+          <span><em>Stance</em><strong>${escapeHtml(memo.stance)}</strong></span>
+          <span><em>Capital buffer</em><strong>${formatAmountUnits(memo.capitalBuffer)}</strong></span>
+          <span><em>Loss spread</em><strong>${formatSignedPercent(memo.lossSpread)}</strong></span>
+        </div>
+      </div>
+      <div class="simulation-comparison-shell">
+        <table class="simulation-comparison-table">
+          <thead>
+            <tr>
+              <th scope="col">Scenario</th>
+              <th scope="col">Median result</th>
+              <th scope="col">Vs baseline</th>
+              <th scope="col">Loss probability</th>
+              <th scope="col">Defaults mean</th>
+              <th scope="col">P05 buffer</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr class="${escapeHtml(row.className)}">
+                <th scope="row"><span>${escapeHtml(formatPolicyName(row.scenario))}</span><em>${escapeHtml(row.title)}</em></th>
+                <td>${formatAmountUnits(row.medianResult)}</td>
+                <td class="${row.deltaResult < 0 ? "delta-bad" : "delta-good"}">${formatSignedAmountUnits(row.deltaResult)}</td>
+                <td>${formatPercent(row.lossProbability)}<em>${formatSignedPercent(row.lossDelta)} vs baseline</em></td>
+                <td>${Number(row.defaultMean).toFixed(1)}<em>${formatSignedFixed(row.defaultDelta)} vs baseline</em></td>
+                <td>${formatAmountUnits(row.capitalBuffer)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <ol class="simulation-policy-actions">
+        ${memo.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+      </ol>
+    </section>
+  `;
+}
+
 function renderPortfolioSimulation(payload) {
   const models = (payload.model_versions || []).join(", ") || "not recorded";
   const scenarioCards = (payload.scenarios || []).map(renderSimulationScenario).join("");
   const cockpit = renderSimulationCockpit(payload);
+  const policyMemo = renderSimulationPolicyMemo(payload);
   const warnings = (payload.warnings || []).length
     ? `<ul class="simulation-warnings">${payload.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
     : "";
@@ -3188,6 +3342,7 @@ function renderPortfolioSimulation(payload) {
     </div>
     ${warnings}
     ${cockpit}
+    ${policyMemo}
     <div class="simulation-scenarios">${scenarioCards}</div>
     <p class="simulation-note">
       Review approval ${formatPercent(payload.assumptions.review_approval_rate)} / margin ${formatPercent(payload.assumptions.interest_margin_rate)} / LGD ${formatPercent(payload.assumptions.loss_given_default)} / macro volatility ${Number(payload.assumptions.macro_volatility).toFixed(2)} / calibration volatility ${Number(payload.assumptions.calibration_volatility).toFixed(2)}.
