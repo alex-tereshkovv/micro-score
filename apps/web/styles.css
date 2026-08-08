@@ -2316,6 +2316,124 @@ label {
   line-height: 1.45;
 }
 
+.simulation-cockpit {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 34%),
+    #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-cockpit.cockpit-stable {
+  border-left-color: var(--green);
+}
+
+.simulation-cockpit.cockpit-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-cockpit.cockpit-defensive {
+  border-left-color: var(--red);
+}
+
+.simulation-cockpit-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.simulation-cockpit-hero span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-cockpit-hero strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.simulation-cockpit-hero p {
+  max-width: 760px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-cockpit-hero em {
+  border-radius: 999px;
+  background: #eaf2f4;
+  padding: 8px 11px;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.simulation-cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.simulation-cockpit-grid div {
+  min-width: 0;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px;
+}
+
+.simulation-cockpit-grid span,
+.simulation-cockpit-grid em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-cockpit-grid strong {
+  display: block;
+  margin: 3px 0 2px;
+  font-size: 16px;
+}
+
+.simulation-cockpit-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simulation-cockpit-steps li {
+  border-radius: 9px;
+  background: var(--surface-strong);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.simulation-cockpit-steps strong {
+  display: block;
+  color: var(--ink);
+}
+
 .simulation-history-heading {
   margin-top: 20px;
   margin-bottom: 10px;
@@ -2412,6 +2530,37 @@ label {
   color: var(--muted);
   font-size: 11px;
   font-style: normal;
+}
+
+.simulation-scenario-directive {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.simulation-scenario-directive.directive-watch {
+  border-left-color: var(--amber);
+  background: #fffaf0;
+}
+
+.simulation-scenario-directive.directive-defensive {
+  border-left-color: var(--red);
+  background: #fff5f5;
+}
+
+.simulation-scenario-directive strong {
+  display: block;
+  font-size: 13px;
+}
+
+.simulation-scenario-directive p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .simulation-card-metrics {
@@ -3649,6 +3798,11 @@ tr.selected {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
 
+  .simulation-cockpit-grid,
+  .simulation-cockpit-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .simulation-history-row {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
@@ -3756,8 +3910,15 @@ tr.selected {
 
   .simulation-summary,
   .simulation-scenarios,
+  .simulation-cockpit-hero,
+  .simulation-cockpit-grid,
+  .simulation-cockpit-steps,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .simulation-cockpit-hero em {
+    justify-self: start;
   }
 
   .simulation-history-row {

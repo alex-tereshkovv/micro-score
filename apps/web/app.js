@@ -3042,9 +3042,137 @@ async function loadStoredSimulation(simulationId) {
   return payload;
 }
 
+function simulationScenarioLookup(payload) {
+  return Object.fromEntries((payload.scenarios || []).map((row) => [row.scenario, row]));
+}
+
+function simulationScenarioDirective(row) {
+  const lossProbability = Number(row.probability_of_loss || 0);
+  const downsideResult = Number(row.portfolio_result?.p05 || 0);
+  const medianResult = Number(row.portfolio_result?.p50 || 0);
+
+  if (lossProbability >= 0.5 || downsideResult < 0) {
+    return {
+      className: "directive-defensive",
+      title: "Defensive posture",
+      body: "Stress loss is material. Tighten approvals, price conservatively, and review LGD or operating cost assumptions before using this policy.",
+    };
+  }
+
+  if (lossProbability >= 0.25 || medianResult < 0) {
+    return {
+      className: "directive-watch",
+      title: "Watch zone",
+      body: "Portfolio economics can turn fragile. Keep manual review capacity visible and compare against lender-protective thresholds.",
+    };
+  }
+
+  return {
+    className: "directive-stable",
+    title: "Planning range",
+    body: "Expected result stays inside a controlled planning band. Keep the run fingerprint and re-check after policy or score changes.",
+  };
+}
+
+function simulationCockpitPosture(payload) {
+  const scenarios = simulationScenarioLookup(payload);
+  const baseline = scenarios.baseline || payload.scenarios?.[0] || {};
+  const severe = scenarios.severe || scenarios.adverse || baseline;
+  const severeLoss = Number(severe.probability_of_loss || 0);
+  const baselineMedian = Number(baseline.portfolio_result?.p50 || 0);
+  const severeMedian = Number(severe.portfolio_result?.p50 || 0);
+  const severeDownside = Number(severe.portfolio_result?.p05 || 0);
+  const stressGap = severeMedian - baselineMedian;
+  const defaultDrift = Number(severe.default_count?.mean || 0) - Number(baseline.default_count?.mean || 0);
+  const diagnostics = severe.diagnostics || {};
+
+  if (severeLoss >= 0.5 || severeDownside < 0) {
+    return {
+      className: "cockpit-defensive",
+      title: "Defensive stress posture",
+      body: "Severe scenario can breach the loss floor. Treat this run as a policy warning, not just a forecast.",
+      baseline,
+      severe,
+      severeLoss,
+      severeDownside,
+      stressGap,
+      defaultDrift,
+      diagnostics,
+    };
+  }
+
+  if (severeLoss >= 0.25 || stressGap < 0) {
+    return {
+      className: "cockpit-watch",
+      title: "Stress watch posture",
+      body: "The book remains usable, but adverse movement is large enough to require limits, capacity checks, and explicit review triggers.",
+      baseline,
+      severe,
+      severeLoss,
+      severeDownside,
+      stressGap,
+      defaultDrift,
+      diagnostics,
+    };
+  }
+
+  return {
+    className: "cockpit-stable",
+    title: "Stable planning posture",
+    body: "Baseline and severe cases remain in a constructive planning range. Use the scenario spread for lending limits and capital buffers.",
+    baseline,
+    severe,
+    severeLoss,
+    severeDownside,
+    stressGap,
+    defaultDrift,
+    diagnostics,
+  };
+}
+
+function renderSimulationCockpit(payload) {
+  if (!payload?.scenarios?.length) return "";
+
+  const posture = simulationCockpitPosture(payload);
+  const baseline = posture.baseline || {};
+  const severe = posture.severe || {};
+  const borrowerDraws = payload.assumptions?.borrower_iterations
+    ? formatMoney(payload.assumptions.borrower_iterations)
+    : formatMoney(payload.assumptions?.iterations || 0);
+  const resultSe = Number(posture.diagnostics?.portfolio_result_mean_standard_error || 0);
+  const lossSe = Number(posture.diagnostics?.loss_probability_standard_error || 0);
+
+  return `
+    <section class="simulation-cockpit ${escapeHtml(posture.className)}" aria-label="Monte Carlo scenario cockpit">
+      <div class="simulation-cockpit-hero">
+        <div>
+          <span>Scenario cockpit</span>
+          <strong>${escapeHtml(posture.title)}</strong>
+          <p>${escapeHtml(posture.body)}</p>
+        </div>
+        <em>${borrowerDraws} borrower draws</em>
+      </div>
+      <div class="simulation-cockpit-grid">
+        <div><span>Loss corridor</span><strong>${formatPercent(Number(baseline.probability_of_loss || 0))} to ${formatPercent(posture.severeLoss)}</strong><em>baseline to severe</em></div>
+        <div><span>Median stress gap</span><strong>${formatAmountUnits(posture.stressGap)}</strong><em>severe minus baseline</em></div>
+        <div><span>Severe downside</span><strong>${formatAmountUnits(posture.severeDownside)}</strong><em>portfolio result P05</em></div>
+        <div><span>Default drift</span><strong>${Number(posture.defaultDrift).toFixed(1)}</strong><em>mean defaults added</em></div>
+        <div><span>Result SE</span><strong>${formatAmountUnits(resultSe)}</strong><em>simulation precision</em></div>
+        <div><span>Loss SE</span><strong>${formatPercent(lossSe)}</strong><em>loss-probability error</em></div>
+      </div>
+      <ol class="simulation-cockpit-steps">
+        <li><strong>Read baseline first.</strong> ${escapeHtml(formatPolicyName(baseline.scenario || "baseline"))} gives the clean operating case.</li>
+        <li><strong>Use severe as the guardrail.</strong> ${escapeHtml(formatPolicyName(severe.scenario || "severe"))} sets capital, limits, and escalation triggers.</li>
+        <li><strong>Keep it reproducible.</strong> Save the seed and fingerprint before changing scores, policy, or assumptions.</li>
+      </ol>
+    </section>
+  `;
+}
+
 function renderPortfolioSimulation(payload) {
   const models = (payload.model_versions || []).join(", ") || "not recorded";
   const scenarioCards = (payload.scenarios || []).map(renderSimulationScenario).join("");
+  const cockpit = renderSimulationCockpit(payload);
   const warnings = (payload.warnings || []).length
     ? `<ul class="simulation-warnings">${payload.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
     : "";
@@ -3059,6 +3187,7 @@ function renderPortfolioSimulation(payload) {
       <div><span>Saved run</span><strong>${escapeHtml(payload.simulation_id)}</strong></div>
     </div>
     ${warnings}
+    ${cockpit}
     <div class="simulation-scenarios">${scenarioCards}</div>
     <p class="simulation-note">
       Review approval ${formatPercent(payload.assumptions.review_approval_rate)} / margin ${formatPercent(payload.assumptions.interest_margin_rate)} / LGD ${formatPercent(payload.assumptions.loss_given_default)} / macro volatility ${Number(payload.assumptions.macro_volatility).toFixed(2)} / calibration volatility ${Number(payload.assumptions.calibration_volatility).toFixed(2)}.
@@ -3073,12 +3202,17 @@ function renderSimulationScenario(row) {
   const defaults = row.default_count;
   const result = row.portfolio_result;
   const diagnostics = row.diagnostics || {};
+  const directive = simulationScenarioDirective(row);
   return `
     <article class="simulation-card ${escapeHtml(row.scenario)}">
       <div class="simulation-card-heading">
         <strong>${escapeHtml(formatPolicyName(row.scenario))}</strong>
         <em>log-odds shift ${Number(row.log_odds_shift).toFixed(2)}</em>
       </div>
+      <section class="simulation-scenario-directive ${escapeHtml(directive.className)}">
+        <strong>${escapeHtml(directive.title)}</strong>
+        <p>${escapeHtml(directive.body)}</p>
+      </section>
       <div class="simulation-card-metrics">
         <div class="simulation-metric"><span>Median result</span><strong>${formatAmountUnits(result.p50)}</strong></div>
         <div class="simulation-metric"><span>Loss probability</span><strong>${formatPercent(row.probability_of_loss)}</strong></div>
