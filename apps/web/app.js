@@ -47,6 +47,7 @@ const state = {
   decisionAnalytics: null,
   portfolioSimulation: null,
   policySweep: [],
+  assumptionSensitivity: [],
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -116,8 +117,10 @@ const els = {
   simulationForm: document.querySelector("#simulationForm"),
   runSimulation: document.querySelector("#runSimulation"),
   runPolicySweep: document.querySelector("#runPolicySweep"),
+  runSensitivitySweep: document.querySelector("#runSensitivitySweep"),
   simulationResults: document.querySelector("#simulationResults"),
   policySweepResults: document.querySelector("#policySweepResults"),
+  sensitivityResults: document.querySelector("#sensitivityResults"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -1050,6 +1053,13 @@ function resetApplicationViews() {
     "empty",
     "No policy sweep yet",
     "Run policy sweep to compare threshold strategies with the same seed and assumptions.",
+  );
+  setPanelState(
+    els.sensitivityResults,
+    "simulation-sensitivity-results",
+    "empty",
+    "No sensitivity run yet",
+    "Run sensitivity to find which assumption error is most dangerous.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -3009,6 +3019,55 @@ function simulationPolicyOptions() {
     .filter(Boolean);
 }
 
+function clampRateValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 0;
+  return Math.max(0, Math.min(1, Number(value)));
+}
+
+function sensitivityVariants(basePayload) {
+  return [
+    {
+      key: "current_assumptions",
+      label: "Current assumptions",
+      driver: "Reference case",
+      payload: {},
+    },
+    {
+      key: "margin_compression",
+      label: "Margin compression",
+      driver: "Interest margin -3pp",
+      payload: {
+        interest_margin_rate: clampRateValue(Number(basePayload.interest_margin_rate) - 0.03),
+      },
+    },
+    {
+      key: "lgd_deterioration",
+      label: "LGD deterioration",
+      driver: "Loss given default +10pp",
+      payload: {
+        loss_given_default: clampRateValue(Number(basePayload.loss_given_default) + 0.1),
+      },
+    },
+    {
+      key: "review_expansion",
+      label: "Review expansion",
+      driver: "Review approval +15pp",
+      payload: {
+        review_approval_rate: clampRateValue(Number(basePayload.review_approval_rate) + 0.15),
+      },
+    },
+    {
+      key: "volatility_spike",
+      label: "Volatility spike",
+      driver: "Macro and calibration volatility +25%",
+      payload: {
+        macro_volatility: Number(basePayload.macro_volatility) * 1.25,
+        calibration_volatility: Number(basePayload.calibration_volatility) * 1.25,
+      },
+    },
+  ];
+}
+
 async function runPortfolioSimulation() {
   setPanelState(
     els.simulationResults,
@@ -3071,6 +3130,43 @@ async function runPolicySweep() {
       "error",
       "Policy sweep unavailable",
       error.message || "Monte Carlo policy sweep could not be completed.",
+    );
+    throw error;
+  }
+}
+
+async function runSensitivitySweep() {
+  const basePayload = simulationPayload();
+  const variants = sensitivityVariants(basePayload);
+  setPanelState(
+    els.sensitivityResults,
+    "simulation-sensitivity-results",
+    "loading",
+    "Running assumption sensitivity",
+    `Testing ${variants.length} assumption variants under policy ${formatPolicyName(basePayload.policy)}.`,
+  );
+
+  try {
+    const runs = [];
+    for (const variant of variants) {
+      const payload = await apiFetch("/mfi/simulations/portfolio", {
+        method: "POST",
+        body: JSON.stringify({ ...basePayload, ...variant.payload }),
+      });
+      runs.push({ variant, payload });
+    }
+    state.assumptionSensitivity = runs;
+    renderSensitivitySweep(runs, basePayload);
+    await refreshSimulationHistory();
+    showMessage(`Sensitivity sweep completed for ${formatPolicyName(basePayload.policy)}`, "ok");
+    return runs;
+  } catch (error) {
+    setPanelState(
+      els.sensitivityResults,
+      "simulation-sensitivity-results",
+      "error",
+      "Sensitivity unavailable",
+      error.message || "Monte Carlo sensitivity sweep could not be completed.",
     );
     throw error;
   }
@@ -3489,6 +3585,126 @@ function renderPolicySweep(payloads, selectedPolicy) {
         ${selectedIsLeader
           ? "Keep this policy as the benchmark, then re-run after changing pricing, LGD, or review capacity."
           : `Compare ${escapeHtml(selected.policyLabel)} against ${escapeHtml(leader.policyLabel)} before committee review; the leader has the stronger stress posture in this run.`}
+      </p>
+    </div>
+  `;
+}
+
+function sensitivitySweepRows(runs) {
+  const referenceRun = runs.find((entry) => entry.variant.key === "current_assumptions") || runs[0];
+  const referencePosture = simulationCockpitPosture(referenceRun.payload);
+  const referenceSevere = referencePosture.severe || referencePosture.baseline || {};
+  const referenceSevereResult = Number(referenceSevere.portfolio_result?.p50 || 0);
+  const referenceSevereLoss = Number(referenceSevere.probability_of_loss || 0);
+  const referenceCapitalBuffer = Math.max(0, -Number(referenceSevere.portfolio_result?.p05 || 0));
+  const referenceDefaultMean = Number(referenceSevere.default_count?.mean || 0);
+
+  return runs.map((entry) => {
+    const memo = simulationPolicyMemo(entry.payload);
+    const posture = simulationCockpitPosture(entry.payload);
+    const severe = posture.severe || posture.baseline || {};
+    const severeResult = Number(severe.portfolio_result?.p50 || 0);
+    const severeLoss = Number(severe.probability_of_loss || 0);
+    const capitalBuffer = Math.max(0, -Number(severe.portfolio_result?.p05 || 0));
+    const defaultMean = Number(severe.default_count?.mean || 0);
+    return {
+      variant: entry.variant,
+      memo,
+      className: memo.className,
+      reference: entry.variant.key === "current_assumptions",
+      severeResult,
+      resultDelta: severeResult - referenceSevereResult,
+      severeLoss,
+      lossDelta: severeLoss - referenceSevereLoss,
+      capitalBuffer,
+      capitalDelta: capitalBuffer - referenceCapitalBuffer,
+      defaultMean,
+      defaultDelta: defaultMean - referenceDefaultMean,
+    };
+  });
+}
+
+function renderSensitivitySweep(runs, basePayload) {
+  if (!runs?.length) {
+    setPanelState(
+      els.sensitivityResults,
+      "simulation-sensitivity-results",
+      "empty",
+      "No sensitivity run yet",
+      "Run sensitivity to find which assumption error is most dangerous.",
+    );
+    return;
+  }
+
+  const rows = sensitivitySweepRows(runs);
+  const challengers = rows.filter((row) => !row.reference);
+  const largestDriver = [...challengers].sort((left, right) => (
+    right.capitalDelta - left.capitalDelta
+    || right.lossDelta - left.lossDelta
+    || left.resultDelta - right.resultDelta
+  ))[0] || rows[0];
+  const materiallyWorse = largestDriver.capitalDelta > 0
+    || largestDriver.lossDelta >= 0.05
+    || largestDriver.resultDelta < 0;
+  const iterations = basePayload.iterations || runs[0]?.payload?.assumptions?.iterations || 0;
+  const seed = basePayload.seed || runs[0]?.payload?.assumptions?.seed || "-";
+
+  els.sensitivityResults.className = `simulation-sensitivity-results ${escapeHtml(largestDriver.className)}`;
+  els.sensitivityResults.innerHTML = `
+    <section class="simulation-sensitivity-hero" aria-label="Monte Carlo assumption sensitivity frontier">
+      <div>
+        <span>Assumption sensitivity</span>
+        <strong>${escapeHtml(largestDriver.variant.label)} is the largest stress driver</strong>
+        <p>
+          Same policy, seed, scenarios, and portfolio; each row changes one assumption package.
+          Use this to decide which input needs evidence before committee review.
+        </p>
+      </div>
+      <div class="simulation-sensitivity-badges">
+        <span><em>Policy</em><strong>${escapeHtml(formatPolicyName(basePayload.policy))}</strong></span>
+        <span><em>Largest driver</em><strong>${escapeHtml(largestDriver.variant.driver)}</strong></span>
+        <span><em>Run design</em><strong>${formatMoney(iterations)} / ${escapeHtml(seed)}</strong></span>
+      </div>
+    </section>
+    <div class="simulation-comparison-shell">
+      <table class="simulation-sensitivity-table">
+        <thead>
+          <tr>
+            <th scope="col">Variant</th>
+            <th scope="col">Assumption change</th>
+            <th scope="col">Stance</th>
+            <th scope="col">Severe median</th>
+            <th scope="col">Vs current</th>
+            <th scope="col">Severe loss</th>
+            <th scope="col">P05 buffer</th>
+            <th scope="col">Defaults mean</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr class="${escapeHtml(row.className)} ${row.reference ? "is-reference" : ""} ${row.variant.key === largestDriver.variant.key ? "is-largest-driver" : ""}">
+              <th scope="row">
+                <span>${escapeHtml(row.variant.label)}</span>
+                <em>${row.reference ? "Reference run" : "Sensitivity shock"}</em>
+              </th>
+              <td>${escapeHtml(row.variant.driver)}</td>
+              <td>${escapeHtml(row.memo.stance)}<em>${escapeHtml(row.memo.title)}</em></td>
+              <td class="${row.severeResult < 0 ? "delta-bad" : "delta-good"}">${formatAmountUnits(row.severeResult)}</td>
+              <td class="${row.resultDelta < 0 ? "delta-bad" : "delta-good"}">${formatSignedAmountUnits(row.resultDelta)}</td>
+              <td>${formatPercent(row.severeLoss)}<em>${formatSignedPercent(row.lossDelta)} vs current</em></td>
+              <td>${formatAmountUnits(row.capitalBuffer)}<em>${formatSignedAmountUnits(row.capitalDelta)} buffer</em></td>
+              <td>${Number(row.defaultMean).toFixed(1)}<em>${formatSignedFixed(row.defaultDelta)} vs current</em></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="simulation-sensitivity-decision ${materiallyWorse ? "sensitivity-watch" : "sensitivity-stable"}">
+      <strong>${materiallyWorse ? "Assumption risk is material." : "Assumptions are stable in this run."}</strong>
+      <p>
+        ${materiallyWorse
+          ? `${escapeHtml(largestDriver.variant.driver)} moves stress economics enough to require evidence, a guardrail, or a re-run before final policy use.`
+          : "The tested assumption shocks do not materially worsen the severe scenario; keep the current seed/fingerprint with the review packet."}
       </p>
     </div>
   `;
@@ -4961,6 +5177,10 @@ function wireEvents() {
   });
   els.runPolicySweep.addEventListener("click", () => {
     withButtonBusy(els.runPolicySweep, "Sweeping...", () => runPolicySweep())
+      .catch((error) => showMessage(error.message, "error"));
+  });
+  els.runSensitivitySweep.addEventListener("click", () => {
+    withButtonBusy(els.runSensitivitySweep, "Testing...", () => runSensitivitySweep())
       .catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {

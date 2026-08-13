@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260808-monte-carlo-policy-sweep-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260808-monte-carlo-sensitivity-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -568,6 +568,7 @@
               <div class="simulation-actions">
                 <button id="runSimulation" class="primary-button" type="submit">Run 3 scenarios</button>
                 <button id="runPolicySweep" class="secondary-button" type="button">Run policy sweep</button>
+                <button id="runSensitivitySweep" class="secondary-button" type="button">Run sensitivity</button>
               </div>
             </form>
             <div id="simulationResults" class="simulation-results empty">
@@ -575,6 +576,9 @@
             </div>
             <div id="policySweepResults" class="simulation-sweep-results empty">
               Run policy sweep to compare approval strategies under the same seed and stress assumptions.
+            </div>
+            <div id="sensitivityResults" class="simulation-sensitivity-results empty">
+              Run sensitivity to see which assumption error moves severe losses, downside, and capital buffer the most.
             </div>
             <div class="panel-heading simulation-history-heading">
               <div>
@@ -842,8 +846,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260808-monte-carlo-policy-sweep-v1"></script>
+    <script src="./mock-api.js?v=20260808-monte-carlo-sensitivity-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260808-monte-carlo-policy-sweep-v1"></script>
+    <script src="./app.js?v=20260808-monte-carlo-sensitivity-v1"></script>
   </body>
 </html>

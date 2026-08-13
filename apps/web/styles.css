@@ -2252,12 +2252,13 @@ label {
 .simulation-actions {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.42fr);
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(170px, 0.36fr));
   gap: 10px;
 }
 
 #runSimulation,
-#runPolicySweep {
+#runPolicySweep,
+#runSensitivitySweep {
   width: 100%;
   white-space: normal;
 }
@@ -2267,7 +2268,8 @@ label {
 }
 
 .simulation-results.empty,
-.simulation-sweep-results.empty {
+.simulation-sweep-results.empty,
+.simulation-sensitivity-results.empty {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
@@ -2275,7 +2277,8 @@ label {
   color: var(--muted);
 }
 
-.simulation-sweep-results {
+.simulation-sweep-results,
+.simulation-sensitivity-results {
   margin-top: 12px;
 }
 
@@ -2782,6 +2785,181 @@ label {
 }
 
 .simulation-sweep-decision p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-sensitivity-results.memo-stable,
+.simulation-sensitivity-results.memo-watch,
+.simulation-sensitivity-results.memo-defensive {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-sensitivity-results.memo-stable {
+  border-left-color: var(--green);
+}
+
+.simulation-sensitivity-results.memo-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-sensitivity-results.memo-defensive {
+  border-left-color: var(--red);
+}
+
+.simulation-sensitivity-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.simulation-sensitivity-hero > div:first-child > span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-sensitivity-hero > div:first-child > strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 19px;
+}
+
+.simulation-sensitivity-hero p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-sensitivity-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-sensitivity-badges span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  padding: 9px;
+}
+
+.simulation-sensitivity-badges em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-sensitivity-badges strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+}
+
+.simulation-sensitivity-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.simulation-sensitivity-table th,
+.simulation-sensitivity-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.simulation-sensitivity-table thead th {
+  background: #f7fbfb;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-sensitivity-table tbody tr:last-child th,
+.simulation-sensitivity-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.simulation-sensitivity-table tbody tr.memo-watch {
+  background: #fffaf0;
+}
+
+.simulation-sensitivity-table tbody tr.memo-defensive {
+  background: #fff5f5;
+}
+
+.simulation-sensitivity-table tbody tr.is-reference th {
+  border-left: 3px solid var(--teal);
+}
+
+.simulation-sensitivity-table tbody tr.is-largest-driver {
+  box-shadow: inset 0 0 0 2px rgba(211, 126, 16, 0.18);
+}
+
+.simulation-sensitivity-table tbody th span,
+.simulation-sensitivity-table td {
+  font-weight: 800;
+}
+
+.simulation-sensitivity-table tbody th em,
+.simulation-sensitivity-table td em {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.simulation-sensitivity-table .delta-good {
+  color: var(--green);
+}
+
+.simulation-sensitivity-table .delta-bad {
+  color: var(--red);
+}
+
+.simulation-sensitivity-decision {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  padding: 11px 12px;
+}
+
+.simulation-sensitivity-decision.sensitivity-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-sensitivity-decision strong {
+  display: block;
+}
+
+.simulation-sensitivity-decision p {
   margin: 5px 0 0;
   color: var(--muted);
   line-height: 1.45;
@@ -4165,6 +4343,10 @@ tr.selected {
     grid-template-columns: 1fr;
   }
 
+  .simulation-sensitivity-hero {
+    grid-template-columns: 1fr;
+  }
+
   .simulation-history-row {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
@@ -4281,6 +4463,8 @@ tr.selected {
   .simulation-actions,
   .simulation-sweep-hero,
   .simulation-sweep-badges,
+  .simulation-sensitivity-hero,
+  .simulation-sensitivity-badges,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
   }
