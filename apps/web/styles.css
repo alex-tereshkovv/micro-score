@@ -2270,7 +2270,8 @@ label {
 .simulation-results.empty,
 .simulation-sweep-results.empty,
 .simulation-sensitivity-results.empty,
-.simulation-committee-brief.empty {
+.simulation-committee-brief.empty,
+.simulation-risk-appetite.empty {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
@@ -2280,7 +2281,8 @@ label {
 
 .simulation-sweep-results,
 .simulation-sensitivity-results,
-.simulation-committee-brief {
+.simulation-committee-brief,
+.simulation-risk-appetite {
   margin-top: 12px;
 }
 
@@ -3064,6 +3066,161 @@ label {
 .simulation-committee-actions li {
   border-radius: 10px;
   background: var(--surface-strong);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.simulation-risk-appetite.gate-pass,
+.simulation-risk-appetite.gate-watch,
+.simulation-risk-appetite.gate-block {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.03), rgba(255, 255, 255, 0.95) 46%),
+    #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-risk-appetite.gate-pass {
+  border-left-color: var(--green);
+}
+
+.simulation-risk-appetite.gate-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-risk-appetite.gate-block {
+  border-left-color: var(--red);
+}
+
+.simulation-risk-appetite-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  gap: 14px;
+  align-items: start;
+}
+
+.simulation-risk-appetite-hero span,
+.simulation-risk-appetite-stance em,
+.simulation-risk-appetite-grid span,
+.simulation-risk-appetite-grid em,
+.risk-appetite-check span,
+.risk-appetite-check em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.simulation-risk-appetite-hero > div:first-child > strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.simulation-risk-appetite-hero p {
+  max-width: 860px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-risk-appetite-stance {
+  display: grid;
+  justify-items: stretch;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px;
+}
+
+.simulation-risk-appetite-stance strong {
+  font-size: 17px;
+}
+
+.simulation-risk-appetite-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-risk-appetite-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px;
+}
+
+.simulation-risk-appetite-grid strong {
+  display: block;
+  margin: 4px 0 3px;
+  font-size: 15px;
+}
+
+.simulation-risk-appetite-checks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.risk-appetite-check {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  padding: 10px;
+}
+
+.risk-appetite-check.check-pass {
+  border-top-color: var(--green);
+}
+
+.risk-appetite-check.check-watch {
+  border-top-color: var(--amber);
+}
+
+.risk-appetite-check.check-block {
+  border-top-color: var(--red);
+}
+
+.risk-appetite-check strong {
+  display: block;
+  margin: 3px 0;
+  font-size: 14px;
+}
+
+.risk-appetite-check p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.simulation-risk-appetite-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simulation-risk-appetite-actions li {
+  border-radius: 10px;
+  background: rgba(13, 148, 136, 0.08);
   padding: 10px;
   color: var(--muted);
   font-size: 12px;
@@ -4438,7 +4595,10 @@ tr.selected {
   .simulation-cockpit-steps,
   .simulation-policy-actions,
   .simulation-committee-grid,
-  .simulation-committee-actions {
+  .simulation-committee-actions,
+  .simulation-risk-appetite-grid,
+  .simulation-risk-appetite-checks,
+  .simulation-risk-appetite-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -4455,6 +4615,10 @@ tr.selected {
   }
 
   .simulation-committee-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-risk-appetite-hero {
     grid-template-columns: 1fr;
   }
 
@@ -4579,6 +4743,10 @@ tr.selected {
   .simulation-committee-hero,
   .simulation-committee-grid,
   .simulation-committee-actions,
+  .simulation-risk-appetite-hero,
+  .simulation-risk-appetite-grid,
+  .simulation-risk-appetite-checks,
+  .simulation-risk-appetite-actions,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
   }

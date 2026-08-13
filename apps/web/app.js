@@ -49,6 +49,7 @@ const state = {
   policySweep: [],
   assumptionSensitivity: [],
   committeeBriefText: "",
+  riskAppetiteText: "",
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -123,6 +124,7 @@ const els = {
   policySweepResults: document.querySelector("#policySweepResults"),
   sensitivityResults: document.querySelector("#sensitivityResults"),
   committeeBrief: document.querySelector("#committeeBrief"),
+  riskAppetiteGate: document.querySelector("#riskAppetiteGate"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -937,6 +939,8 @@ function resetApplicationViews() {
   state.policyAnalytics = null;
   state.decisionAnalytics = null;
   state.portfolioSimulation = null;
+  state.policySweep = [];
+  state.assumptionSensitivity = [];
   state.simulationHistory = [];
 
   els.borrowerConsent.checked = false;
@@ -1070,6 +1074,14 @@ function resetApplicationViews() {
     "empty",
     "No committee brief yet",
     "Run one or more Monte Carlo tools to build a committee-ready brief.",
+  );
+  state.riskAppetiteText = "";
+  setPanelState(
+    els.riskAppetiteGate,
+    "simulation-risk-appetite",
+    "empty",
+    "No risk appetite gate yet",
+    "Run Monte Carlo evidence to evaluate pilot risk appetite and guardrails.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -3094,6 +3106,7 @@ async function runPortfolioSimulation() {
     state.portfolioSimulation = payload;
     renderPortfolioSimulation(payload);
     renderMonteCarloCommitteeBrief();
+    renderMonteCarloRiskAppetiteGate();
     await refreshSimulationHistory();
     showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
     return payload;
@@ -3132,6 +3145,7 @@ async function runPolicySweep() {
     state.policySweep = runs;
     renderPolicySweep(runs, basePayload.policy);
     renderMonteCarloCommitteeBrief();
+    renderMonteCarloRiskAppetiteGate();
     await refreshSimulationHistory();
     showMessage(`Compared ${runs.length} Monte Carlo policies with seed ${basePayload.seed}`, "ok");
     return runs;
@@ -3170,6 +3184,7 @@ async function runSensitivitySweep() {
     state.assumptionSensitivity = runs;
     renderSensitivitySweep(runs, basePayload);
     renderMonteCarloCommitteeBrief();
+    renderMonteCarloRiskAppetiteGate();
     await refreshSimulationHistory();
     showMessage(`Sensitivity sweep completed for ${formatPolicyName(basePayload.policy)}`, "ok");
     return runs;
@@ -3220,6 +3235,7 @@ async function loadStoredSimulation(simulationId) {
   state.portfolioSimulation = payload;
   renderPortfolioSimulation(payload);
   renderMonteCarloCommitteeBrief();
+  renderMonteCarloRiskAppetiteGate();
   showMessage(`Loaded saved Monte Carlo run ${simulationId}`, "ok");
   return payload;
 }
@@ -3918,6 +3934,322 @@ async function copyCommitteeBriefText() {
     textarea.remove();
   }
   showMessage("Committee brief copied", "ok");
+}
+
+function riskAppetiteAggregateStatus(checks) {
+  const statuses = checks.map((check) => check.status);
+  if (statuses.includes("block")) return "block";
+  if (statuses.includes("watch")) return "watch";
+  return "pass";
+}
+
+function riskAppetiteStatusLabel(status) {
+  if (status === "block") return "Block";
+  if (status === "watch") return "Watch";
+  return "Pass";
+}
+
+function riskAppetiteGateSummary() {
+  const selectedPolicy = state.portfolioSimulation?.policy?.name
+    || els.simulationForm.elements.policy.value;
+  const sourcePayload = state.portfolioSimulation
+    || state.policySweep?.[0]
+    || state.assumptionSensitivity?.[0]?.payload
+    || null;
+  const singleMemo = state.portfolioSimulation ? simulationPolicyMemo(state.portfolioSimulation) : null;
+  const singlePosture = state.portfolioSimulation ? simulationCockpitPosture(state.portfolioSimulation) : null;
+  const policyRows = state.policySweep?.length ? policySweepRows(state.policySweep, selectedPolicy) : [];
+  const policyLeader = policyRows[0] || null;
+  const selectedPolicyRow = policyRows.find((row) => row.selected) || policyLeader;
+  const sensitivityRows = state.assumptionSensitivity?.length
+    ? sensitivitySweepRows(state.assumptionSensitivity)
+    : [];
+  const sensitivityDriver = largestSensitivityDriverRow(sensitivityRows);
+  const evidenceCount = [singleMemo, policyLeader, sensitivityDriver].filter(Boolean).length;
+
+  if (!evidenceCount) return null;
+
+  const checks = [];
+
+  if (singlePosture) {
+    const capitalBuffer = Math.max(0, -Number(singlePosture.severeDownside || 0));
+    const status = singlePosture.severeLoss >= 0.5 || singlePosture.severeDownside < 0
+      ? "block"
+      : singlePosture.severeLoss >= 0.25 || singlePosture.stressGap < 0
+        ? "watch"
+        : "pass";
+    checks.push({
+      label: "Severe stress appetite",
+      status,
+      value: `${formatPercent(singlePosture.severeLoss)} loss / ${formatAmountUnits(capitalBuffer)} buffer`,
+      note: status === "block"
+        ? "Severe path breaches the pilot loss floor or needs reserve coverage."
+        : status === "watch"
+          ? "Pilot can continue only with an explicit stop-loss trigger."
+          : "Severe case stays inside the default planning band.",
+    });
+  } else {
+    checks.push({
+      label: "Severe stress appetite",
+      status: "watch",
+      value: "Pending",
+      note: "Run the 3-scenario simulation before approving any pilot envelope.",
+    });
+  }
+
+  if (policyLeader) {
+    const selectedIsLeader = selectedPolicyRow?.policyName === policyLeader.policyName;
+    const status = policyLeader.memo.className === "memo-defensive"
+      ? "block"
+      : selectedIsLeader
+        ? "pass"
+        : "watch";
+    checks.push({
+      label: "Policy frontier",
+      status,
+      value: policyLeader.policyLabel,
+      note: status === "block"
+        ? "Even the best policy candidate is defensive in this stress run."
+        : selectedIsLeader
+          ? "Selected policy is the current frontier leader."
+          : `${selectedPolicyRow?.policyLabel || formatPolicyName(selectedPolicy)} trails the current frontier leader.`,
+    });
+  } else {
+    checks.push({
+      label: "Policy frontier",
+      status: "watch",
+      value: "Not compared",
+      note: "Run policy sweep before changing thresholds or pilot limits.",
+    });
+  }
+
+  if (sensitivityDriver) {
+    const materialSensitivity = sensitivityDriver.capitalDelta > 0
+      || sensitivityDriver.lossDelta >= 0.05
+      || sensitivityDriver.resultDelta < 0;
+    const status = sensitivityDriver.memo.className === "memo-defensive"
+      || (sensitivityDriver.capitalDelta > 0 && sensitivityDriver.lossDelta >= 0.05)
+      ? "block"
+      : materialSensitivity
+        ? "watch"
+        : "pass";
+    checks.push({
+      label: "Assumption sensitivity",
+      status,
+      value: sensitivityDriver.variant.label,
+      note: materialSensitivity
+        ? `${sensitivityDriver.variant.driver} moves severe economics enough to require evidence.`
+        : "Tested assumption shocks do not materially worsen the severe case.",
+    });
+  } else {
+    checks.push({
+      label: "Assumption sensitivity",
+      status: "watch",
+      value: "Not tested",
+      note: "Run sensitivity before locking margin, LGD, or review-capacity assumptions.",
+    });
+  }
+
+  checks.push({
+    label: "Evidence completeness",
+    status: evidenceCount >= 3 ? "pass" : "watch",
+    value: `${evidenceCount} / 3`,
+    note: "Gate expects single run, policy sweep, and sensitivity evidence.",
+  });
+
+  const status = riskAppetiteAggregateStatus(checks);
+  const statusLabel = riskAppetiteStatusLabel(status);
+  const className = `gate-${status}`;
+  const title = status === "block"
+    ? "Pilot blocked until appetite breach has an owner"
+    : status === "watch"
+      ? "Pilot allowed only inside explicit guardrails"
+      : "Pilot envelope is inside risk appetite";
+  const body = status === "block"
+    ? "Monte Carlo evidence shows at least one breach. Do not expand approval limits until the owner, reserve, and re-run condition are documented."
+    : status === "watch"
+      ? "The book is usable for a controlled pilot, but only with stop triggers, capacity checks, and assumption evidence attached."
+      : "The current evidence set supports a controlled pilot with routine monitoring and preserved reproducibility.";
+  const stance = status === "block"
+    ? "Block expansion"
+    : status === "watch"
+      ? "Conditional pilot"
+      : "Controlled pilot";
+  const seed = sourcePayload?.assumptions?.seed || els.simulationForm.elements.seed.value;
+  const fingerprint = sourcePayload?.portfolio_fingerprint || "";
+  const reviewApprovalRate = Number(
+    sourcePayload?.assumptions?.review_approval_rate
+    ?? els.simulationForm.elements.review_approval_rate.value
+    ?? 0,
+  );
+  const recommendedPolicy = policyLeader?.policyLabel || formatPolicyName(selectedPolicy);
+  const capitalBuffer = singleMemo ? singleMemo.capitalBuffer : policyLeader?.capitalBuffer || 0;
+  const severeLoss = singlePosture?.severeLoss ?? policyLeader?.severeLoss ?? null;
+  const policyNote = policyLeader
+    ? `${policyLeader.memo.stance}; severe loss ${formatPercent(policyLeader.severeLoss)}`
+    : "Run policy sweep to confirm the frontier policy.";
+
+  const envelope = [
+    {
+      label: "Gate decision",
+      value: `${statusLabel}: ${stance}`,
+      note: status === "block" ? "Committee owner required before rollout." : "Use this as the pilot operating stance.",
+    },
+    {
+      label: "Pilot policy",
+      value: recommendedPolicy,
+      note: policyNote,
+    },
+    {
+      label: "Stop trigger",
+      value: "Watch 25% / block 50%",
+      note: severeLoss === null
+        ? "Severe loss probability is pending."
+        : `Current severe loss is ${formatPercent(severeLoss)}.`,
+    },
+    {
+      label: "Capital reserve",
+      value: formatAmountUnits(capitalBuffer),
+      note: "Cover severe P05 downside before expanding limits.",
+    },
+    {
+      label: "Review capacity",
+      value: formatPercent(reviewApprovalRate),
+      note: "Manual-review approval assumption used by the run.",
+    },
+    {
+      label: "Sensitivity owner",
+      value: sensitivityDriver ? sensitivityDriver.variant.label : "Pending",
+      note: sensitivityDriver
+        ? `${sensitivityDriver.variant.driver}; buffer ${formatSignedAmountUnits(sensitivityDriver.capitalDelta)}`
+        : "Assign after the sensitivity sweep.",
+    },
+  ];
+
+  const actions = status === "block"
+    ? [
+      "Freeze approval expansion until the blocked check has an accountable owner.",
+      "Re-run policy sweep after changing pricing, LGD, review capacity, or exposure limits.",
+      "Attach the breach check and reserve plan to the committee packet.",
+      "Do not treat this as production authorization; it remains decision-support evidence.",
+    ]
+    : status === "watch"
+      ? [
+        "Pilot only within the recommended policy envelope and stop-loss trigger.",
+        "Review severe loss probability and capital buffer at every monitoring checkpoint.",
+        "Close missing evidence before increasing limits or moving to production data.",
+        "Archive seed, fingerprint, and assumptions with the committee packet.",
+      ]
+      : [
+        "Proceed with a controlled pilot using the current policy envelope.",
+        "Keep severe P05 as the reserve reference and re-run after score or threshold changes.",
+        "Monitor severe loss, default drift, and assumption sensitivity on a fixed cadence.",
+        "Archive seed, fingerprint, and committee brief for reproducibility.",
+      ];
+
+  const text = [
+    "MicroScore Monte Carlo risk appetite gate",
+    `Gate: ${statusLabel} - ${stance}`,
+    `Summary: ${body}`,
+    `Recommended policy: ${recommendedPolicy}`,
+    `Seed: ${seed}`,
+    fingerprint ? `Portfolio fingerprint: ${fingerprint}` : "Portfolio fingerprint: pending",
+    "Checks:",
+    ...checks.map((check) => `- ${check.label}: ${riskAppetiteStatusLabel(check.status)}; ${check.value}; ${check.note}`),
+    "Pilot envelope:",
+    ...envelope.map((item) => `- ${item.label}: ${item.value}; ${item.note}`),
+    "Actions:",
+    ...actions.map((action, index) => `${index + 1}. ${action}`),
+  ].join("\n");
+
+  return {
+    status,
+    statusLabel,
+    className,
+    title,
+    body,
+    stance,
+    checks,
+    envelope,
+    actions,
+    text,
+  };
+}
+
+function renderMonteCarloRiskAppetiteGate() {
+  const gate = riskAppetiteGateSummary();
+  if (!gate) {
+    state.riskAppetiteText = "";
+    setPanelState(
+      els.riskAppetiteGate,
+      "simulation-risk-appetite",
+      "empty",
+      "No risk appetite gate yet",
+      "Run Monte Carlo evidence to evaluate pilot risk appetite and guardrails.",
+    );
+    return;
+  }
+
+  state.riskAppetiteText = gate.text;
+  els.riskAppetiteGate.className = `simulation-risk-appetite ${escapeHtml(gate.className)}`;
+  els.riskAppetiteGate.innerHTML = `
+    <section class="simulation-risk-appetite-hero" aria-label="Monte Carlo risk appetite gate">
+      <div>
+        <span>Risk appetite gate</span>
+        <strong>${escapeHtml(gate.title)}</strong>
+        <p>${escapeHtml(gate.body)}</p>
+      </div>
+      <div class="simulation-risk-appetite-stance">
+        <em>${escapeHtml(gate.statusLabel)}</em>
+        <strong>${escapeHtml(gate.stance)}</strong>
+        <button class="secondary-button" type="button" data-copy-risk-appetite>Copy gate</button>
+      </div>
+    </section>
+    <div class="simulation-risk-appetite-grid">
+      ${gate.envelope.map((item) => `
+        <div>
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <em>${escapeHtml(item.note)}</em>
+        </div>
+      `).join("")}
+    </div>
+    <div class="simulation-risk-appetite-checks">
+      ${gate.checks.map((check) => `
+        <div class="risk-appetite-check check-${escapeHtml(check.status)}">
+          <span>${escapeHtml(riskAppetiteStatusLabel(check.status))}</span>
+          <strong>${escapeHtml(check.label)}</strong>
+          <em>${escapeHtml(check.value)}</em>
+          <p>${escapeHtml(check.note)}</p>
+        </div>
+      `).join("")}
+    </div>
+    <ol class="simulation-risk-appetite-actions">
+      ${gate.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+    </ol>
+  `;
+}
+
+async function copyRiskAppetiteGateText() {
+  if (!state.riskAppetiteText) {
+    showMessage("Run Monte Carlo evidence before copying the risk appetite gate", "error");
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(state.riskAppetiteText);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = state.riskAppetiteText;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("Risk appetite gate copied", "ok");
 }
 
 function renderPortfolioSimulation(payload) {
@@ -5396,6 +5728,10 @@ function wireEvents() {
   els.committeeBrief.addEventListener("click", (event) => {
     if (!event.target.closest("[data-copy-committee-brief]")) return;
     copyCommitteeBriefText().catch((error) => showMessage(error.message, "error"));
+  });
+  els.riskAppetiteGate.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-copy-risk-appetite]")) return;
+    copyRiskAppetiteGateText().catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
     withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
