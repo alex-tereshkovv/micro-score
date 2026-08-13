@@ -2269,7 +2269,8 @@ label {
 
 .simulation-results.empty,
 .simulation-sweep-results.empty,
-.simulation-sensitivity-results.empty {
+.simulation-sensitivity-results.empty,
+.simulation-committee-brief.empty {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
@@ -2278,7 +2279,8 @@ label {
 }
 
 .simulation-sweep-results,
-.simulation-sensitivity-results {
+.simulation-sensitivity-results,
+.simulation-committee-brief {
   margin-top: 12px;
 }
 
@@ -2962,6 +2964,109 @@ label {
 .simulation-sensitivity-decision p {
   margin: 5px 0 0;
   color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-committee-brief.brief-stable,
+.simulation-committee-brief.brief-watch,
+.simulation-committee-brief.brief-defensive {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(13, 148, 136, 0.08), rgba(255, 255, 255, 0.92) 42%),
+    #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-committee-brief.brief-stable {
+  border-left-color: var(--green);
+}
+
+.simulation-committee-brief.brief-watch {
+  border-left-color: var(--amber);
+}
+
+.simulation-committee-brief.brief-defensive {
+  border-left-color: var(--red);
+}
+
+.simulation-committee-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.simulation-committee-hero span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-committee-hero strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.simulation-committee-hero p {
+  max-width: 820px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-committee-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-committee-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px;
+}
+
+.simulation-committee-grid span,
+.simulation-committee-grid em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.simulation-committee-grid strong {
+  display: block;
+  margin: 3px 0 2px;
+  font-size: 15px;
+}
+
+.simulation-committee-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simulation-committee-actions li {
+  border-radius: 10px;
+  background: var(--surface-strong);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -4331,7 +4436,9 @@ tr.selected {
 
   .simulation-cockpit-grid,
   .simulation-cockpit-steps,
-  .simulation-policy-actions {
+  .simulation-policy-actions,
+  .simulation-committee-grid,
+  .simulation-committee-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -4344,6 +4451,10 @@ tr.selected {
   }
 
   .simulation-sensitivity-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-committee-hero {
     grid-template-columns: 1fr;
   }
 
@@ -4465,6 +4576,9 @@ tr.selected {
   .simulation-sweep-badges,
   .simulation-sensitivity-hero,
   .simulation-sensitivity-badges,
+  .simulation-committee-hero,
+  .simulation-committee-grid,
+  .simulation-committee-actions,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
   }

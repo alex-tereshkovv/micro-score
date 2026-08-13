@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260808-monte-carlo-sensitivity-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260813-monte-carlo-committee-brief-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -580,6 +580,9 @@
             <div id="sensitivityResults" class="simulation-sensitivity-results empty">
               Run sensitivity to see which assumption error moves severe losses, downside, and capital buffer the most.
             </div>
+            <div id="committeeBrief" class="simulation-committee-brief empty">
+              Run one or more Monte Carlo tools to build a committee-ready brief.
+            </div>
             <div class="panel-heading simulation-history-heading">
               <div>
                 <p class="eyebrow">Reproducibility</p>
@@ -846,8 +849,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260808-monte-carlo-sensitivity-v1"></script>
+    <script src="./mock-api.js?v=20260813-monte-carlo-committee-brief-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260808-monte-carlo-sensitivity-v1"></script>
+    <script src="./app.js?v=20260813-monte-carlo-committee-brief-v1"></script>
   </body>
 </html>

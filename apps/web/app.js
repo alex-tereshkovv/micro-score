@@ -48,6 +48,7 @@ const state = {
   portfolioSimulation: null,
   policySweep: [],
   assumptionSensitivity: [],
+  committeeBriefText: "",
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -121,6 +122,7 @@ const els = {
   simulationResults: document.querySelector("#simulationResults"),
   policySweepResults: document.querySelector("#policySweepResults"),
   sensitivityResults: document.querySelector("#sensitivityResults"),
+  committeeBrief: document.querySelector("#committeeBrief"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -1060,6 +1062,14 @@ function resetApplicationViews() {
     "empty",
     "No sensitivity run yet",
     "Run sensitivity to find which assumption error is most dangerous.",
+  );
+  state.committeeBriefText = "";
+  setPanelState(
+    els.committeeBrief,
+    "simulation-committee-brief",
+    "empty",
+    "No committee brief yet",
+    "Run one or more Monte Carlo tools to build a committee-ready brief.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -3083,6 +3093,7 @@ async function runPortfolioSimulation() {
     });
     state.portfolioSimulation = payload;
     renderPortfolioSimulation(payload);
+    renderMonteCarloCommitteeBrief();
     await refreshSimulationHistory();
     showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
     return payload;
@@ -3120,6 +3131,7 @@ async function runPolicySweep() {
     }
     state.policySweep = runs;
     renderPolicySweep(runs, basePayload.policy);
+    renderMonteCarloCommitteeBrief();
     await refreshSimulationHistory();
     showMessage(`Compared ${runs.length} Monte Carlo policies with seed ${basePayload.seed}`, "ok");
     return runs;
@@ -3157,6 +3169,7 @@ async function runSensitivitySweep() {
     }
     state.assumptionSensitivity = runs;
     renderSensitivitySweep(runs, basePayload);
+    renderMonteCarloCommitteeBrief();
     await refreshSimulationHistory();
     showMessage(`Sensitivity sweep completed for ${formatPolicyName(basePayload.policy)}`, "ok");
     return runs;
@@ -3206,6 +3219,7 @@ async function loadStoredSimulation(simulationId) {
   const payload = await apiFetch(`/mfi/simulations/${encodeURIComponent(simulationId)}`);
   state.portfolioSimulation = payload;
   renderPortfolioSimulation(payload);
+  renderMonteCarloCommitteeBrief();
   showMessage(`Loaded saved Monte Carlo run ${simulationId}`, "ok");
   return payload;
 }
@@ -3708,6 +3722,202 @@ function renderSensitivitySweep(runs, basePayload) {
       </p>
     </div>
   `;
+}
+
+function largestSensitivityDriverRow(rows) {
+  const challengers = rows.filter((row) => !row.reference);
+  return [...challengers].sort((left, right) => (
+    right.capitalDelta - left.capitalDelta
+    || right.lossDelta - left.lossDelta
+    || left.resultDelta - right.resultDelta
+  ))[0] || rows[0] || null;
+}
+
+function committeeBriefSeverityClass(items) {
+  const classes = items.map((item) => item?.className).filter(Boolean);
+  if (classes.includes("memo-defensive")) return "brief-defensive";
+  if (classes.includes("memo-watch")) return "brief-watch";
+  return "brief-stable";
+}
+
+function committeeBriefSummary() {
+  const selectedPolicy = state.portfolioSimulation?.policy?.name
+    || els.simulationForm.elements.policy.value;
+  const sourcePayload = state.portfolioSimulation
+    || state.policySweep?.[0]
+    || state.assumptionSensitivity?.[0]?.payload
+    || null;
+  const singleMemo = state.portfolioSimulation ? simulationPolicyMemo(state.portfolioSimulation) : null;
+  const singlePosture = state.portfolioSimulation ? simulationCockpitPosture(state.portfolioSimulation) : null;
+  const policyRows = state.policySweep?.length ? policySweepRows(state.policySweep, selectedPolicy) : [];
+  const policyLeader = policyRows[0] || null;
+  const selectedPolicyRow = policyRows.find((row) => row.selected) || policyLeader;
+  const sensitivityRows = state.assumptionSensitivity?.length
+    ? sensitivitySweepRows(state.assumptionSensitivity)
+    : [];
+  const sensitivityDriver = largestSensitivityDriverRow(sensitivityRows);
+  const evidenceCount = [singleMemo, policyLeader, sensitivityDriver].filter(Boolean).length;
+
+  if (!evidenceCount) return null;
+
+  const className = committeeBriefSeverityClass([singleMemo, policyLeader?.memo, sensitivityDriver?.memo]);
+  const title = className === "brief-defensive"
+    ? "Committee escalation brief"
+    : className === "brief-watch"
+      ? "Guardrail committee brief"
+      : "Committee-ready planning brief";
+  const body = className === "brief-defensive"
+    ? "Monte Carlo evidence shows a stress path that needs explicit ownership before rollout."
+    : className === "brief-watch"
+      ? "Monte Carlo evidence supports a guarded rollout with documented thresholds, monitoring, and assumption evidence."
+      : "Monte Carlo evidence supports controlled planning, with seed and fingerprint preserved for reproducibility.";
+  const severe = singlePosture?.severe || singlePosture?.baseline || null;
+  const fingerprint = sourcePayload?.portfolio_fingerprint || "";
+  const seed = sourcePayload?.assumptions?.seed || els.simulationForm.elements.seed.value;
+  const actions = [];
+
+  if (singleMemo) {
+    actions.push(...singleMemo.actions.slice(0, 2));
+  } else {
+    actions.push("Run the 3-scenario simulation to attach a single-policy risk memo.");
+  }
+
+  if (policyLeader) {
+    const selectedIsLeader = selectedPolicyRow?.policyName === policyLeader.policyName;
+    actions.push(selectedIsLeader
+      ? `${policyLeader.policyLabel} is the current frontier leader; keep it as the benchmark.`
+      : `Compare ${selectedPolicyRow?.policyLabel || formatPolicyName(selectedPolicy)} against ${policyLeader.policyLabel} before committee review.`);
+  } else {
+    actions.push("Run policy sweep before changing approval thresholds.");
+  }
+
+  if (sensitivityDriver) {
+    const materialSensitivity = sensitivityDriver.capitalDelta > 0
+      || sensitivityDriver.lossDelta >= 0.05
+      || sensitivityDriver.resultDelta < 0;
+    actions.push(materialSensitivity
+      ? `Evidence required for ${sensitivityDriver.variant.driver}; it is the largest assumption driver.`
+      : "Sensitivity shocks are stable; keep the assumption set with the review packet.");
+  } else {
+    actions.push("Run sensitivity before finalizing margin, LGD, and review-capacity assumptions.");
+  }
+
+  actions.push(`Archive seed ${seed} and fingerprint ${fingerprint ? fingerprint.slice(0, 16) : "pending"} with the review packet.`);
+
+  const cards = [
+    {
+      label: "Current policy",
+      value: singleMemo ? singleMemo.stance : "Run needed",
+      note: singleMemo
+        ? `${formatPolicyName(state.portfolioSimulation.policy.name)} / capital ${formatAmountUnits(singleMemo.capitalBuffer)}`
+        : "Run 3 scenarios to generate a policy memo.",
+    },
+    {
+      label: "Policy frontier",
+      value: policyLeader ? policyLeader.policyLabel : "Not compared",
+      note: policyLeader
+        ? `${policyLeader.memo.stance} / severe loss ${formatPercent(policyLeader.severeLoss)}`
+        : "Run policy sweep to compare threshold strategies.",
+    },
+    {
+      label: "Assumption driver",
+      value: sensitivityDriver ? sensitivityDriver.variant.label : "Not tested",
+      note: sensitivityDriver
+        ? `${sensitivityDriver.variant.driver} / buffer ${formatSignedAmountUnits(sensitivityDriver.capitalDelta)}`
+        : "Run sensitivity to find the dangerous assumption.",
+    },
+    {
+      label: "Reproducibility",
+      value: seed,
+      note: fingerprint ? `${fingerprint.slice(0, 16)}...` : "Fingerprint appears after a run.",
+    },
+  ];
+
+  const text = [
+    "MicroScore Monte Carlo committee brief",
+    `Status: ${title}`,
+    `Summary: ${body}`,
+    `Policy: ${formatPolicyName(selectedPolicy)}`,
+    `Seed: ${seed}`,
+    fingerprint ? `Portfolio fingerprint: ${fingerprint}` : "Portfolio fingerprint: pending",
+    singleMemo ? `Single-policy stance: ${singleMemo.stance}; capital buffer ${formatAmountUnits(singleMemo.capitalBuffer)}; loss spread ${formatSignedPercent(singleMemo.lossSpread)}.` : "Single-policy stance: not run.",
+    severe ? `Severe scenario: median ${formatAmountUnits(severe.portfolio_result?.p50)}; loss ${formatPercent(severe.probability_of_loss)}; defaults mean ${Number(severe.default_count?.mean || 0).toFixed(1)}.` : "Severe scenario: pending.",
+    policyLeader ? `Policy frontier leader: ${policyLeader.policyLabel}; stance ${policyLeader.memo.stance}; severe loss ${formatPercent(policyLeader.severeLoss)}.` : "Policy frontier: not run.",
+    sensitivityDriver ? `Largest assumption driver: ${sensitivityDriver.variant.label} (${sensitivityDriver.variant.driver}); buffer delta ${formatSignedAmountUnits(sensitivityDriver.capitalDelta)}; loss delta ${formatSignedPercent(sensitivityDriver.lossDelta)}.` : "Assumption sensitivity: not run.",
+    "Actions:",
+    ...actions.map((action, index) => `${index + 1}. ${action}`),
+  ].join("\n");
+
+  return {
+    className,
+    title,
+    body,
+    cards,
+    actions: actions.slice(0, 4),
+    text,
+  };
+}
+
+function renderMonteCarloCommitteeBrief() {
+  const brief = committeeBriefSummary();
+  if (!brief) {
+    state.committeeBriefText = "";
+    setPanelState(
+      els.committeeBrief,
+      "simulation-committee-brief",
+      "empty",
+      "No committee brief yet",
+      "Run one or more Monte Carlo tools to build a committee-ready brief.",
+    );
+    return;
+  }
+
+  state.committeeBriefText = brief.text;
+  els.committeeBrief.className = `simulation-committee-brief ${escapeHtml(brief.className)}`;
+  els.committeeBrief.innerHTML = `
+    <section class="simulation-committee-hero" aria-label="Monte Carlo committee brief">
+      <div>
+        <span>Committee brief</span>
+        <strong>${escapeHtml(brief.title)}</strong>
+        <p>${escapeHtml(brief.body)}</p>
+      </div>
+      <button class="secondary-button" type="button" data-copy-committee-brief>Copy brief</button>
+    </section>
+    <div class="simulation-committee-grid">
+      ${brief.cards.map((card) => `
+        <div>
+          <span>${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(card.value)}</strong>
+          <em>${escapeHtml(card.note)}</em>
+        </div>
+      `).join("")}
+    </div>
+    <ol class="simulation-committee-actions">
+      ${brief.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+    </ol>
+  `;
+}
+
+async function copyCommitteeBriefText() {
+  if (!state.committeeBriefText) {
+    showMessage("Run Monte Carlo evidence before copying the committee brief", "error");
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(state.committeeBriefText);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = state.committeeBriefText;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("Committee brief copied", "ok");
 }
 
 function renderPortfolioSimulation(payload) {
@@ -5182,6 +5392,10 @@ function wireEvents() {
   els.runSensitivitySweep.addEventListener("click", () => {
     withButtonBusy(els.runSensitivitySweep, "Testing...", () => runSensitivitySweep())
       .catch((error) => showMessage(error.message, "error"));
+  });
+  els.committeeBrief.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-copy-committee-brief]")) return;
+    copyCommitteeBriefText().catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
     withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
