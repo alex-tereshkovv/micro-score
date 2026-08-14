@@ -14,6 +14,8 @@ const hostedStaticPage = !LOCAL_HOSTNAMES.has(window.location.hostname);
 // A 15-point proxy swing is enough to make an analyst slow down. Real pilot data should get the final vote here.
 const HIGH_PROXY_SENSITIVITY_DELTA = 0.15;
 const DEMO_CONSENT_VERSION = "synthetic-demo-v1";
+const DOSSIER_VAULT_STORAGE_KEY = "microscore.pilotDossierVault";
+const DOSSIER_VAULT_LIMIT = 6;
 const portfolioDashboard = window.MicroScorePortfolioDashboard || {};
 const MFI_QUEUE_FILTER_DEFAULTS = Object.freeze({
   search: "",
@@ -52,6 +54,7 @@ const state = {
   riskAppetiteText: "",
   pilotMonitoringText: "",
   pilotEvidenceDossierText: "",
+  dossierVaultRecords: [],
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -129,6 +132,7 @@ const els = {
   riskAppetiteGate: document.querySelector("#riskAppetiteGate"),
   pilotMonitoringPlan: document.querySelector("#pilotMonitoringPlan"),
   pilotEvidenceDossier: document.querySelector("#pilotEvidenceDossier"),
+  dossierVault: document.querySelector("#dossierVault"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -596,6 +600,10 @@ function downloadBlob(blob, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(text, filename) {
+  downloadBlob(new Blob([text], { type: "text/markdown;charset=utf-8" }), filename);
 }
 
 function hasStaticDemoApi() {
@@ -1103,6 +1111,7 @@ function resetApplicationViews() {
     "No pilot evidence dossier yet",
     "Run Monte Carlo evidence to assemble committee, gate, and monitoring artifacts.",
   );
+  renderDossierVault();
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
 }
@@ -4763,6 +4772,8 @@ function renderMonteCarloPilotEvidenceDossier() {
         <em>${escapeHtml(dossier.statusLabel)}</em>
         <strong>${escapeHtml(dossier.selectedPolicy)}</strong>
         <button class="secondary-button" type="button" data-copy-pilot-dossier>Copy dossier</button>
+        <button class="secondary-button" type="button" data-save-pilot-dossier>Save snapshot</button>
+        <button class="secondary-button" type="button" data-download-pilot-dossier>Download .md</button>
       </div>
     </section>
     <div class="simulation-dossier-meta">
@@ -4815,6 +4826,168 @@ async function copyPilotEvidenceDossierText() {
     textarea.remove();
   }
   showMessage("Pilot evidence dossier copied", "ok");
+}
+
+function safeFileSlug(value) {
+  return String(value || "dossier")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72) || "dossier";
+}
+
+function dossierDownloadFilename(dossier) {
+  const date = new Date().toISOString().slice(0, 10);
+  return `microscore-${safeFileSlug(dossier.selectedPolicy)}-${safeFileSlug(dossier.status)}-${date}.md`;
+}
+
+function loadDossierVaultRecords() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DOSSIER_VAULT_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((record) => record && typeof record === "object" && record.id && record.text)
+      .slice(0, DOSSIER_VAULT_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function persistDossierVaultRecords(records) {
+  const nextRecords = records.slice(0, DOSSIER_VAULT_LIMIT);
+  state.dossierVaultRecords = nextRecords;
+  localStorage.setItem(DOSSIER_VAULT_STORAGE_KEY, JSON.stringify(nextRecords));
+}
+
+function currentDossierVaultRecord(dossier) {
+  const createdAt = new Date().toISOString();
+  const fingerprint = dossier.fingerprint || "";
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    created_at: createdAt,
+    title: dossier.title,
+    status: dossier.status,
+    status_label: dossier.statusLabel,
+    selected_policy: dossier.selectedPolicy,
+    seed: dossier.seed,
+    fingerprint,
+    evidence_label: dossier.artifacts.find((artifact) => artifact.label === "Evidence completeness")?.value || "-",
+    filename: dossierDownloadFilename(dossier),
+    text: dossier.text,
+  };
+}
+
+function renderDossierVault() {
+  const records = state.dossierVaultRecords?.length
+    ? state.dossierVaultRecords
+    : loadDossierVaultRecords();
+  state.dossierVaultRecords = records;
+
+  if (!records.length) {
+    setPanelState(
+      els.dossierVault,
+      "simulation-dossier-vault",
+      "empty",
+      "No saved dossier snapshots",
+      "Save a pilot evidence dossier snapshot to create a device-local committee packet vault.",
+    );
+    return;
+  }
+
+  els.dossierVault.className = "simulation-dossier-vault";
+  els.dossierVault.innerHTML = `
+    <section class="simulation-vault-hero" aria-label="Device-local dossier vault">
+      <div>
+        <span>Dossier vault</span>
+        <strong>${records.length} saved committee packet${records.length === 1 ? "" : "s"}</strong>
+        <p>Device-local snapshots for committee handoff. Download the Markdown file before changing browser or clearing site data.</p>
+      </div>
+      <em>Last ${DOSSIER_VAULT_LIMIT}</em>
+    </section>
+    <div class="simulation-vault-list">
+      ${records.map((record) => `
+        <article class="simulation-vault-record vault-${escapeHtml(record.status || "draft")}">
+          <div>
+            <span>${escapeHtml(record.status_label || dossierStatusLabel(record.status))}</span>
+            <strong>${escapeHtml(record.title || "Pilot evidence dossier")}</strong>
+            <em>${escapeHtml(record.created_at || "")}</em>
+          </div>
+          <div class="simulation-vault-meta">
+            <span><em>Policy</em><strong>${escapeHtml(record.selected_policy || "Pending")}</strong></span>
+            <span><em>Evidence</em><strong>${escapeHtml(record.evidence_label || "-")}</strong></span>
+            <span><em>Seed</em><strong>${escapeHtml(record.seed || "-")}</strong></span>
+            <span><em>Fingerprint</em><strong>${escapeHtml(record.fingerprint ? `${record.fingerprint.slice(0, 12)}...` : "pending")}</strong></span>
+          </div>
+          <div class="simulation-vault-actions">
+            <button class="secondary-button" type="button" data-copy-vault-record="${escapeHtml(record.id)}">Copy</button>
+            <button class="secondary-button" type="button" data-download-vault-record="${escapeHtml(record.id)}">Download</button>
+            <button class="secondary-button danger-button" type="button" data-delete-vault-record="${escapeHtml(record.id)}">Delete</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function saveCurrentPilotDossierSnapshot() {
+  const dossier = pilotEvidenceDossierSummary();
+  if (!dossier) {
+    showMessage("Run Monte Carlo evidence before saving a dossier snapshot", "error");
+    return;
+  }
+  const record = currentDossierVaultRecord(dossier);
+  persistDossierVaultRecords([record, ...loadDossierVaultRecords()]);
+  renderDossierVault();
+  showMessage("Pilot evidence dossier snapshot saved", "ok");
+}
+
+function downloadCurrentPilotDossier() {
+  const dossier = pilotEvidenceDossierSummary();
+  if (!dossier) {
+    showMessage("Run Monte Carlo evidence before downloading a dossier", "error");
+    return;
+  }
+  downloadTextFile(dossier.text, dossierDownloadFilename(dossier));
+  showMessage("Pilot evidence dossier downloaded", "ok");
+}
+
+async function copyDossierVaultRecord(recordId) {
+  const record = loadDossierVaultRecords().find((item) => item.id === recordId);
+  if (!record) {
+    showMessage("Saved dossier snapshot was not found", "error");
+    return;
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(record.text);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = record.text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("Saved dossier copied", "ok");
+}
+
+function downloadDossierVaultRecord(recordId) {
+  const record = loadDossierVaultRecords().find((item) => item.id === recordId);
+  if (!record) {
+    showMessage("Saved dossier snapshot was not found", "error");
+    return;
+  }
+  downloadTextFile(record.text, record.filename || "microscore-pilot-evidence-dossier.md");
+  showMessage("Saved dossier downloaded", "ok");
+}
+
+function deleteDossierVaultRecord(recordId) {
+  const records = loadDossierVaultRecords().filter((record) => record.id !== recordId);
+  persistDossierVaultRecords(records);
+  renderDossierVault();
+  showMessage("Saved dossier snapshot deleted", "ok");
 }
 
 function renderPortfolioSimulation(payload) {
@@ -6303,8 +6476,33 @@ function wireEvents() {
     copyPilotMonitoringPlanText().catch((error) => showMessage(error.message, "error"));
   });
   els.pilotEvidenceDossier.addEventListener("click", (event) => {
-    if (!event.target.closest("[data-copy-pilot-dossier]")) return;
-    copyPilotEvidenceDossierText().catch((error) => showMessage(error.message, "error"));
+    if (event.target.closest("[data-copy-pilot-dossier]")) {
+      copyPilotEvidenceDossierText().catch((error) => showMessage(error.message, "error"));
+      return;
+    }
+    if (event.target.closest("[data-save-pilot-dossier]")) {
+      saveCurrentPilotDossierSnapshot();
+      return;
+    }
+    if (event.target.closest("[data-download-pilot-dossier]")) {
+      downloadCurrentPilotDossier();
+    }
+  });
+  els.dossierVault.addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-copy-vault-record]");
+    if (copyButton) {
+      copyDossierVaultRecord(copyButton.dataset.copyVaultRecord)
+        .catch((error) => showMessage(error.message, "error"));
+      return;
+    }
+    const downloadButton = event.target.closest("[data-download-vault-record]");
+    if (downloadButton) {
+      downloadDossierVaultRecord(downloadButton.dataset.downloadVaultRecord);
+      return;
+    }
+    const deleteButton = event.target.closest("[data-delete-vault-record]");
+    if (!deleteButton) return;
+    deleteDossierVaultRecord(deleteButton.dataset.deleteVaultRecord);
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
     withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
@@ -6406,9 +6604,11 @@ function wireEvents() {
 }
 
 function restoreState() {
+  state.dossierVaultRecords = loadDossierVaultRecords();
   applyRoute();
   fillApplicationForm(demoApplication);
   syncMfiInspectorTabs();
+  renderDossierVault();
 }
 
 wireEvents();

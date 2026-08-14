@@ -2273,7 +2273,8 @@ label {
 .simulation-committee-brief.empty,
 .simulation-risk-appetite.empty,
 .simulation-monitoring-plan.empty,
-.simulation-evidence-dossier.empty {
+.simulation-evidence-dossier.empty,
+.simulation-dossier-vault.empty {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-strong);
@@ -2286,7 +2287,8 @@ label {
 .simulation-committee-brief,
 .simulation-risk-appetite,
 .simulation-monitoring-plan,
-.simulation-evidence-dossier {
+.simulation-evidence-dossier,
+.simulation-dossier-vault {
   margin-top: 12px;
 }
 
@@ -3573,6 +3575,118 @@ label {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.simulation-dossier-vault {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(255, 255, 255, 0.96) 48%),
+    #ffffff;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.simulation-vault-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.simulation-vault-hero span,
+.simulation-vault-hero em,
+.simulation-vault-record span,
+.simulation-vault-record em,
+.simulation-vault-meta em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.simulation-vault-hero strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.simulation-vault-hero p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.simulation-vault-list {
+  display: grid;
+  gap: 8px;
+}
+
+.simulation-vault-record {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.6fr) auto;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px;
+}
+
+.simulation-vault-record.vault-ready {
+  border-left-color: var(--green);
+}
+
+.simulation-vault-record.vault-review,
+.simulation-vault-record.vault-draft {
+  border-left-color: var(--amber);
+}
+
+.simulation-vault-record.vault-blocked {
+  border-left-color: var(--red);
+}
+
+.simulation-vault-record strong {
+  display: block;
+  margin: 3px 0;
+  font-size: 14px;
+}
+
+.simulation-vault-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.simulation-vault-meta span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 7px;
+}
+
+.simulation-vault-meta strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.simulation-vault-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(88px, 1fr));
+  gap: 6px;
+}
+
+.simulation-vault-actions .secondary-button {
+  min-height: 36px;
+  padding: 7px 9px;
+  font-size: 12px;
 }
 
 .simulation-history-heading {
@@ -4954,7 +5068,9 @@ tr.selected {
   .simulation-dossier-meta,
   .simulation-dossier-artifacts,
   .simulation-dossier-checklist,
-  .simulation-dossier-actions {
+  .simulation-dossier-actions,
+  .simulation-vault-record,
+  .simulation-vault-meta {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -4983,6 +5099,10 @@ tr.selected {
   }
 
   .simulation-dossier-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-vault-hero {
     grid-template-columns: 1fr;
   }
 
@@ -5121,6 +5241,10 @@ tr.selected {
   .simulation-dossier-artifacts,
   .simulation-dossier-checklist,
   .simulation-dossier-actions,
+  .simulation-vault-hero,
+  .simulation-vault-record,
+  .simulation-vault-meta,
+  .simulation-vault-actions,
   .simulation-card-metrics {
     grid-template-columns: 1fr;
   }
