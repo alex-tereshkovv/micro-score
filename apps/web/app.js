@@ -51,6 +51,7 @@ const state = {
   committeeBriefText: "",
   riskAppetiteText: "",
   pilotMonitoringText: "",
+  pilotEvidenceDossierText: "",
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -127,6 +128,7 @@ const els = {
   committeeBrief: document.querySelector("#committeeBrief"),
   riskAppetiteGate: document.querySelector("#riskAppetiteGate"),
   pilotMonitoringPlan: document.querySelector("#pilotMonitoringPlan"),
+  pilotEvidenceDossier: document.querySelector("#pilotEvidenceDossier"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -1092,6 +1094,14 @@ function resetApplicationViews() {
     "empty",
     "No pilot monitoring plan yet",
     "Run Monte Carlo evidence to build stop triggers, cadence, and monitoring owners.",
+  );
+  state.pilotEvidenceDossierText = "";
+  setPanelState(
+    els.pilotEvidenceDossier,
+    "simulation-evidence-dossier",
+    "empty",
+    "No pilot evidence dossier yet",
+    "Run Monte Carlo evidence to assemble committee, gate, and monitoring artifacts.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -3118,6 +3128,7 @@ async function runPortfolioSimulation() {
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
     renderMonteCarloPilotMonitoringPlan();
+    renderMonteCarloPilotEvidenceDossier();
     await refreshSimulationHistory();
     showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
     return payload;
@@ -3158,6 +3169,7 @@ async function runPolicySweep() {
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
     renderMonteCarloPilotMonitoringPlan();
+    renderMonteCarloPilotEvidenceDossier();
     await refreshSimulationHistory();
     showMessage(`Compared ${runs.length} Monte Carlo policies with seed ${basePayload.seed}`, "ok");
     return runs;
@@ -3198,6 +3210,7 @@ async function runSensitivitySweep() {
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
     renderMonteCarloPilotMonitoringPlan();
+    renderMonteCarloPilotEvidenceDossier();
     await refreshSimulationHistory();
     showMessage(`Sensitivity sweep completed for ${formatPolicyName(basePayload.policy)}`, "ok");
     return runs;
@@ -3250,6 +3263,7 @@ async function loadStoredSimulation(simulationId) {
   renderMonteCarloCommitteeBrief();
   renderMonteCarloRiskAppetiteGate();
   renderMonteCarloPilotMonitoringPlan();
+  renderMonteCarloPilotEvidenceDossier();
   showMessage(`Loaded saved Monte Carlo run ${simulationId}`, "ok");
   return payload;
 }
@@ -4572,6 +4586,235 @@ async function copyPilotMonitoringPlanText() {
     textarea.remove();
   }
   showMessage("Pilot monitoring plan copied", "ok");
+}
+
+function dossierStatusLabel(status) {
+  if (status === "blocked") return "Blocked";
+  if (status === "review") return "Review";
+  if (status === "ready") return "Ready";
+  return "Draft";
+}
+
+function pilotEvidenceDossierSummary() {
+  const committee = committeeBriefSummary();
+  const gate = riskAppetiteGateSummary();
+  const monitoring = pilotMonitoringPlanSummary();
+
+  if (!committee && !gate && !monitoring) return null;
+
+  const evidenceCount = gate?.monitoring?.evidenceCount || 0;
+  const artifacts = [
+    {
+      label: "Committee brief",
+      present: Boolean(committee),
+      value: committee?.title || "Pending",
+      note: committee ? "Narrative memo is available." : "Run Monte Carlo evidence to build the committee memo.",
+    },
+    {
+      label: "Risk appetite gate",
+      present: Boolean(gate),
+      value: gate ? `${gate.statusLabel}: ${gate.stance}` : "Pending",
+      note: gate ? gate.body : "Gate will classify pilot readiness as pass, watch, or block.",
+    },
+    {
+      label: "Pilot monitoring plan",
+      present: Boolean(monitoring),
+      value: monitoring?.title || "Pending",
+      note: monitoring ? "Monitoring metrics, cadence, and triggers are available." : "Monitoring plan appears after gate evidence.",
+    },
+    {
+      label: "Evidence completeness",
+      present: evidenceCount >= 3,
+      value: `${evidenceCount} / 3`,
+      note: "Expected set: single run, policy sweep, and sensitivity sweep.",
+    },
+  ];
+
+  const status = gate?.status === "block"
+    ? "blocked"
+    : evidenceCount >= 3 && gate?.status === "pass"
+      ? "ready"
+      : evidenceCount >= 3
+        ? "review"
+        : "draft";
+  const title = status === "blocked"
+    ? "Dossier blocked by risk appetite"
+    : status === "ready"
+      ? "Committee dossier is ready"
+      : status === "review"
+        ? "Committee dossier needs guarded review"
+        : "Committee dossier is still a draft";
+  const body = status === "blocked"
+    ? "The dossier is assembled, but appetite evidence blocks pilot expansion until the breach has an owner and mitigation."
+    : status === "ready"
+      ? "The dossier has the required Monte Carlo evidence, a pass gate, and an operating monitoring plan for committee review."
+      : status === "review"
+        ? "The dossier has the evidence set, but guardrails or watch checks must stay explicit before approval."
+        : "The dossier can be copied as a working draft, but missing evidence should be completed before committee use.";
+  const className = `dossier-${status}`;
+  const seed = gate?.monitoring?.seed || monitoring?.gate?.monitoring?.seed || "-";
+  const fingerprint = gate?.monitoring?.fingerprint || monitoring?.gate?.monitoring?.fingerprint || "";
+  const selectedPolicy = gate?.monitoring?.recommendedPolicy || "Pending";
+  const checklist = [
+    {
+      label: "Single simulation attached",
+      done: Boolean(state.portfolioSimulation),
+      detail: state.portfolioSimulation ? formatPolicyName(state.portfolioSimulation.policy?.name) : "Run 3 scenarios",
+    },
+    {
+      label: "Policy sweep attached",
+      done: Boolean(state.policySweep?.length),
+      detail: state.policySweep?.length ? `${state.policySweep.length} policies compared` : "Run policy sweep",
+    },
+    {
+      label: "Sensitivity attached",
+      done: Boolean(state.assumptionSensitivity?.length),
+      detail: state.assumptionSensitivity?.length ? `${state.assumptionSensitivity.length} variants tested` : "Run sensitivity",
+    },
+    {
+      label: "Decision boundary explicit",
+      done: true,
+      detail: "Decision-support only; not production authorization",
+    },
+  ];
+  const nextActions = status === "blocked"
+    ? [
+      "Assign a risk owner for every blocked appetite check.",
+      "Re-run the dossier after mitigation changes.",
+      "Keep borrower-facing expansion frozen until the committee accepts the exception.",
+    ]
+    : status === "ready"
+      ? [
+        "Attach the copied dossier to the committee packet.",
+        "Archive seed, fingerprint, and assumptions before changing limits.",
+        "Run the monitoring plan at the first pilot checkpoint.",
+      ]
+      : status === "review"
+        ? [
+          "Attach the dossier with guardrails highlighted.",
+          "Confirm stop triggers before approving any limit increase.",
+          "Re-run after closing watch checks.",
+        ]
+        : [
+          "Complete missing Monte Carlo evidence before final committee review.",
+          "Use the dossier as a working draft only.",
+          "Re-copy after policy sweep and sensitivity are complete.",
+        ];
+
+  const text = [
+    "MicroScore Monte Carlo pilot evidence dossier",
+    `Status: ${dossierStatusLabel(status)} - ${title}`,
+    `Summary: ${body}`,
+    `Recommended policy: ${selectedPolicy}`,
+    `Seed: ${seed}`,
+    fingerprint ? `Portfolio fingerprint: ${fingerprint}` : "Portfolio fingerprint: pending",
+    "Artifacts:",
+    ...artifacts.map((artifact) => `- ${artifact.label}: ${artifact.present ? "attached" : "missing"}; ${artifact.value}; ${artifact.note}`),
+    "Checklist:",
+    ...checklist.map((item) => `- ${item.done ? "done" : "open"}: ${item.label}; ${item.detail}`),
+    "Next actions:",
+    ...nextActions.map((action, index) => `${index + 1}. ${action}`),
+    "",
+    committee?.text ? `--- Committee brief ---\n${committee.text}` : "--- Committee brief ---\nPending.",
+    gate?.text ? `--- Risk appetite gate ---\n${gate.text}` : "--- Risk appetite gate ---\nPending.",
+    monitoring?.text ? `--- Pilot monitoring plan ---\n${monitoring.text}` : "--- Pilot monitoring plan ---\nPending.",
+  ].join("\n");
+
+  return {
+    status,
+    statusLabel: dossierStatusLabel(status),
+    className,
+    title,
+    body,
+    artifacts,
+    checklist,
+    nextActions,
+    seed,
+    fingerprint,
+    selectedPolicy,
+    text,
+  };
+}
+
+function renderMonteCarloPilotEvidenceDossier() {
+  const dossier = pilotEvidenceDossierSummary();
+  if (!dossier) {
+    state.pilotEvidenceDossierText = "";
+    setPanelState(
+      els.pilotEvidenceDossier,
+      "simulation-evidence-dossier",
+      "empty",
+      "No pilot evidence dossier yet",
+      "Run Monte Carlo evidence to assemble committee, gate, and monitoring artifacts.",
+    );
+    return;
+  }
+
+  state.pilotEvidenceDossierText = dossier.text;
+  els.pilotEvidenceDossier.className = `simulation-evidence-dossier ${escapeHtml(dossier.className)}`;
+  els.pilotEvidenceDossier.innerHTML = `
+    <section class="simulation-dossier-hero" aria-label="Monte Carlo pilot evidence dossier">
+      <div>
+        <span>Pilot evidence dossier</span>
+        <strong>${escapeHtml(dossier.title)}</strong>
+        <p>${escapeHtml(dossier.body)}</p>
+      </div>
+      <div class="simulation-dossier-copy">
+        <em>${escapeHtml(dossier.statusLabel)}</em>
+        <strong>${escapeHtml(dossier.selectedPolicy)}</strong>
+        <button class="secondary-button" type="button" data-copy-pilot-dossier>Copy dossier</button>
+      </div>
+    </section>
+    <div class="simulation-dossier-meta">
+      <div><span>Seed</span><strong>${escapeHtml(dossier.seed)}</strong><em>reproducibility key</em></div>
+      <div><span>Fingerprint</span><strong>${escapeHtml(dossier.fingerprint ? `${dossier.fingerprint.slice(0, 16)}...` : "pending")}</strong><em>portfolio snapshot</em></div>
+      <div><span>Status</span><strong>${escapeHtml(dossier.statusLabel)}</strong><em>committee readiness</em></div>
+    </div>
+    <div class="simulation-dossier-artifacts">
+      ${dossier.artifacts.map((artifact) => `
+        <div class="${artifact.present ? "artifact-attached" : "artifact-missing"}">
+          <span>${escapeHtml(artifact.present ? "Attached" : "Missing")}</span>
+          <strong>${escapeHtml(artifact.label)}</strong>
+          <em>${escapeHtml(artifact.value)}</em>
+          <p>${escapeHtml(artifact.note)}</p>
+        </div>
+      `).join("")}
+    </div>
+    <div class="simulation-dossier-checklist">
+      ${dossier.checklist.map((item) => `
+        <div class="${item.done ? "check-done" : "check-open"}">
+          <span>${escapeHtml(item.done ? "Done" : "Open")}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <em>${escapeHtml(item.detail)}</em>
+        </div>
+      `).join("")}
+    </div>
+    <ol class="simulation-dossier-actions">
+      ${dossier.nextActions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+    </ol>
+  `;
+}
+
+async function copyPilotEvidenceDossierText() {
+  if (!state.pilotEvidenceDossierText) {
+    showMessage("Run Monte Carlo evidence before copying the pilot evidence dossier", "error");
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(state.pilotEvidenceDossierText);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = state.pilotEvidenceDossierText;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("Pilot evidence dossier copied", "ok");
 }
 
 function renderPortfolioSimulation(payload) {
@@ -6058,6 +6301,10 @@ function wireEvents() {
   els.pilotMonitoringPlan.addEventListener("click", (event) => {
     if (!event.target.closest("[data-copy-pilot-monitoring]")) return;
     copyPilotMonitoringPlanText().catch((error) => showMessage(error.message, "error"));
+  });
+  els.pilotEvidenceDossier.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-copy-pilot-dossier]")) return;
+    copyPilotEvidenceDossierText().catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
     withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
