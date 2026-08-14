@@ -50,6 +50,7 @@ const state = {
   assumptionSensitivity: [],
   committeeBriefText: "",
   riskAppetiteText: "",
+  pilotMonitoringText: "",
   simulationHistory: [],
   organizations: [],
   activeModel: null,
@@ -125,6 +126,7 @@ const els = {
   sensitivityResults: document.querySelector("#sensitivityResults"),
   committeeBrief: document.querySelector("#committeeBrief"),
   riskAppetiteGate: document.querySelector("#riskAppetiteGate"),
+  pilotMonitoringPlan: document.querySelector("#pilotMonitoringPlan"),
   simulationHistory: document.querySelector("#simulationHistory"),
   refreshSimulationHistory: document.querySelector("#refreshSimulationHistory"),
   refreshAudit: document.querySelector("#refreshAudit"),
@@ -1082,6 +1084,14 @@ function resetApplicationViews() {
     "empty",
     "No risk appetite gate yet",
     "Run Monte Carlo evidence to evaluate pilot risk appetite and guardrails.",
+  );
+  state.pilotMonitoringText = "";
+  setPanelState(
+    els.pilotMonitoringPlan,
+    "simulation-monitoring-plan",
+    "empty",
+    "No pilot monitoring plan yet",
+    "Run Monte Carlo evidence to build stop triggers, cadence, and monitoring owners.",
   );
   els.simulationHistory.className = "simulation-history empty";
   els.simulationHistory.textContent = "No saved simulation runs.";
@@ -3107,6 +3117,7 @@ async function runPortfolioSimulation() {
     renderPortfolioSimulation(payload);
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
+    renderMonteCarloPilotMonitoringPlan();
     await refreshSimulationHistory();
     showMessage(`Completed ${formatMoney(payload.assumptions.iterations)} Monte Carlo iterations`, "ok");
     return payload;
@@ -3146,6 +3157,7 @@ async function runPolicySweep() {
     renderPolicySweep(runs, basePayload.policy);
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
+    renderMonteCarloPilotMonitoringPlan();
     await refreshSimulationHistory();
     showMessage(`Compared ${runs.length} Monte Carlo policies with seed ${basePayload.seed}`, "ok");
     return runs;
@@ -3185,6 +3197,7 @@ async function runSensitivitySweep() {
     renderSensitivitySweep(runs, basePayload);
     renderMonteCarloCommitteeBrief();
     renderMonteCarloRiskAppetiteGate();
+    renderMonteCarloPilotMonitoringPlan();
     await refreshSimulationHistory();
     showMessage(`Sensitivity sweep completed for ${formatPolicyName(basePayload.policy)}`, "ok");
     return runs;
@@ -3236,6 +3249,7 @@ async function loadStoredSimulation(simulationId) {
   renderPortfolioSimulation(payload);
   renderMonteCarloCommitteeBrief();
   renderMonteCarloRiskAppetiteGate();
+  renderMonteCarloPilotMonitoringPlan();
   showMessage(`Loaded saved Monte Carlo run ${simulationId}`, "ok");
   return payload;
 }
@@ -4085,6 +4099,11 @@ function riskAppetiteGateSummary() {
   const recommendedPolicy = policyLeader?.policyLabel || formatPolicyName(selectedPolicy);
   const capitalBuffer = singleMemo ? singleMemo.capitalBuffer : policyLeader?.capitalBuffer || 0;
   const severeLoss = singlePosture?.severeLoss ?? policyLeader?.severeLoss ?? null;
+  const severeDownside = singlePosture?.severeDownside ?? policyLeader?.severeDownside ?? null;
+  const sensitivityOwner = sensitivityDriver ? sensitivityDriver.variant.label : "Pending";
+  const sensitivityNote = sensitivityDriver
+    ? `${sensitivityDriver.variant.driver}; buffer ${formatSignedAmountUnits(sensitivityDriver.capitalDelta)}`
+    : "Assign after the sensitivity sweep.";
   const policyNote = policyLeader
     ? `${policyLeader.memo.stance}; severe loss ${formatPercent(policyLeader.severeLoss)}`
     : "Run policy sweep to confirm the frontier policy.";
@@ -4119,10 +4138,8 @@ function riskAppetiteGateSummary() {
     },
     {
       label: "Sensitivity owner",
-      value: sensitivityDriver ? sensitivityDriver.variant.label : "Pending",
-      note: sensitivityDriver
-        ? `${sensitivityDriver.variant.driver}; buffer ${formatSignedAmountUnits(sensitivityDriver.capitalDelta)}`
-        : "Assign after the sensitivity sweep.",
+      value: sensitivityOwner,
+      note: sensitivityNote,
     },
   ];
 
@@ -4172,6 +4189,19 @@ function riskAppetiteGateSummary() {
     checks,
     envelope,
     actions,
+    monitoring: {
+      evidenceCount,
+      recommendedPolicy,
+      seed,
+      fingerprint,
+      severeLoss,
+      severeDownside,
+      capitalBuffer,
+      reviewApprovalRate,
+      sensitivityOwner,
+      sensitivityNote,
+      policyNote,
+    },
     text,
   };
 }
@@ -4250,6 +4280,298 @@ async function copyRiskAppetiteGateText() {
     textarea.remove();
   }
   showMessage("Risk appetite gate copied", "ok");
+}
+
+function pilotMonitoringCadence(gate) {
+  if (gate.status === "block") {
+    return [
+      {
+        moment: "Now",
+        title: "Freeze expansion",
+        body: "Keep the pilot in design mode until the blocked appetite check has an owner and mitigation.",
+      },
+      {
+        moment: "After mitigation",
+        title: "Re-run evidence",
+        body: "Repeat single simulation, policy sweep, and sensitivity before reopening the pilot envelope.",
+      },
+      {
+        moment: "Committee",
+        title: "Approve exception only",
+        body: "Escalate if leadership wants to proceed despite the blocked Monte Carlo evidence.",
+      },
+    ];
+  }
+
+  if (gate.status === "watch") {
+    return [
+      {
+        moment: "Day 0",
+        title: "Launch under guardrails",
+        body: "Use the recommended policy envelope and document the stop trigger before any borrower-facing pilot.",
+      },
+      {
+        moment: "Weekly x4",
+        title: "Review stress movement",
+        body: "Check severe loss, default drift, manual-review capacity, and sensitivity owner evidence.",
+      },
+      {
+        moment: "Day 30",
+        title: "Committee checkpoint",
+        body: "Increase limits only if watch checks are closed and a refreshed run stays inside appetite.",
+      },
+    ];
+  }
+
+  return [
+    {
+      moment: "Day 0",
+      title: "Controlled pilot start",
+      body: "Proceed with the current policy envelope and archive the seed, fingerprint, and assumptions.",
+    },
+    {
+      moment: "Biweekly",
+      title: "Routine risk review",
+      body: "Monitor severe loss, capital reserve, review throughput, and assumption sensitivity.",
+    },
+    {
+      moment: "Day 60-90",
+      title: "Recalibration review",
+      body: "Refresh Monte Carlo evidence before increasing limits, activating a new model, or changing thresholds.",
+    },
+  ];
+}
+
+function pilotMonitoringMetricRows(gate) {
+  const monitoring = gate.monitoring || {};
+  const severeLoss = monitoring.severeLoss;
+  const lossStatus = severeLoss === null || severeLoss === undefined
+    ? "watch"
+    : severeLoss >= 0.5
+      ? "block"
+      : severeLoss >= 0.25
+        ? "watch"
+        : "pass";
+  const capitalStatus = Number(monitoring.capitalBuffer || 0) > 0
+    ? gate.status === "block" ? "block" : "watch"
+    : "pass";
+  const completenessStatus = Number(monitoring.evidenceCount || 0) >= 3 ? "pass" : "watch";
+
+  return [
+    {
+      label: "Severe loss",
+      status: lossStatus,
+      value: severeLoss === null || severeLoss === undefined ? "Pending" : formatPercent(severeLoss),
+      threshold: "Pass <25%; watch 25-50%; block >=50%",
+    },
+    {
+      label: "Capital reserve",
+      status: capitalStatus,
+      value: formatAmountUnits(monitoring.capitalBuffer),
+      threshold: "Reserve covers severe P05 downside before limits expand",
+    },
+    {
+      label: "Policy envelope",
+      status: gate.status === "block" ? "block" : "pass",
+      value: monitoring.recommendedPolicy || "Pending",
+      threshold: monitoring.policyNote || "Policy frontier evidence required",
+    },
+    {
+      label: "Review capacity",
+      status: gate.status === "block" ? "watch" : "pass",
+      value: formatPercent(monitoring.reviewApprovalRate),
+      threshold: "Monitor manual-review throughput against the simulation assumption",
+    },
+    {
+      label: "Sensitivity owner",
+      status: monitoring.sensitivityOwner === "Pending" ? "watch" : "pass",
+      value: monitoring.sensitivityOwner || "Pending",
+      threshold: monitoring.sensitivityNote || "Evidence owner required",
+    },
+    {
+      label: "Evidence set",
+      status: completenessStatus,
+      value: `${monitoring.evidenceCount || 0} / 3`,
+      threshold: "Single run + policy sweep + sensitivity before limit increases",
+    },
+  ];
+}
+
+function pilotMonitoringTriggerRows(gate) {
+  const monitoring = gate.monitoring || {};
+  const fingerprint = monitoring.fingerprint ? `${monitoring.fingerprint.slice(0, 16)}...` : "pending";
+
+  return [
+    {
+      label: "Stop",
+      value: "Severe loss >=50% or blocked appetite check",
+      owner: "Risk owner",
+    },
+    {
+      label: "Watch",
+      value: "Severe loss >=25%, reserve increase, or selected policy trails frontier",
+      owner: "Credit committee",
+    },
+    {
+      label: "Re-run",
+      value: "Any threshold, margin, LGD, review-capacity, model, or portfolio mix change",
+      owner: "Model owner",
+    },
+    {
+      label: "Archive",
+      value: `Seed ${monitoring.seed || "-"} / fingerprint ${fingerprint}`,
+      owner: "Analyst",
+    },
+  ];
+}
+
+function pilotMonitoringPlanSummary() {
+  const gate = riskAppetiteGateSummary();
+  if (!gate) return null;
+
+  const metrics = pilotMonitoringMetricRows(gate);
+  const cadence = pilotMonitoringCadence(gate);
+  const triggers = pilotMonitoringTriggerRows(gate);
+  const className = `monitor-${gate.status}`;
+  const title = gate.status === "block"
+    ? "Monitoring plan is blocked pending mitigation"
+    : gate.status === "watch"
+      ? "Conditional pilot monitoring plan"
+      : "Controlled pilot monitoring plan";
+  const body = gate.status === "block"
+    ? "Use this plan to close appetite breaches before borrower-facing expansion."
+    : gate.status === "watch"
+      ? "Use this plan to run a cautious pilot with weekly evidence reviews and explicit stop triggers."
+      : "Use this plan to keep a controlled pilot reproducible, monitored, and ready for recalibration.";
+  const actions = gate.status === "block"
+    ? [
+      "Name an owner for every blocked or watch check.",
+      "Document mitigation before the next committee checkpoint.",
+      "Re-run Monte Carlo evidence after mitigation and before pilot launch.",
+    ]
+    : gate.status === "watch"
+      ? [
+        "Run weekly stress reviews for the first month.",
+        "Do not increase limits until evidence completeness is 3 / 3.",
+        "Escalate immediately if any metric moves from watch to block.",
+      ]
+      : [
+        "Run biweekly monitoring during the first pilot cycle.",
+        "Re-run Monte Carlo before threshold or model activation changes.",
+        "Attach monitoring evidence to the next committee review.",
+      ];
+
+  const text = [
+    "MicroScore Monte Carlo pilot monitoring plan",
+    `Plan: ${title}`,
+    `Gate: ${gate.statusLabel} - ${gate.stance}`,
+    `Summary: ${body}`,
+    "Metrics:",
+    ...metrics.map((metric) => `- ${metric.label}: ${riskAppetiteStatusLabel(metric.status)}; ${metric.value}; ${metric.threshold}`),
+    "Cadence:",
+    ...cadence.map((step) => `- ${step.moment}: ${step.title}; ${step.body}`),
+    "Triggers:",
+    ...triggers.map((trigger) => `- ${trigger.label}: ${trigger.value}; owner ${trigger.owner}`),
+    "Actions:",
+    ...actions.map((action, index) => `${index + 1}. ${action}`),
+  ].join("\n");
+
+  return {
+    gate,
+    className,
+    title,
+    body,
+    metrics,
+    cadence,
+    triggers,
+    actions,
+    text,
+  };
+}
+
+function renderMonteCarloPilotMonitoringPlan() {
+  const plan = pilotMonitoringPlanSummary();
+  if (!plan) {
+    state.pilotMonitoringText = "";
+    setPanelState(
+      els.pilotMonitoringPlan,
+      "simulation-monitoring-plan",
+      "empty",
+      "No pilot monitoring plan yet",
+      "Run Monte Carlo evidence to build stop triggers, cadence, and monitoring owners.",
+    );
+    return;
+  }
+
+  state.pilotMonitoringText = plan.text;
+  els.pilotMonitoringPlan.className = `simulation-monitoring-plan ${escapeHtml(plan.className)}`;
+  els.pilotMonitoringPlan.innerHTML = `
+    <section class="simulation-monitoring-hero" aria-label="Monte Carlo pilot monitoring plan">
+      <div>
+        <span>Pilot monitoring plan</span>
+        <strong>${escapeHtml(plan.title)}</strong>
+        <p>${escapeHtml(plan.body)}</p>
+      </div>
+      <div class="simulation-monitoring-copy">
+        <em>${escapeHtml(plan.gate.statusLabel)}</em>
+        <strong>${escapeHtml(plan.gate.stance)}</strong>
+        <button class="secondary-button" type="button" data-copy-pilot-monitoring>Copy plan</button>
+      </div>
+    </section>
+    <div class="simulation-monitoring-metrics">
+      ${plan.metrics.map((metric) => `
+        <div class="monitoring-metric metric-${escapeHtml(metric.status)}">
+          <span>${escapeHtml(riskAppetiteStatusLabel(metric.status))}</span>
+          <strong>${escapeHtml(metric.label)}</strong>
+          <em>${escapeHtml(metric.value)}</em>
+          <p>${escapeHtml(metric.threshold)}</p>
+        </div>
+      `).join("")}
+    </div>
+    <ol class="simulation-monitoring-cadence">
+      ${plan.cadence.map((step) => `
+        <li>
+          <span>${escapeHtml(step.moment)}</span>
+          <strong>${escapeHtml(step.title)}</strong>
+          <p>${escapeHtml(step.body)}</p>
+        </li>
+      `).join("")}
+    </ol>
+    <div class="simulation-monitoring-triggers">
+      ${plan.triggers.map((trigger) => `
+        <div>
+          <span>${escapeHtml(trigger.label)}</span>
+          <strong>${escapeHtml(trigger.value)}</strong>
+          <em>${escapeHtml(trigger.owner)}</em>
+        </div>
+      `).join("")}
+    </div>
+    <ol class="simulation-monitoring-actions">
+      ${plan.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+    </ol>
+  `;
+}
+
+async function copyPilotMonitoringPlanText() {
+  if (!state.pilotMonitoringText) {
+    showMessage("Run Monte Carlo evidence before copying the pilot monitoring plan", "error");
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(state.pilotMonitoringText);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = state.pilotMonitoringText;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("Pilot monitoring plan copied", "ok");
 }
 
 function renderPortfolioSimulation(payload) {
@@ -5732,6 +6054,10 @@ function wireEvents() {
   els.riskAppetiteGate.addEventListener("click", (event) => {
     if (!event.target.closest("[data-copy-risk-appetite]")) return;
     copyRiskAppetiteGateText().catch((error) => showMessage(error.message, "error"));
+  });
+  els.pilotMonitoringPlan.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-copy-pilot-monitoring]")) return;
+    copyPilotMonitoringPlanText().catch((error) => showMessage(error.message, "error"));
   });
   els.refreshSimulationHistory.addEventListener("click", () => {
     withButtonBusy(els.refreshSimulationHistory, "Refreshing...", () => refreshSimulationHistory())
