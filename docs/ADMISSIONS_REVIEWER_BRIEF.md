@@ -20,12 +20,14 @@ regional MFI analyst could review risk, explanations, and policy trade-offs.
 
 ## What To Open First
 
-1. Public demo: https://alex-tereshkovv.github.io/micro-score/
-2. Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`
-3. Password: `password123`; staff/admin MFA code: `246810`
-4. Demo script: [DEMO_VIDEO_SCRIPT.md](DEMO_VIDEO_SCRIPT.md)
-5. Research paper draft: [RESEARCH_PAPER.md](RESEARCH_PAPER.md)
-6. Model governance: [MODEL_CARD.md](MODEL_CARD.md)
+1. Three-minute case study: https://alex-tereshkovv.github.io/micro-score/#/review
+2. Two-minute presentation: https://alex-tereshkovv.github.io/micro-score/showcase.html
+3. Engineering evidence hub: https://alex-tereshkovv.github.io/micro-score/evidence.html
+4. Role-based demo: https://alex-tereshkovv.github.io/micro-score/
+5. Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`
+6. Password: `password123`; staff/admin MFA code: `246810`
+7. Research paper draft: [RESEARCH_PAPER.md](RESEARCH_PAPER.md)
+8. Model governance: [MODEL_CARD.md](MODEL_CARD.md)
 
 The public demo uses synthetic in-browser data only. It does not collect real
 borrower names, identity numbers, phone numbers, bank records, or addresses.

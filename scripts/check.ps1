@@ -129,6 +129,11 @@ try {
         Assert-LastExitCode "Portfolio dashboard smoke test"
     }
 
+    Invoke-Step "Run admissions evidence smoke test" {
+        & $python scripts\admissions-evidence-smoke.py
+        Assert-LastExitCode "Admissions evidence smoke test"
+    }
+
     Invoke-Step "Run static demo smoke test" {
         & $node scripts\static-demo-smoke.js
         Assert-LastExitCode "Static demo smoke test"

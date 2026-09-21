@@ -72,6 +72,15 @@ http://127.0.0.1:5173/showcase.html?autoplay=1
 The presentation uses seven deterministic scenes, supports arrow-key navigation,
 and can auto-advance in approximately two minutes without loading API data.
 
+Public engineering evidence hub:
+
+```text
+http://127.0.0.1:5173/evidence.html
+```
+
+The hub connects the development timeline and major architecture decisions to
+specific commits, source files, generated artifacts, tests, and claim boundaries.
+
 Static demo mode uses `mock-api.js` and synthetic data only. It is designed for
 a future GitHub Pages/Vercel portfolio demo, not for real borrower data.
 

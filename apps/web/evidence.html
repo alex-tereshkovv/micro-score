@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#102932" />
+    <meta
+      name="description"
+      content="Trace the engineering decisions, development history, and reproducible evidence behind MicroScore."
+    />
+    <title>MicroScore | Engineering Evidence</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="stylesheet" href="./evidence.css?v=20260921-evidence-hub-v1" />
+  </head>
+  <body>
+    <header class="evidence-nav">
+      <a class="evidence-brand" href="./#/review" aria-label="Return to the MicroScore engineering case study">
+        <img src="./assets/microscore-mark.svg" alt="" />
+        <span><strong>Micro</strong>Score</span>
+      </a>
+      <nav aria-label="Evidence hub navigation">
+        <a href="#journey">Journey</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#proof">Proof map</a>
+        <a href="#limits">Limits</a>
+      </nav>
+      <a class="nav-cta" href="./showcase.html">Watch walkthrough</a>
+    </header>
+
+    <main>
+      <section class="evidence-hero">
+        <div class="hero-copy">
+          <p class="evidence-eyebrow">Engineering evidence hub · May–September 2026</p>
+          <h1>From a fragile model result to a reviewable system.</h1>
+          <p class="hero-lead">
+            MicroScore did not grow by adding features around a fixed idea. Research evidence changed the idea.
+            A proxy-sensitive result led to human review, explicit uncertainty, auditability, tenant isolation,
+            and release gates becoming part of the product architecture.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-action" href="#decisions">Trace the decisions</a>
+            <a class="secondary-action" href="./assets/MicroScore_Engineering_Case_Study.pdf" download>Download evidence report</a>
+            <a class="text-action" href="https://github.com/alex-tereshkovv/micro-score" target="_blank" rel="noreferrer">Open repository ↗</a>
+          </div>
+        </div>
+        <aside class="hero-proof" aria-label="Project evidence snapshot">
+          <div class="proof-header">
+            <span>Repository evidence</span>
+            <strong>Inspectable, not implied</strong>
+          </div>
+          <div class="hero-metrics">
+            <div><strong>90+</strong><span>traceable engineering increments</span></div>
+            <div><strong>126</strong><span>Python unit and integration tests</span></div>
+            <div><strong>52 / 52</strong><span>PostgreSQL repository methods</span></div>
+            <div><strong>3 layers</strong><span>research, product, public review</span></div>
+          </div>
+          <p><span></span>Full release gate passed before publication</p>
+        </aside>
+      </section>
+
+      <section class="thesis-strip" aria-label="Engineering thesis">
+        <span>Engineering thesis</span>
+        <strong>A high-impact model is only useful when the surrounding system makes evidence, uncertainty, and human responsibility visible.</strong>
+      </section>
+
+      <section id="journey" class="evidence-section journey-section">
+        <div class="section-heading">
+          <div>
+            <p class="evidence-eyebrow">01 · Development journey</p>
+            <h2>The architecture followed the evidence.</h2>
+          </div>
+          <p>Eight repository milestones show how a notebook-scale experiment became a governed, role-based engineering system.</p>
+        </div>
+
+        <div class="journey-grid">
+          <article data-milestone>
+            <div class="journey-date"><span>May 11</span><em>2026</em></div>
+            <div class="journey-marker">01</div>
+            <div class="journey-copy">
+              <span>Research foundation</span>
+              <h3>Start with a measurable credit-risk problem</h3>
+              <p>The first prototype established a reproducible modeling baseline and the initial research question.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/d17403f" target="_blank" rel="noreferrer">Initial project setup · d17403f ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>June 9</span><em>2026</em></div>
+            <div class="journey-marker">02</div>
+            <div class="journey-copy">
+              <span>System boundary</span>
+              <h3>Move beyond the notebook</h3>
+              <p>FastAPI contracts, persistence, borrower intake, and a browser product made the model part of a real workflow.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/7970495" target="_blank" rel="noreferrer">API and web prototype · 7970495 ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>June 12</span><em>2026</em></div>
+            <div class="journey-marker">03</div>
+            <div class="journey-copy">
+              <span>External benchmark</span>
+              <h3>Test the pipeline outside synthetic data</h3>
+              <p>The public UCI benchmark produced a 0.775 Random Forest ROC-AUC while remaining explicitly separate from local validation.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/fe796a0" target="_blank" rel="noreferrer">Benchmark pipeline · fe796a0 ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>June 18</span><em>2026</em></div>
+            <div class="journey-marker">04</div>
+            <div class="journey-copy">
+              <span>Model governance</span>
+              <h3>Make every score traceable</h3>
+              <p>Versioned models, immutable score provenance, stale-score warnings, and tenant-scoped review became first-class behavior.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/8f76e80" target="_blank" rel="noreferrer">Governed model registry · 8f76e80 ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>June 19</span><em>2026</em></div>
+            <div class="journey-marker">05</div>
+            <div class="journey-copy">
+              <span>Portfolio uncertainty</span>
+              <h3>Separate scoring from policy stress</h3>
+              <p>Seeded Monte Carlo scenarios added reproducible outcome ranges without changing any borrower score.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/42fd7ca" target="_blank" rel="noreferrer">Monte Carlo simulation · 42fd7ca ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>July–Aug</span><em>2026</em></div>
+            <div class="journey-marker">06</div>
+            <div class="journey-copy">
+              <span>Security and storage</span>
+              <h3>Turn production gaps into explicit gates</h3>
+              <p>Session, MFA, invite, secret-hygiene, migration, and PostgreSQL repository contracts became visible readiness evidence.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/4c45af7" target="_blank" rel="noreferrer">Repository adapter groups · 4c45af7 ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>August 4</span><em>2026</em></div>
+            <div class="journey-marker">07</div>
+            <div class="journey-copy">
+              <span>Analyst experience</span>
+              <h3>Redesign around the decision workflow</h3>
+              <p>The MFI workspace shifted from a long technical page to queue triage, a focused inspector, and guided policy work.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/73b056e" target="_blank" rel="noreferrer">Frontend redesign · 73b056e ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>September 21</span><em>2026</em></div>
+            <div class="journey-marker">08</div>
+            <div class="journey-copy">
+              <span>Admissions review</span>
+              <h3>Compress the system into inspectable evidence</h3>
+              <p>A three-minute case study, ten-page report, and two-minute presentation now give reviewers multiple depths of access.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/commit/95cd744" target="_blank" rel="noreferrer">Presentation mode · 95cd744 ↗</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="decisions" class="evidence-section decision-section">
+        <div class="section-heading light-heading">
+          <div>
+            <p class="evidence-eyebrow">02 · Decision record</p>
+            <h2>Five choices define the system.</h2>
+          </div>
+          <p>Each decision connects an observed problem to a tradeoff and a repository artifact that can be inspected.</p>
+        </div>
+
+        <div class="decision-grid">
+          <article data-decision>
+            <div class="decision-number">01</div>
+            <span>Research integrity</span>
+            <h3>Weak independent signal → human decision support</h3>
+            <dl>
+              <div><dt>Observed</dt><dd>Removing `late_payment_count` reduced synthetic ROC-AUC to 0.492.</dd></div>
+              <div><dt>Choice</dt><dd>Keep the model advisory and expose proxy sensitivity.</dd></div>
+              <div><dt>Tradeoff</dt><dd>Less automation, stronger accountability.</dd></div>
+            </dl>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/reports/research-artifacts/ablation_study.csv" target="_blank" rel="noreferrer">Inspect ablation artifact ↗</a>
+          </article>
+          <article data-decision>
+            <div class="decision-number">02</div>
+            <span>Public accessibility</span>
+            <h3>Reviewer setup cost → browser-local demo</h3>
+            <dl>
+              <div><dt>Observed</dt><dd>Admissions reviewers should not need Python, ports, or seeded databases.</dd></div>
+              <div><dt>Choice</dt><dd>Mirror the API contract in a synthetic in-browser backend.</dd></div>
+              <div><dt>Tradeoff</dt><dd>Easy public review, without a production-backend claim.</dd></div>
+            </dl>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/apps/web/mock-api.js" target="_blank" rel="noreferrer">Inspect static API contract ↗</a>
+          </article>
+          <article data-decision>
+            <div class="decision-number">03</div>
+            <span>Uncertainty design</span>
+            <h3>Policy uncertainty → separate Monte Carlo layer</h3>
+            <dl>
+              <div><dt>Observed</dt><dd>Portfolio outcomes depend on policy and macro assumptions, not only scores.</dd></div>
+              <div><dt>Choice</dt><dd>Use paired seeded baseline, adverse, and severe scenarios.</dd></div>
+              <div><dt>Tradeoff</dt><dd>Explicit assumptions instead of false forecast certainty.</dd></div>
+            </dl>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/simulation.py" target="_blank" rel="noreferrer">Inspect simulation engine ↗</a>
+          </article>
+          <article data-decision>
+            <div class="decision-number">04</div>
+            <span>Lifecycle safety</span>
+            <h3>Mutable records → terminal decision guards</h3>
+            <dl>
+              <div><dt>Observed</dt><dd>A final lending record must not be silently rescored or reversed.</dd></div>
+              <div><dt>Choice</dt><dd>Enforce lifecycle capabilities and append decision history.</dd></div>
+              <div><dt>Tradeoff</dt><dd>Stricter workflow, clearer audit semantics.</dd></div>
+            </dl>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/tests/test_api_integration.py" target="_blank" rel="noreferrer">Inspect workflow tests ↗</a>
+          </article>
+          <article data-decision>
+            <div class="decision-number">05</div>
+            <span>Pre-pilot honesty</span>
+            <h3>Incomplete production controls → visible blockers</h3>
+            <dl>
+              <div><dt>Observed</dt><dd>Demo readiness is not permission to process real borrower data.</dd></div>
+              <div><dt>Choice</dt><dd>Aggregate identity, storage, delivery, privacy, and model gaps into a gate.</dd></div>
+              <div><dt>Tradeoff</dt><dd>A blocked status is more useful than an unsupported readiness claim.</dd></div>
+            </dl>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/ENGINEERING_QUALITY.md" target="_blank" rel="noreferrer">Inspect release gate matrix ↗</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="proof" class="evidence-section proof-section">
+        <div class="section-heading">
+          <div>
+            <p class="evidence-eyebrow">03 · Claim-to-proof map</p>
+            <h2>Every headline has an audit path.</h2>
+          </div>
+          <p>The public story stays connected to source code, generated artifacts, automated checks, and explicit limitations.</p>
+        </div>
+
+        <div class="proof-map" role="table" aria-label="MicroScore claim-to-proof map">
+          <div class="proof-map-header" role="row">
+            <span role="columnheader">Claim</span><span role="columnheader">Primary artifact</span><span role="columnheader">Automated proof</span><span role="columnheader">Boundary</span>
+          </div>
+          <article role="row">
+            <div role="cell"><span class="proof-index">01</span><strong>Interpretable ML pipeline</strong><small>Calibration, explanations, benchmark evaluation</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/RESEARCH_PAPER.md" target="_blank" rel="noreferrer">Research paper ↗</a></div>
+            <div role="cell"><code>test_modeling.py</code><code>test_benchmark.py</code></div>
+            <div role="cell"><span class="boundary-pill">Not local validation</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">02</span><strong>Role-based review product</strong><small>Borrower, MFI analyst, admin, audit history</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/API_CONTRACT.md" target="_blank" rel="noreferrer">API contract ↗</a></div>
+            <div role="cell"><code>test_api_integration.py</code><code>frontend-workflow-smoke.js</code></div>
+            <div role="cell"><span class="boundary-pill">Human review only</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">03</span><strong>Reproducible uncertainty</strong><small>Seed, fingerprint, paired scenarios, diagnostics</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/simulation.py" target="_blank" rel="noreferrer">Simulation engine ↗</a></div>
+            <div role="cell"><code>test_api_simulation.py</code><code>static-demo-smoke.js</code></div>
+            <div role="cell"><span class="boundary-pill">Not a loss forecast</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">04</span><strong>Tenant and secret controls</strong><small>Scoped records, safe previews, session lifecycle</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/security.py" target="_blank" rel="noreferrer">Security module ↗</a></div>
+            <div role="cell"><code>test_api_security.py</code><code>live-security-workflow-smoke.py</code></div>
+            <div role="cell"><span class="boundary-pill">Prototype identity</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">05</span><strong>PostgreSQL migration path</strong><small>Versioned schema and 52-method repository surface</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/postgres_repository.py" target="_blank" rel="noreferrer">Repository adapter ↗</a></div>
+            <div role="cell"><code>test_postgres_repository_adapter.py</code><code>postgresql-migration-smoke.py</code></div>
+            <div role="cell"><span class="boundary-pill">Runtime switch blocked</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">06</span><strong>Release discipline</strong><small>One command proves research, product, storage, and security</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/scripts/check.ps1" target="_blank" rel="noreferrer">Release gate ↗</a></div>
+            <div role="cell"><code>126 Python tests</code><code>10 smoke workflows</code></div>
+            <div role="cell"><span class="boundary-pill">Evidence can still evolve</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="evidence-section learning-section">
+        <div class="learning-intro">
+          <p class="evidence-eyebrow">04 · Engineering reflection</p>
+          <h2>What the project taught.</h2>
+          <p>The strongest progress came from treating failed assumptions as design inputs instead of hiding them.</p>
+        </div>
+        <div class="learning-grid">
+          <article><span>01</span><h3>Measure before claiming</h3><p>A high score on synthetic data is a question to investigate, not a result to market.</p></article>
+          <article><span>02</span><h3>Boundaries are architecture</h3><p>“Not production ready” becomes useful when identity, storage, and validation blockers are explicit.</p></article>
+          <article><span>03</span><h3>Uncertainty has layers</h3><p>Borrower scoring uncertainty and portfolio policy uncertainty require different tools and language.</p></article>
+          <article><span>04</span><h3>Reviewability changes design</h3><p>A system becomes more credible when another person can trace inputs, decisions, tests, and limitations.</p></article>
+        </div>
+      </section>
+
+      <section id="limits" class="evidence-section limits-section">
+        <div>
+          <p class="evidence-eyebrow">05 · Current boundary</p>
+          <h2>Strong prototype.<br />Blocked production claim.</h2>
+          <p>
+            The public demo is appropriate for technical review. Real borrower data remains out of scope until
+            production identity, managed storage, transactional delivery, privacy review, and locally calibrated validation are complete.
+          </p>
+        </div>
+        <div class="limits-stack">
+          <article><span>Ready to inspect</span><strong>Research pipeline, full-stack workflow, Monte Carlo, audit evidence, public demo</strong></article>
+          <article><span>Not ready to claim</span><strong>Real lending validity, automated decisions, production security, MFI pilot completion</strong></article>
+          <article><span>Next responsible step</span><strong>Privacy-safe validation with local experts or an MFI partner</strong></article>
+        </div>
+      </section>
+
+      <section class="evidence-cta">
+        <div>
+          <p class="evidence-eyebrow">Choose your review depth</p>
+          <h2>Two minutes, three minutes, or the full evidence.</h2>
+        </div>
+        <div class="cta-grid">
+          <a href="./showcase.html"><span>2 min</span><strong>Watch the walkthrough</strong><em>→</em></a>
+          <a href="./#/review"><span>3 min</span><strong>Read the case study</strong><em>→</em></a>
+          <a href="./assets/MicroScore_Engineering_Case_Study.pdf" download><span>10 pages</span><strong>Audit the report</strong><em>↓</em></a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="evidence-footer">
+      <span>MicroScore · Alexandr · Pavlodar, Kazakhstan</span>
+      <span>Research prototype · synthetic public demo · human decision support</span>
+    </footer>
+  </body>
+</html>

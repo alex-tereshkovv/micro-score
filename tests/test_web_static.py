@@ -18,6 +18,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertTrue((WEB_ROOT / "showcase.html").exists())
         self.assertTrue((WEB_ROOT / "showcase.css").exists())
         self.assertTrue((WEB_ROOT / "showcase.js").exists())
+        self.assertTrue((WEB_ROOT / "evidence.html").exists())
+        self.assertTrue((WEB_ROOT / "evidence.css").exists())
+        self.assertTrue((PROJECT_ROOT / "scripts" / "admissions-evidence-smoke.py").exists())
         self.assertTrue((WEB_ROOT / "styles.css").exists())
         self.assertTrue((WEB_ROOT / "app.js").exists())
         self.assertTrue((WEB_ROOT / "mock-api.js").exists())
@@ -179,6 +182,8 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Download evidence PDF", html)
         self.assertIn('href="./showcase.html"', html)
         self.assertIn("Watch 2-minute walkthrough", html)
+        self.assertIn('href="./evidence.html"', html)
+        self.assertIn("Open evidence hub", html)
         self.assertIn('data-review-route="#/review"', html)
         self.assertIn('data-review-route="#/login"', html)
         self.assertIn(".reviewer-screen", css)
@@ -942,6 +947,23 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("setPlaying", showcase_script)
         self.assertIn("visibilitychange", showcase_script)
         self.assertIn('event.key === "ArrowRight"', showcase_script)
+
+        evidence_html = (WEB_ROOT / "evidence.html").read_text(encoding="utf-8")
+        evidence_css = (WEB_ROOT / "evidence.css").read_text(encoding="utf-8")
+        evidence_smoke = (PROJECT_ROOT / "scripts" / "admissions-evidence-smoke.py").read_text(
+            encoding="utf-8",
+        )
+        self.assertEqual(evidence_html.count("data-milestone"), 8)
+        self.assertEqual(evidence_html.count("data-decision"), 5)
+        self.assertIn("From a fragile model result to a reviewable system.", evidence_html)
+        self.assertIn("Every headline has an audit path.", evidence_html)
+        self.assertIn("90+", evidence_html)
+        self.assertIn("126", evidence_html)
+        self.assertIn("52 / 52", evidence_html)
+        self.assertIn(".proof-map", evidence_css)
+        self.assertIn(".journey-grid", evidence_css)
+        self.assertIn("admissions-evidence-smoke", evidence_smoke)
+        self.assertIn("Broken local evidence links", evidence_smoke)
 
     def test_one_click_launcher_is_documented(self) -> None:
         root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
