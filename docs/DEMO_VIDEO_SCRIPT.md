@@ -6,9 +6,12 @@ prototype, not a deployed lending system.
 
 ## Recording Setup
 
-- Use the static demo URL when possible.
+- Use `showcase.html?autoplay=1` for the polished two-minute narrative. Use the
+  role demo only when a longer live-product recording is required.
 - Close unrelated browser tabs before recording. Admissions reviewers do not
   need to meet your entire tab ecosystem.
+- Record at 1920×1080 or 1440×900. The presentation is deterministic, uses no
+  private data, and pauses automatically if the browser tab loses visibility.
 - Use the demo accounts only:
 
 ```text
@@ -22,85 +25,70 @@ staff/admin MFA code: 246810
 - Do not enter real borrower names, IINs, phone numbers, addresses, bank
   records, or private financial data.
 
-## Voiceover Script
+## Presentation Mode Voiceover
 
-### 0:00 - 0:15 Opening
+The public recording route is:
+
+```text
+https://alex-tereshkovv.github.io/micro-score/showcase.html?autoplay=1
+```
+
+Each scene lasts 17 seconds. Use the arrow keys to retake a scene, Space to
+pause or resume, Home/End to jump, and Escape to return to the case study.
+
+### 0:00 - 0:17 — The problem
 
 MicroScore is an interpretable alternative credit-risk scoring prototype for
 thin-file borrowers in Pavlodar, Kazakhstan. The problem is that many people can
 be rejected because they lack formal credit history, even when their behavior may
 show repayment discipline.
 
-Show:
+The screen shows the complete intake-to-policy system and the synthetic-data
+boundary from the first frame.
 
-- login screen
-- reviewer snapshot
-- synthetic-data/demo framing
-
-### 0:15 - 0:35 Research Caution
+### 0:17 - 0:34 — Research changed the product
 
 The current Pavlodar borrower-level data is synthetic, so I do not claim that
 this model is ready for real lending. One important finding is that
 `late_payment_count` is a strong proxy feature, so the product treats the model
 as decision support rather than automated approval.
 
-Show:
+Point to the `0.830 → 0.492` ablation result and the separate `0.775` public
+benchmark. The conclusion is architectural: use the score for review support,
+not automatic approval.
 
-- reviewer snapshot
-- model-use language if already signed in
+### 0:34 - 0:51 — Product workflow
 
-### 0:35 - 0:55 Borrower Flow
+Show the synthetic application queue, the local explanation, the model version,
+and the review checklist. The important result is traceability: context appears
+before the analyst acts.
 
-Sign in as the borrower. Show that a borrower can submit an application with
-behavioral and regional signals. Point to the consent checkbox: the demo is for
-synthetic or self-entered test data only.
+### 0:51 - 1:08 — Monte Carlo uncertainty
 
-Show:
+Explain that the seeded baseline, adverse, and severe scenarios operate at the
+portfolio-policy level. They do not change borrower scores and are scenario
+planning rather than validated forecasts.
 
-- borrower workspace
-- Fill demo
-- synthetic-data consent
-- submitted application status
+### 1:08 - 1:25 — Systems engineering
 
-### 0:55 - 1:25 MFI Analyst Flow
+Connect the browser product, typed FastAPI contracts, repository layer, and
+evidence trail. Mention tenant scoping, secret-safe audit surfaces, terminal
+decision guards, and the complete 52-method PostgreSQL repository adapter.
 
-Sign in as the MFI analyst. Show the application queue, portfolio overview,
-score detail, scenario comparison, local explanation, and review packet. The key
-point is not just prediction; the system makes uncertainty, proxy risk, and
-human review visible.
+### 1:25 - 1:42 — Responsible-use boundary
 
-Show:
+State the three claims the project does not make: automatic credit decisions,
+local predictive validity, or production readiness. The next responsible step
+is privacy-safe validation with local experts or an MFI partner.
 
-- MFI queue
-- portfolio overview
-- score detail
-- model-use notice
-- review packet
-- decision form
-- Monte Carlo baseline/adverse/severe cards
+### 1:42 - 1:59 — Evidence and close
 
-### 1:25 - 1:45 Uncertainty + Governance
+End on the evidence: 126 Python tests, a reproducible ten-page engineering
+report, a public synthetic-data demo, and the inspected source repository.
 
-Run a seeded Monte Carlo comparison and explain that the ranges come from
-explicit stress and financial assumptions; they do not change borrower scores
-and are not forecasts. Show the review packet and decision audit. Explain that
-MicroScore records model context, assumptions, analyst decisions, governance
-flags, and timeline events so that the system can be audited rather than
-treated as a black box.
-
-Show:
-
-- governance flags
-- checklist
-- timeline
-- decision audit
-- Monte Carlo result range and loss probability
-
-### 1:45 - 2:00 Close
-
-End with the limitation and next step: the static demo uses synthetic data only.
-The next research phase is stronger benchmark evaluation, calibration, fairness
-analysis, and eventually privacy-safe validation with local experts or an MFI.
+Closing line: “MicroScore is not a claim that a model should decide who receives
+credit. It is an engineering argument that high-impact models should live inside
+systems that make evidence, uncertainty, and human responsibility visible.”
 
 ## Caption Summary
 

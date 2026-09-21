@@ -62,6 +62,16 @@ Static demo mode without FastAPI:
 http://127.0.0.1:5173?demo=static
 ```
 
+Recording-ready admissions walkthrough:
+
+```text
+http://127.0.0.1:5173/showcase.html
+http://127.0.0.1:5173/showcase.html?autoplay=1
+```
+
+The presentation uses seven deterministic scenes, supports arrow-key navigation,
+and can auto-advance in approximately two minutes without loading API data.
+
 Static demo mode uses `mock-api.js` and synthetic data only. It is designed for
 a future GitHub Pages/Vercel portfolio demo, not for real borrower data.
 

@@ -36,7 +36,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 
 ## Reviewer Assets
 
-- Admissions engineering case study: [three-minute reviewer mode](https://alex-tereshkovv.github.io/micro-score/#/review)
+- Admissions review: [three-minute case study](https://alex-tereshkovv.github.io/micro-score/#/review) · [two-minute presentation mode](https://alex-tereshkovv.github.io/micro-score/showcase.html)
 - Admissions evidence PDF: [MicroScore Engineering Case Study](output/pdf/MicroScore_Engineering_Case_Study.pdf)
 - Live Demo: [GitHub Pages static demo](https://alex-tereshkovv.github.io/micro-score/)
 - Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password `password123`; staff/admin MFA code `246810`

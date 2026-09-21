@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f262e" />
+    <meta
+      name="description"
+      content="A two-minute guided walkthrough of the MicroScore responsible credit-risk engineering project."
+    />
+    <title>MicroScore | Two-minute Walkthrough</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="stylesheet" href="./showcase.css?v=20260921-showcase-v1" />
+  </head>
+  <body>
+    <div class="showcase-shell">
+      <header class="showcase-header">
+        <a class="showcase-brand" href="./#/review" aria-label="Return to the MicroScore engineering case study">
+          <img src="./assets/microscore-mark.svg" alt="" />
+          <span><strong>Micro</strong>Score</span>
+        </a>
+        <div class="showcase-header-meta">
+          <span>Computer Engineering</span>
+          <strong>Two-minute walkthrough</strong>
+        </div>
+        <div class="showcase-header-actions">
+          <button class="showcase-quiet-button" type="button" data-autoplay aria-pressed="false">
+            <span data-autoplay-icon aria-hidden="true">▶</span>
+            <span data-autoplay-label>Play tour</span>
+          </button>
+          <a class="showcase-exit" href="./#/review">Exit</a>
+        </div>
+      </header>
+
+      <main class="showcase-stage" aria-live="polite">
+        <article class="showcase-slide scene-opening is-active" data-slide data-duration="17000" aria-hidden="false">
+          <div class="scene-copy">
+            <p class="scene-eyebrow">01 · The problem</p>
+            <h1>Credit-risk engineering for people with limited formal history.</h1>
+            <p class="scene-lead">
+              MicroScore began with a local question in Pavlodar, Kazakhstan: can a useful decision-support
+              system surface repayment context without pretending that a model should make the final decision?
+            </p>
+            <div class="scene-boundary"><span></span>Synthetic demonstration · no real lending decisions</div>
+          </div>
+          <div class="system-orbit" aria-label="MicroScore system layers">
+            <div class="orbit-core">
+              <img src="./assets/microscore-mark.svg" alt="" />
+              <strong>MicroScore</strong>
+              <span>Human-centered risk review</span>
+            </div>
+            <div class="orbit-node node-intake"><span>01</span><strong>Consented intake</strong></div>
+            <div class="orbit-node node-model"><span>02</span><strong>Interpretable ML</strong></div>
+            <div class="orbit-node node-review"><span>03</span><strong>Human review</strong></div>
+            <div class="orbit-node node-policy"><span>04</span><strong>Policy stress</strong></div>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-research" data-slide data-duration="17000" aria-hidden="true">
+          <div class="scene-heading">
+            <div>
+              <p class="scene-eyebrow">02 · Research changed the product</p>
+              <h2>The most valuable result was a limitation.</h2>
+            </div>
+            <p>
+              An ablation test showed that the apparent strength of the synthetic model depended heavily on a
+              late-payment proxy. That finding changed the architecture from automation to review support.
+            </p>
+          </div>
+          <div class="evidence-plot" aria-label="Model evidence comparison">
+            <div class="evidence-card evidence-synthetic">
+              <span>Full synthetic model</span>
+              <strong>0.830</strong>
+              <em>ROC-AUC</em>
+              <div class="evidence-bar"><i style="--bar: 83%"></i></div>
+              <p>Promising at first glance.</p>
+            </div>
+            <div class="evidence-arrow" aria-hidden="true">→</div>
+            <div class="evidence-card evidence-ablation">
+              <span>Remove proxy feature</span>
+              <strong>0.492</strong>
+              <em>ROC-AUC</em>
+              <div class="evidence-bar"><i style="--bar: 49.2%"></i></div>
+              <p>Near-random thin-file signal.</p>
+            </div>
+            <div class="evidence-card evidence-benchmark">
+              <span>Public UCI benchmark</span>
+              <strong>0.775</strong>
+              <em>ROC-AUC</em>
+              <div class="evidence-bar"><i style="--bar: 77.5%"></i></div>
+              <p>Technical benchmark, not Kazakhstan validation.</p>
+            </div>
+          </div>
+          <div class="engineering-decision">
+            <span>Engineering decision</span>
+            <strong>Expose uncertainty and require a trained human reviewer.</strong>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-workflow" data-slide data-duration="17000" aria-hidden="true">
+          <div class="scene-heading compact-heading">
+            <div>
+              <p class="scene-eyebrow">03 · Product workflow</p>
+              <h2>Context before action.</h2>
+            </div>
+            <p>Every score stays attached to model provenance, an explanation, review checks, and an audit trail.</p>
+          </div>
+          <div class="analyst-demo">
+            <section class="demo-queue" aria-label="Application queue example">
+              <div class="demo-panel-heading"><span>Application queue</span><strong>5 synthetic records</strong></div>
+              <div class="queue-item is-selected">
+                <span class="queue-avatar">01</span>
+                <div><strong>Working capital</strong><small>Pavlodar city · 3,000 units</small></div>
+                <em>Selected</em>
+              </div>
+              <div class="queue-item">
+                <span class="queue-avatar">02</span>
+                <div><strong>Equipment</strong><small>Bayanaul · 4,200 units</small></div>
+                <em>Review</em>
+              </div>
+              <div class="queue-item">
+                <span class="queue-avatar">03</span>
+                <div><strong>Inventory</strong><small>Ekibastuz · 2,500 units</small></div>
+                <em>Scored</em>
+              </div>
+            </section>
+            <section class="demo-score" aria-label="Risk and explanation example">
+              <div class="demo-panel-heading"><span>Risk context</span><strong>static-demo-v1</strong></div>
+              <div class="risk-summary">
+                <div><span>Probability</span><strong>13.5%</strong></div>
+                <div><span>Risk band</span><strong class="risk-low">Low</strong></div>
+                <div><span>Proxy delta</span><strong>0.0%</strong></div>
+              </div>
+              <div class="factor-grid">
+                <div><span>Raises risk</span><strong>Open loans</strong><em>+0.080</em></div>
+                <div><span>Lowers risk</span><strong>Mobile banking</strong><em>−0.216</em></div>
+              </div>
+              <p class="decision-notice"><span></span>Decision support only — verify identity, income, and affordability.</p>
+            </section>
+            <section class="demo-review" aria-label="Human review packet example">
+              <div class="demo-panel-heading"><span>Human review packet</span><strong>Ready</strong></div>
+              <ol>
+                <li class="is-complete"><span>✓</span><div><strong>Application ownership</strong><small>Verified in demo workflow</small></div></li>
+                <li><span>2</span><div><strong>Affordability context</strong><small>Analyst confirmation required</small></div></li>
+                <li><span>3</span><div><strong>Record decision note</strong><small>Append-only audit evidence</small></div></li>
+              </ol>
+              <div class="human-gate"><span>Human gate</span><strong>No automatic approval</strong></div>
+            </section>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-uncertainty" data-slide data-duration="17000" aria-hidden="true">
+          <div class="scene-heading compact-heading">
+            <div>
+              <p class="scene-eyebrow">04 · Monte Carlo layer</p>
+              <h2>Uncertainty belongs at portfolio level.</h2>
+            </div>
+            <p>
+              Seeded simulations compare policy outcomes under explicit shocks. They do not modify borrower scores
+              and they are presented as scenario planning, not validated loss forecasts.
+            </p>
+          </div>
+          <div class="scenario-lab">
+            <div class="scenario-card scenario-baseline">
+              <div class="scenario-title"><span>Baseline</span><em>Reference</em></div>
+              <div class="scenario-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <strong>Normal assumptions</strong>
+              <p>Portfolio outcomes under the selected policy and calibrated demonstration inputs.</p>
+            </div>
+            <div class="scenario-card scenario-adverse">
+              <div class="scenario-title"><span>Adverse</span><em>Stress</em></div>
+              <div class="scenario-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <strong>Macro volatility</strong>
+              <p>Higher default pressure makes the distribution wider and the downside more visible.</p>
+            </div>
+            <div class="scenario-card scenario-severe">
+              <div class="scenario-title"><span>Severe</span><em>Boundary</em></div>
+              <div class="scenario-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <strong>Risk appetite test</strong>
+              <p>A transparent limit helps a committee decide whether the policy should move forward.</p>
+            </div>
+          </div>
+          <div class="simulation-contract">
+            <div><strong>5,000</strong><span>seeded paths per scenario</span></div>
+            <div><strong>3</strong><span>paired stress scenarios</span></div>
+            <div><strong>0</strong><span>borrower scores changed</span></div>
+            <p>Same inputs + same seed = reproducible result</p>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-engineering" data-slide data-duration="17000" aria-hidden="true">
+          <div class="scene-heading compact-heading">
+            <div>
+              <p class="scene-eyebrow">05 · Systems engineering</p>
+              <h2>The model is one component of the system.</h2>
+            </div>
+            <p>Reliability, privacy boundaries, tenant isolation, and inspectable evidence are treated as product behavior.</p>
+          </div>
+          <div class="engineering-map">
+            <div class="engineering-spine" aria-label="System architecture">
+              <div><span>01</span><strong>Browser product</strong><small>Borrower · analyst · admin</small></div>
+              <b aria-hidden="true">→</b>
+              <div><span>02</span><strong>FastAPI contracts</strong><small>Typed, role-scoped responses</small></div>
+              <b aria-hidden="true">→</b>
+              <div><span>03</span><strong>Repository layer</strong><small>SQLite + PostgreSQL path</small></div>
+              <b aria-hidden="true">→</b>
+              <div><span>04</span><strong>Evidence trail</strong><small>Model · decision · audit</small></div>
+            </div>
+            <div class="engineering-proofs">
+              <div><strong>52 / 52</strong><span>PostgreSQL repository adapter methods implemented</span></div>
+              <div><strong>Tenant scoped</strong><span>Queues, analytics, review packets, and simulations</span></div>
+              <div><strong>Secret safe</strong><span>No raw invite or bearer tokens in list and audit surfaces</span></div>
+              <div><strong>Terminal guards</strong><span>Final application decisions cannot be silently reversed</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-boundaries" data-slide data-duration="17000" aria-hidden="true">
+          <div class="boundary-statement">
+            <p class="scene-eyebrow">06 · Responsible-use boundary</p>
+            <h2>A prototype can be ambitious and still be honest.</h2>
+            <p>
+              MicroScore demonstrates the engineering of a review system. It does not claim that synthetic Pavlodar
+              data proves real repayment prediction or that the prototype is ready to process real borrower data.
+            </p>
+          </div>
+          <div class="boundary-list">
+            <div><span>Not claimed</span><strong>Automated credit decisions</strong><p>Every final decision remains with a trained human reviewer.</p></div>
+            <div><span>Not claimed</span><strong>Local predictive validity</strong><p>Real regional validation requires consented data and expert partnership.</p></div>
+            <div><span>Not claimed</span><strong>Production readiness</strong><p>Identity, transactional delivery, hosting, and privacy review remain pre-pilot gates.</p></div>
+          </div>
+          <div class="next-research">
+            <span>Next responsible milestone</span>
+            <strong>Privacy-safe validation with local experts or an MFI partner.</strong>
+          </div>
+        </article>
+
+        <article class="showcase-slide scene-finale" data-slide data-duration="17000" aria-hidden="true">
+          <div class="finale-copy">
+            <p class="scene-eyebrow">07 · Inspect the evidence</p>
+            <h2>Built as a system.<br />Tested as a system.</h2>
+            <p>
+              The public repository connects research artifacts, application code, security gates,
+              reproducible simulations, and reviewer-facing evidence.
+            </p>
+            <div class="finale-actions">
+              <a class="showcase-primary-action" href="./?demo=static#/login">Open role-based demo</a>
+              <a class="showcase-secondary-action" href="./assets/MicroScore_Engineering_Case_Study.pdf" download>Download evidence PDF</a>
+              <a class="showcase-text-action" href="https://github.com/alex-tereshkovv/micro-score" target="_blank" rel="noreferrer">Inspect source ↗</a>
+            </div>
+          </div>
+          <div class="finale-proof">
+            <div><strong>126</strong><span>Python unit and integration tests</span></div>
+            <div><strong>10 pages</strong><span>Reproducible engineering evidence report</span></div>
+            <div><strong>Public</strong><span>Browser demo with synthetic data only</span></div>
+            <p><span></span>Release gate passed before publication</p>
+          </div>
+        </article>
+      </main>
+
+      <footer class="showcase-controls">
+        <button class="showcase-nav-button" type="button" data-prev aria-label="Previous scene">←</button>
+        <div class="showcase-progress-wrap">
+          <div class="showcase-progress-meta">
+            <strong data-scene-label>01 · The problem</strong>
+            <span><b data-scene-current>1</b> / <span data-scene-total>7</span></span>
+          </div>
+          <div class="showcase-track" role="tablist" aria-label="Walkthrough scenes">
+            <button type="button" class="is-active" data-scene-target="0" role="tab" aria-selected="true" aria-label="Scene 1: The problem"><i></i></button>
+            <button type="button" data-scene-target="1" role="tab" aria-selected="false" aria-label="Scene 2: Research evidence"><i></i></button>
+            <button type="button" data-scene-target="2" role="tab" aria-selected="false" aria-label="Scene 3: Product workflow"><i></i></button>
+            <button type="button" data-scene-target="3" role="tab" aria-selected="false" aria-label="Scene 4: Monte Carlo"><i></i></button>
+            <button type="button" data-scene-target="4" role="tab" aria-selected="false" aria-label="Scene 5: Systems engineering"><i></i></button>
+            <button type="button" data-scene-target="5" role="tab" aria-selected="false" aria-label="Scene 6: Responsible-use boundary"><i></i></button>
+            <button type="button" data-scene-target="6" role="tab" aria-selected="false" aria-label="Scene 7: Evidence and next steps"><i></i></button>
+          </div>
+        </div>
+        <button class="showcase-nav-button" type="button" data-next aria-label="Next scene">→</button>
+      </footer>
+    </div>
+
+    <noscript>This walkthrough requires JavaScript for scene navigation. The main MicroScore demo remains available.</noscript>
+    <script src="./showcase.js?v=20260921-showcase-v1"></script>
+  </body>
+</html>

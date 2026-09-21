@@ -99,6 +99,8 @@ try {
     Invoke-Step "Check frontend JavaScript syntax" {
         & $node --check apps\web\app.js
         Assert-LastExitCode "Frontend app.js syntax check"
+        & $node --check apps\web\showcase.js
+        Assert-LastExitCode "Frontend showcase.js syntax check"
         & $node --check apps\web\mock-api.js
         Assert-LastExitCode "Frontend mock-api.js syntax check"
         & $node --check apps\web\application-intake.js
