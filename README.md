@@ -8,6 +8,9 @@ Interpretable alternative credit-risk scoring prototype for thin-file borrowers 
 
 Open the public static demo: https://alex-tereshkovv.github.io/micro-score/
 
+For a three-minute admissions overview, open the engineering case study:
+https://alex-tereshkovv.github.io/micro-score/#/review
+
 Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password: `password123`; staff/admin MFA code: `246810`.
 
 The public demo uses synthetic in-browser data only. It is not a lending service and does not collect real borrower data.
@@ -33,6 +36,7 @@ The public demo uses synthetic in-browser data only. It is not a lending service
 
 ## Reviewer Assets
 
+- Admissions engineering case study: [three-minute reviewer mode](https://alex-tereshkovv.github.io/micro-score/#/review)
 - Live Demo: [GitHub Pages static demo](https://alex-tereshkovv.github.io/micro-score/)
 - Demo accounts: `borrower@test.com`, `analyst@test.com`, `admin@test.com`; password `password123`; staff/admin MFA code `246810`
 - Demo Video: planned; script in [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md)

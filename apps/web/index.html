@@ -9,11 +9,12 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20260814-monte-carlo-dossier-vault-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260921-admissions-review-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
-        if (!hasSession && window.location.hash && window.location.hash !== "#/login") {
+        const publicRoutes = new Set(["#/login", "#/review"]);
+        if (!hasSession && window.location.hash && !publicRoutes.has(window.location.hash)) {
           window.history.replaceState(
             null,
             "",
@@ -25,6 +26,208 @@
   </head>
   <body>
     <div id="messageArea" class="message-area global-message" aria-live="polite"></div>
+
+    <section id="reviewerScreen" class="reviewer-screen" aria-labelledby="reviewer-title" hidden>
+      <header class="reviewer-nav">
+        <a class="reviewer-brand" href="#/review" aria-label="MicroScore admissions review home">
+          <img src="./assets/microscore-mark.svg" alt="" />
+          <span><strong>Micro</strong>Score</span>
+        </a>
+        <div class="reviewer-nav-actions">
+          <span>Admissions case study</span>
+          <button class="secondary-button compact-button" type="button" data-review-route="#/login">Role demo</button>
+        </div>
+      </header>
+
+      <main class="reviewer-main">
+        <section class="reviewer-hero">
+          <div class="reviewer-hero-copy">
+            <p class="reviewer-kicker">Computer Engineering · 3-minute review</p>
+            <h1 id="reviewer-title">Engineering a responsible credit-risk system for thin-file borrowers.</h1>
+            <p class="reviewer-lead">
+              MicroScore connects interpretable machine learning, a role-based FastAPI product,
+              and reproducible portfolio stress testing around one local problem in Pavlodar,
+              Kazakhstan: access to credit when formal credit history is limited.
+            </p>
+            <div class="reviewer-hero-actions">
+              <button class="primary-button" type="button" data-demo="analyst@test.com" data-role="mfi_analyst">
+                Open analyst demo
+              </button>
+              <a class="secondary-button reviewer-link-button" href="https://github.com/alex-tereshkovv/micro-score" target="_blank" rel="noreferrer">
+                Inspect source code
+              </a>
+            </div>
+            <p class="reviewer-safety-line">
+              Synthetic data only · human decision support · no real lending claims
+            </p>
+          </div>
+          <aside class="reviewer-hero-proof" aria-label="Project evidence snapshot">
+            <div class="reviewer-proof-heading">
+              <span>Evidence snapshot</span>
+              <strong>Built, tested, public</strong>
+            </div>
+            <dl class="reviewer-proof-grid">
+              <div>
+                <dt>0.775</dt>
+                <dd>Random Forest ROC-AUC on the public UCI benchmark</dd>
+              </div>
+              <div>
+                <dt>124</dt>
+                <dd>automated tests in the current release gate</dd>
+              </div>
+              <div>
+                <dt>52 / 52</dt>
+                <dd>PostgreSQL repository adapter methods implemented</dd>
+              </div>
+              <div>
+                <dt>3 layers</dt>
+                <dd>research pipeline, API product, public browser demo</dd>
+              </div>
+            </dl>
+          </aside>
+        </section>
+
+        <section class="reviewer-thesis" aria-labelledby="reviewer-thesis-title">
+          <div>
+            <p class="eyebrow">The engineering thesis</p>
+            <h2 id="reviewer-thesis-title">Accuracy is only one component of a lending system.</h2>
+          </div>
+          <p>
+            A useful system also needs explainability, tenant isolation, audit evidence,
+            lifecycle controls, uncertainty analysis, and a clear boundary between model
+            output and human judgment. MicroScore was built as that complete system.
+          </p>
+        </section>
+
+        <section id="reviewer-system" class="reviewer-section" aria-labelledby="reviewer-system-title">
+          <div class="reviewer-section-heading">
+            <div>
+              <p class="eyebrow">System design</p>
+              <h2 id="reviewer-system-title">One traceable path from application to decision evidence</h2>
+            </div>
+            <span class="reviewer-section-number">01</span>
+          </div>
+          <div class="reviewer-architecture" aria-label="MicroScore system architecture">
+            <article>
+              <span>01</span>
+              <strong>Borrower intake</strong>
+              <p>Typed consented inputs, field validation, privacy-safe status history.</p>
+            </article>
+            <div class="reviewer-flow-arrow" aria-hidden="true">→</div>
+            <article>
+              <span>02</span>
+              <strong>Scoring service</strong>
+              <p>Versioned model, probability, risk band, additive local explanation.</p>
+            </article>
+            <div class="reviewer-flow-arrow" aria-hidden="true">→</div>
+            <article>
+              <span>03</span>
+              <strong>Human review</strong>
+              <p>Analyst packet, affordability context, governance flags, audit trail.</p>
+            </article>
+            <div class="reviewer-flow-arrow" aria-hidden="true">→</div>
+            <article>
+              <span>04</span>
+              <strong>Policy stress test</strong>
+              <p>Seeded Monte Carlo scenarios, risk appetite gate, evidence dossier.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="reviewer-section reviewer-findings-section" aria-labelledby="reviewer-findings-title">
+          <div class="reviewer-section-heading">
+            <div>
+              <p class="eyebrow">Results and intellectual honesty</p>
+              <h2 id="reviewer-findings-title">The most important result was a limitation.</h2>
+            </div>
+            <span class="reviewer-section-number">02</span>
+          </div>
+          <div class="reviewer-findings">
+            <article class="reviewer-finding-card finding-primary">
+              <span>Full synthetic model</span>
+              <strong>0.830 ROC-AUC</strong>
+              <p>Random Forest initially appears strong on the synthetic experiment.</p>
+            </article>
+            <article class="reviewer-finding-card finding-warning">
+              <span>Remove late-payment proxy</span>
+              <strong>0.492 ROC-AUC</strong>
+              <p>Performance falls near random, exposing weak independent thin-file signal.</p>
+            </article>
+            <article class="reviewer-finding-card finding-benchmark">
+              <span>Public UCI benchmark</span>
+              <strong>0.775 ROC-AUC</strong>
+              <p>The pipeline generalizes technically, but this is not Kazakhstan validation.</p>
+            </article>
+          </div>
+          <div class="reviewer-conclusion">
+            <strong>Engineering conclusion</strong>
+            <p>
+              Do not automate lending decisions. Keep a human reviewer, monitor proxy features,
+              and require consented local pilot data before making predictive claims.
+            </p>
+          </div>
+        </section>
+
+        <section class="reviewer-section" aria-labelledby="reviewer-proof-title">
+          <div class="reviewer-section-heading">
+            <div>
+              <p class="eyebrow">What to inspect</p>
+              <h2 id="reviewer-proof-title">Three routes through the project</h2>
+            </div>
+            <span class="reviewer-section-number">03</span>
+          </div>
+          <div class="reviewer-routes">
+            <article>
+              <div class="reviewer-route-meta"><span>Product</span><em>2 minutes</em></div>
+              <h3>Follow the analyst workflow</h3>
+              <p>Open a scored application, inspect its explanation, record a human decision, and stress-test the portfolio.</p>
+              <button class="reviewer-text-action" type="button" data-demo="analyst@test.com" data-role="mfi_analyst">Enter MFI workspace <span aria-hidden="true">→</span></button>
+            </article>
+            <article>
+              <div class="reviewer-route-meta"><span>Research</span><em>5 minutes</em></div>
+              <h3>Audit the evidence</h3>
+              <p>Read the methodology, ablation findings, benchmark results, and explicit claim boundaries.</p>
+              <a class="reviewer-text-action" href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/RESEARCH_PAPER.md" target="_blank" rel="noreferrer">Read research paper <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <div class="reviewer-route-meta"><span>Engineering</span><em>5 minutes</em></div>
+              <h3>Inspect reliability and governance</h3>
+              <p>Review API contracts, security gates, CI checks, Monte Carlo reproducibility, and PostgreSQL migration work.</p>
+              <a class="reviewer-text-action" href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/ENGINEERING_QUALITY.md" target="_blank" rel="noreferrer">Review quality evidence <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </section>
+
+        <section class="reviewer-boundary" aria-labelledby="reviewer-boundary-title">
+          <div>
+            <p class="eyebrow">Responsible-use boundary</p>
+            <h2 id="reviewer-boundary-title">A working prototype, not a production lending model.</h2>
+          </div>
+          <ul>
+            <li>No real borrower data is collected by the public demo.</li>
+            <li>Regional assumptions are labeled and remain unvalidated locally.</li>
+            <li>Scores support a trained human reviewer; they do not make final decisions.</li>
+          </ul>
+        </section>
+
+        <section class="reviewer-final-cta">
+          <div>
+            <p class="eyebrow">Continue the review</p>
+            <h2>See the system operate from three perspectives.</h2>
+          </div>
+          <div class="reviewer-role-actions">
+            <button type="button" data-demo="borrower@test.com" data-role="borrower">Borrower <span>Submit application</span></button>
+            <button type="button" data-demo="analyst@test.com" data-role="mfi_analyst">MFI analyst <span>Review risk</span></button>
+            <button type="button" data-demo="admin@test.com" data-role="admin">Admin <span>Inspect governance</span></button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="reviewer-footer">
+        <span>MicroScore · Alexandr · Pavlodar, Kazakhstan</span>
+        <span>Interpretable systems for financial inclusion</span>
+      </footer>
+    </section>
 
     <section id="authScreen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-card">
@@ -43,6 +246,11 @@
               Sign in as a borrower, MFI analyst, or admin. Each role opens its own
               MicroScore workspace with synthetic demo data only.
             </p>
+            <button class="reviewer-entry-button" type="button" data-review-route="#/review">
+              <span>Admissions review</span>
+              <strong>See the engineering case study</strong>
+              <em aria-hidden="true">→</em>
+            </button>
             <dl class="reviewer-snapshot" aria-label="Reviewer snapshot">
               <div>
                 <dt>Status</dt>
@@ -861,8 +1069,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20260814-monte-carlo-dossier-vault-v1"></script>
+    <script src="./mock-api.js?v=20260921-admissions-review-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20260814-monte-carlo-dossier-vault-v1"></script>
+    <script src="./app.js?v=20260921-admissions-review-v1"></script>
   </body>
 </html>

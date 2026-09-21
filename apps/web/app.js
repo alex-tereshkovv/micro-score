@@ -62,6 +62,7 @@ const state = {
 };
 
 const els = {
+  reviewerScreen: document.querySelector("#reviewerScreen"),
   authScreen: document.querySelector("#authScreen"),
   appShell: document.querySelector("#appShell"),
   apiBase: document.querySelector("#apiBase"),
@@ -84,6 +85,7 @@ const els = {
   logoutButton: document.querySelector("#logoutButton"),
   messageArea: document.querySelector("#messageArea"),
   demoButtons: document.querySelectorAll("[data-demo]"),
+  reviewRouteButtons: document.querySelectorAll("[data-review-route]"),
   mfiSectionJumps: document.querySelectorAll("[data-mfi-jump]"),
   applicationForm: document.querySelector("#applicationForm"),
   applicationValidationSummary: document.querySelector("#applicationValidationSummary"),
@@ -371,7 +373,7 @@ function applyRoute() {
   const signedIn = Boolean(state.token);
 
   if (!signedIn) {
-    if (window.location.hash !== "#/login") replaceRoute("#/login");
+    if (!["#/login", "#/review"].includes(currentRoute())) replaceRoute("#/login");
     setAppMode();
     return;
   }
@@ -404,6 +406,8 @@ function setAppMode(targetView = null) {
       updateRoute: false,
     });
     showAppPage();
+  } else if (currentRoute() === "#/review") {
+    showReviewerPage();
   } else {
     showAuthPage();
   }
@@ -411,6 +415,9 @@ function setAppMode(targetView = null) {
 
 function showAppPage() {
   const shouldAnimate = els.appShell.hidden;
+  document.title = "MicroScore Risk Console";
+  document.body.classList.remove("reviewer-mode");
+  els.reviewerScreen.hidden = true;
   els.appShell.hidden = false;
   if (shouldAnimate) {
     els.appShell.classList.add("page-enter");
@@ -430,6 +437,9 @@ function showAppPage() {
 
 function showAuthPage() {
   const shouldAnimate = !els.appShell.hidden;
+  document.title = "MicroScore Risk Console";
+  document.body.classList.remove("reviewer-mode");
+  els.reviewerScreen.hidden = true;
   els.authScreen.hidden = false;
   if (shouldAnimate) {
     els.authScreen.classList.add("page-enter");
@@ -443,6 +453,17 @@ function showAuthPage() {
   } else {
     els.appShell.hidden = true;
   }
+}
+
+function showReviewerPage() {
+  document.title = "MicroScore | Engineering Case Study";
+  document.body.classList.add("reviewer-mode");
+  els.authScreen.hidden = true;
+  els.appShell.hidden = true;
+  els.reviewerScreen.hidden = false;
+  els.reviewerScreen.classList.add("page-enter");
+  window.scrollTo(0, 0);
+  window.setTimeout(() => els.reviewerScreen.classList.remove("page-enter"), 280);
 }
 
 function showMessage(text, type = "info") {
@@ -6358,6 +6379,9 @@ function wireEvents() {
       enterDemoWorkspace(button.dataset.demo, button.dataset.role)
         .catch((error) => showMessage(error.message, "error"));
     });
+  });
+  els.reviewRouteButtons.forEach((button) => {
+    button.addEventListener("click", () => navigateToRoute(button.dataset.reviewRoute));
   });
   els.mfiSectionJumps.forEach((button) => {
     button.addEventListener("click", () => scrollToMfiSection(button.dataset.mfiJump));
