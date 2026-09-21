@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/web/**"
+      - "output/pdf/MicroScore_Engineering_Case_Study.pdf"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,6 +31,9 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
+
+      - name: Stage admissions evidence PDF
+        run: cp output/pdf/MicroScore_Engineering_Case_Study.pdf apps/web/assets/MicroScore_Engineering_Case_Study.pdf
 
       - name: Upload static web artifact
         uses: actions/upload-pages-artifact@v5

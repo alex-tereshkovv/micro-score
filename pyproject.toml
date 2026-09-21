@@ -25,6 +25,10 @@ app = [
     "httpx>=0.27",
     "uvicorn[standard]>=0.30",
 ]
+report = [
+    "reportlab>=4.2",
+    "pypdf>=5.0",
+]
 
 [project.scripts]
 microscore-train = "microscore.cli:main"

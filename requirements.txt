@@ -1,1 +1,1 @@
--e .[notebook,app]
+-e .[notebook,app,report]
