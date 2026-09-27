@@ -974,7 +974,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Start-MicroScore.cmd", web_readme)
         self.assertIn("microscore_api.dev", command_file)
         self.assertIn("https://alex-tereshkovv.github.io/micro-score/#/review", root_readme)
-        self.assertIn("three-minute admissions overview", root_readme)
+        self.assertIn("Three-minute engineering case study", root_readme)
 
     def test_static_demo_deployment_is_configured(self) -> None:
         workflow = PAGES_WORKFLOW.read_text(encoding="utf-8")

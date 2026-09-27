@@ -195,7 +195,7 @@ This shows why the product should support analyst review rather than a simple
 binary threshold. Different lending policies change inclusion and risk exposure
 in opposite directions.
 
-### Research Finding 6
+### Research Finding 7
 
 Decision thresholds create a strong access-vs-sustainability trade-off. Under
 the current lending assumptions, a purely profit-maximizing threshold can

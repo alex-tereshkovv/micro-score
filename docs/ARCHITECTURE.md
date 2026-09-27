@@ -48,7 +48,7 @@ support MFI analysts, not automatically approve or reject real borrowers.
 URL: https://alex-tereshkovv.github.io/micro-score/
 
 This mode runs entirely in the browser. It uses `apps/web/mock-api.js` to mimic
-the backend with synthetic demo data. It is designed for admissions reviewers,
+the backend with synthetic demo data. It is designed for technical reviewers,
 teachers, and non-technical viewers who should not need PowerShell or local
 setup.
 
@@ -189,7 +189,7 @@ while the research is still pre-pilot.
 
 | Environment | Purpose | Data |
 | --- | --- | --- |
-| GitHub Pages | Public demo and admissions review | Synthetic browser data only |
+| GitHub Pages | Public demo and technical review | Synthetic browser data only |
 | Local FastAPI | Product development | Seeded SQLite demo data |
 | Research CLI | Model experiments | Synthetic and public benchmark datasets |
 | Future cloud API | Pilot candidate | Requires privacy, security, and legal review |

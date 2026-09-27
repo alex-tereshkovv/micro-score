@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,7 @@ DOCS_ROOT = PROJECT_ROOT / "docs"
 class ResearchDocsTests(unittest.TestCase):
     def test_research_governance_docs_exist(self) -> None:
         expected_docs = [
-            "ADMISSIONS_REVIEWER_BRIEF.md",
+            "PROJECT_BRIEF.md",
             "ARCHITECTURE.md",
             "BENCHMARK_DATASETS.md",
             "DATA_STATEMENT.md",
@@ -29,6 +30,7 @@ class ResearchDocsTests(unittest.TestCase):
             "SCREENSHOT_CHECKLIST.md",
             "STAKEHOLDER_INTERVIEW_GUIDE.md",
             "STATIC_DEMO_DEPLOYMENT.md",
+            "TECHNICAL_INTERVIEW_GUIDE.md",
             "VALIDATION_TRACKER.md",
         ]
 
@@ -40,22 +42,21 @@ class ResearchDocsTests(unittest.TestCase):
 
         self.assertIn("## Snapshot", readme)
         self.assertIn("## Try The Live Demo", readme)
-        self.assertIn("## Developer Quick Start (Optional)", readme)
-        self.assertIn("Interpretable alternative credit-risk scoring prototype", readme)
-        self.assertIn("Public demo", readme)
+        self.assertIn("## Run Locally", readme)
+        self.assertIn("Interpretable credit-risk research", readme)
+        self.assertIn("Role-based product demo", readme)
         self.assertIn("https://alex-tereshkovv.github.io/micro-score/", readme)
         self.assertIn("borrower@test.com", readme)
         self.assertIn("password123", readme)
-        self.assertIn("DEMO_VIDEO_SCRIPT.md", readme)
-        self.assertIn("ADMISSIONS_REVIEWER_BRIEF.md", readme)
+        self.assertIn("PROJECT_BRIEF.md", readme)
+        self.assertIn("TECHNICAL_INTERVIEW_GUIDE.md", readme)
         self.assertIn("ARCHITECTURE.md", readme)
         self.assertIn("PILOT_DATA_SCHEMA.md", readme)
         self.assertIn("MONTE_CARLO_METHODOLOGY.md", readme)
-        self.assertIn("SCREENSHOT_CHECKLIST.md", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
         self.assertIn("Key limitation", readme)
-        self.assertLess(len(readme.splitlines()), 240)
+        self.assertLess(len(readme.splitlines()), 180)
         self.assertNotIn(r".venv\S cripts\p ython", readme)
         self.assertNotIn(r".venv\Scripts\p ython", readme)
         self.assertNotIn(r".venv\S cripts\python", readme)
@@ -169,19 +170,30 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("No real borrower data", screenshot_checklist)
         self.assertTrue((DOCS_ROOT / "assets" / "screenshots" / ".gitkeep").exists())
 
-    def test_reviewer_brief_and_architecture_define_product_story(self) -> None:
-        reviewer_brief = (DOCS_ROOT / "ADMISSIONS_REVIEWER_BRIEF.md").read_text(
+    def test_project_brief_and_architecture_define_product_story(self) -> None:
+        project_brief = (DOCS_ROOT / "PROJECT_BRIEF.md").read_text(
+            encoding="utf-8",
+        )
+        interview_guide = (DOCS_ROOT / "TECHNICAL_INTERVIEW_GUIDE.md").read_text(
             encoding="utf-8",
         )
         architecture = (DOCS_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
 
-        self.assertIn("https://alex-tereshkovv.github.io/micro-score/", reviewer_brief)
-        self.assertIn("Pavlodar", reviewer_brief)
-        self.assertIn("synthetic", reviewer_brief)
-        self.assertIn("not automatic lending", reviewer_brief)
-        self.assertIn("thin-file", reviewer_brief)
-        self.assertIn("What Not To Claim", reviewer_brief)
-        self.assertIn("Human-in-the-loop", reviewer_brief)
+        self.assertIn("https://alex-tereshkovv.github.io/micro-score/", project_brief)
+        self.assertIn("Pavlodar", project_brief)
+        self.assertIn("synthetic", project_brief)
+        self.assertIn("not automatic lending", project_brief)
+        self.assertIn("thin-file", project_brief)
+        self.assertIn("What Not To Claim", project_brief)
+        self.assertIn("Human-in-the-loop", project_brief)
+        self.assertNotIn("Admissions Reviewer Brief", project_brief)
+        self.assertIn("Why Logistic Regression?", interview_guide)
+        self.assertIn("What Does ROC-AUC Mean?", interview_guide)
+        self.assertIn("Why Is `late_payment_count` A Problem?", interview_guide)
+        self.assertIn("What Does Ablation Show?", interview_guide)
+        self.assertIn("Why Threshold Policies Instead Of One Cutoff?", interview_guide)
+        self.assertIn("How Do Frontend, API, And Database Fit Together?", interview_guide)
+        self.assertIn("Ownership Check", interview_guide)
         self.assertIn("flowchart LR", architecture)
         self.assertIn("Borrower", architecture)
         self.assertIn("MFI analyst", architecture)
@@ -396,6 +408,16 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("Methodological prototype only", validation_tracker)
         self.assertIn("Monte Carlo portfolio simulation", research_paper)
         self.assertIn("common random numbers", research_paper)
+        finding_numbers = [
+            int(value)
+            for value in re.findall(
+                r"^### Research Finding (\d+)$",
+                research_paper,
+                flags=re.MULTILINE,
+            )
+        ]
+        self.assertEqual(finding_numbers, list(range(1, len(finding_numbers) + 1)))
+        self.assertEqual(len(finding_numbers), 7)
 
     def test_kzt_calibration_and_proxy_monitoring_boundaries_are_documented(self) -> None:
         kzt_pack = (DOCS_ROOT / "KZT_CALIBRATION_ASSUMPTIONS.md").read_text(
