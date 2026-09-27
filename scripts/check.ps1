@@ -76,6 +76,11 @@ try {
     Write-Host "Python: $python"
     Write-Host "Node:   $node"
 
+    Invoke-Step "Build research paper PDF" {
+        & $python scripts\build_research_paper.py
+        Assert-LastExitCode "Research paper PDF build"
+    }
+
     Invoke-Step "Run Python unit and integration tests" {
         & $python -m unittest discover -s tests
         Assert-LastExitCode "Python unit and integration tests"

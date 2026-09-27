@@ -4,6 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
+from pypdf import PdfReader
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = PROJECT_ROOT / "docs"
 
@@ -36,6 +38,28 @@ class ResearchDocsTests(unittest.TestCase):
 
         for filename in expected_docs:
             self.assertTrue((DOCS_ROOT / filename).exists(), filename)
+
+        builder = PROJECT_ROOT / "scripts" / "build_research_paper.py"
+        paper_pdf = PROJECT_ROOT / "output" / "pdf" / "MicroScore_Research_Paper.pdf"
+        self.assertTrue(builder.exists())
+        self.assertTrue(paper_pdf.exists())
+        self.assertGreater(paper_pdf.stat().st_size, 250_000)
+
+        reader = PdfReader(str(paper_pdf))
+        self.assertGreaterEqual(len(reader.pages), 9)
+        self.assertLessEqual(len(reader.pages), 12)
+        self.assertIn("MicroScore", str(reader.metadata.title))
+        paper_text = " ".join(
+            " ".join(page.extract_text() or "" for page in reader.pages).split()
+        )
+        for marker in [
+            "An Interpretable Decision-Support Prototype",
+            "Research Finding 3: Thin-File Ablation Collapses Ranking",
+            "Threats To Validity And Ethical Boundary",
+            "The strongest result is not the headline score",
+            "https://github.com/alex-tereshkovv/micro-score",
+        ]:
+            self.assertIn(marker, paper_text)
 
     def test_readme_has_portfolio_snapshot(self) -> None:
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
@@ -411,7 +435,7 @@ class ResearchDocsTests(unittest.TestCase):
         finding_numbers = [
             int(value)
             for value in re.findall(
-                r"^### Research Finding (\d+)$",
+                r"^### Research Finding (\d+):",
                 research_paper,
                 flags=re.MULTILINE,
             )

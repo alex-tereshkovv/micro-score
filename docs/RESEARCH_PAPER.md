@@ -1,294 +1,414 @@
-# MicroScore: Interpretable Alternative Credit-Risk Modeling for Thin-File Borrowers in Pavlodar, Kazakhstan
+# MicroScore: An Interpretable Decision-Support Prototype for Thin-File Credit Risk
+
+**Alexandr | Pavlodar, Kazakhstan | September 2026**
 
 ## Abstract
 
-MicroScore investigates whether behavioral financial signals can support
-credit-risk review for thin-file borrowers in Pavlodar, Kazakhstan. The project
-combines machine-learning baselines, leakage checks, proxy-risk analysis,
-regional simulation, threshold analysis, and a small FastAPI/web product
-prototype. Current results show that the full synthetic-data model can achieve
-moderate ROC-AUC, but much of that performance depends on `late_payment_count`,
-a strong repayment-history proxy. A separate UCI public benchmark now tests the
-same pipeline on real public credit-card default data, where Random Forest
-reaches ROC-AUC about `0.775`. The project therefore treats the current system
-as a research and decision-support prototype, not a validated lending model.
+Thin-file borrowers have too little conventional credit history for many
+standard underwriting processes, but alternative behavioral data can introduce
+new privacy, proxy, and reliability risks. MicroScore studies this tension
+through a reproducible machine-learning pipeline and a working decision-support
+prototype. Experiment A uses 5,000 synthetic borrower records to compare
+Logistic Regression and Random Forest, audit leakage and proxy dependence, test
+feature-group ablations, examine calibration and classification errors, and
+compare three-zone lending policies. Experiment B applies the same evaluation
+discipline to the public UCI Default of Credit Card Clients dataset. On the
+synthetic held-out set, Random Forest reaches ROC-AUC 0.830 and Logistic
+Regression reaches 0.806. However, `late_payment_count` alone reaches
+directional ROC-AUC 0.827, and removing it reduces both models to approximately
+random ranking (0.486-0.492). On the UCI benchmark, Random Forest reaches
+ROC-AUC 0.775 and Brier score 0.159. These results show that a credible score
+cannot be judged from one headline metric: feature provenance, ablation,
+calibration, policy effects, and deployment context are equally important.
+MicroScore is therefore presented as a human-in-the-loop research prototype,
+not a validated lending model.
+
+**Keywords:** alternative credit scoring; thin-file borrowers; interpretable
+machine learning; ablation; calibration; decision thresholds; responsible AI
 
 ## 1. Introduction
 
-Traditional credit scoring can exclude borrowers who lack formal credit history,
-stable official employment, or collateral. This is especially important in
-regional and rural contexts where people may be economically active but poorly
-represented in formal banking data.
+Credit reporting can exclude people and small businesses that lack documented
+income, bank accounts, or a sufficiently detailed repayment record. Alternative
+data may help construct a fuller view of thin-file applicants, but it can also
+amplify inaccurate, opaque, or discriminatory signals [1, 2]. A technically
+strong classifier is therefore not sufficient. A lending support system must
+also reveal what drives the score, how sensitive the result is to individual
+features, what policy converts a probability into an action, and where the
+evidence stops.
 
-MicroScore asks whether behavioral financial data can help identify responsible
-borrowers while keeping lending risk visible to microfinance organizations.
+MicroScore investigates these questions in the context of a possible regional
+microfinance workflow in Pavlodar, Kazakhstan. The project combines two layers:
 
-## 2. Local Context
+- a research pipeline for modeling, ablation, calibration, error analysis,
+  segment review, and public benchmark validation;
+- a product prototype with borrower, analyst, and administrator workflows,
+  model provenance, audit events, threshold policies, and portfolio simulation.
 
-The project focuses on Pavlodar region. Public regional context shows a mix of
-urban, industrial, peri-urban, and rural communities. This makes Pavlodar a
-useful setting for studying financial inclusion, access gaps, and different
-borrower contexts.
+The intended contribution is not a new state-of-the-art scoring algorithm. It
+is a transparent engineering study of how an apparently promising model can be
+challenged before it is trusted.
 
-The current regional layer is not real borrower geography. It is a transparent
-simulation scaffold that must be replaced with measured data before pilot use.
+## 2. Research Questions
 
-## 3. Related Work
+The study asks four questions:
 
-Relevant areas include:
+1. How well do interpretable linear and nonlinear baseline models rank synthetic
+   credit risk after obvious leakage-like fields are removed?
+2. Does the result survive removal of repayment-history and feature groups that
+   may not exist for genuinely thin-file borrowers?
+3. How do probability thresholds change approval access, manual-review load,
+   and exposure to high-risk cases?
+4. Can the same evaluation pipeline operate on a real public benchmark without
+   treating that benchmark as local validation?
 
-- alternative credit scoring;
-- thin-file borrower risk modeling;
-- explainable machine learning;
-- model cards and responsible AI governance;
-- fairness and proxy-risk auditing;
-- financial inclusion and microfinance decision systems.
+## 3. Background And Related Work
 
-## 4. Data
+The World Bank and International Committee on Credit Reporting describe
+alternative data as a possible route to richer credit profiles for thin-file or
+credit-invisible customers, while emphasizing consent, data quality,
+discrimination, cybersecurity, and explainability risks [1, 2]. This motivates
+MicroScore's decision to treat alternative data as evidence to be audited, not
+as automatically fairer data.
 
-The current borrower-level dataset is synthetic. It contains behavioral and
-financial variables such as income, debt, digital banking activity, deposits,
-spending, loan amount, open loans, and late-payment count.
+The public benchmark originates from the UCI Default of Credit Card Clients
+dataset and the accompanying study by Yeh and Lien [3, 4]. It contains real
+Taiwan credit-card records and supports comparison with a recognized binary
+default-prediction task. Its geography, borrower type, and product remain
+different from Pavlodar microfinance, so it tests pipeline portability rather
+than local validity.
 
-The regional layer uses public context and explicit assumptions. Evidence-based
-fields and assumptions are separated in `docs/DATA_STATEMENT.md`.
+Model reporting follows the principle behind Model Cards: intended use,
+evaluation context, limitations, and ethical considerations should accompany
+performance results [5]. ROC analysis is used for ranking performance [6],
+while probability quality is also examined with Brier score and calibration
+tables because ranking alone does not establish reliable probabilities.
 
-The project also includes a separate public benchmark track using UCI Default
-of Credit Card Clients. This benchmark is not local to Kazakhstan, but it allows
-the same modeling, calibration, feature-importance, and error-analysis workflow
-to be tested on a real public credit-risk dataset.
+## 4. Data And Evidence Boundary
 
-The claim boundary for pilot-facing communication is documented in
-`docs/PILOT_EVIDENCE_CLAIMS.md`. It separates implemented prototype evidence,
-synthetic-only findings, public benchmark evidence, assumption scaffolds, and
-blocked real-world validation.
+### 4.1 Experiment A: Synthetic Prototype Data
 
-## 5. Methodology
+Experiment A uses `data/raw/credit_risk_dataset.csv`, containing 5,000
+synthetic rows and 22 raw columns. The target `credit_risk` has 3,829 positive
+and 1,171 negative examples. Variables include income, balance, deposits,
+digital banking activity, debt, loan amount, open loans, and late-payment count.
 
-The current pipeline includes:
+The dataset is suitable for deterministic software tests, workflow design, and
+diagnostic experiments. It is not evidence about real borrowers. Its target and
+feature relationships may reflect assumptions embedded during synthetic data
+creation rather than relationships that would generalize to an MFI population.
 
-- feature engineering;
-- leakage-feature removal;
-- Logistic Regression and Random Forest baselines;
-- scaling and one-hot encoding inside sklearn pipelines;
-- stratified train/test split;
-- 5-fold cross-validation;
-- ROC-AUC, accuracy, precision, recall, F1, and Brier score;
-- proxy-feature audit;
-- proxy-feature monitoring across repayment-history, monetary-scale,
-  affordability, debt/formal-credit, and digital-access signals;
-- feature-group ablation study;
-- local additive explanations for individual API scores;
-- false-positive and false-negative error analysis;
-- approve/review/decline threshold policy analysis;
-- saved research artifacts for metrics, ablation, calibration, and explanation
-  review;
-- segment/fairness audit;
-- decision-threshold analysis;
-- thin-file scenario without `late_payment_count`.
+The optional Pavlodar regional layer is also a scaffold. Administrative names
+and public regional context are separated from assumed fields such as digital
+access, distance, and seasonal-income risk. These assumptions are documented in
+`data/external/README.md` and must not be interpreted as measured borrower
+attributes.
 
-## 6. Leakage And Proxy Risk
+### 4.2 Experiment B: Public UCI Benchmark
 
-The project drops target-like or unrealistic features:
+Experiment B uses the UCI Default of Credit Card Clients dataset, which contains
+30,000 records from Taiwan and is distributed under CC BY 4.0 [3]. MicroScore
+normalizes its fields into the same evaluation workflow but keeps all benchmark
+artifacts in a separate directory. Results are never merged with the synthetic
+experiment.
 
-- `customer_id`
-- `credit_score`
-- `loan_default_history`
-- `fraud_flag`
+### 4.3 Leakage And Proxy Controls
 
-The most important remaining concern is `late_payment_count`. In the current
-synthetic dataset, it dominates model behavior and behaves like a strong proxy
-for default.
+The leakage-safe baseline removes identifiers and target-like or unrealistic
+fields:
 
-The project now monitors adjacent monetary-scale, affordability, debt, and
-digital-access features as proxy candidates too. This matters because
-uncalibrated amount units and digital-activity measures can proxy wealth,
-formal financial access, or rural infrastructure instead of borrower
-reliability.
+- `customer_id`;
+- `credit_score`;
+- `loan_default_history`;
+- `fraud_flag`.
 
-## 7. Models
+`late_payment_count` is retained in the baseline so its influence can be
+measured rather than hidden. It is then removed in a dedicated thin-file stress
+test. Adjacent monetary, affordability, formal-credit, and digital-access
+signals are monitored as possible proxies, because they may represent wealth,
+infrastructure, or prior access rather than repayment reliability.
 
-Current baselines:
+## 5. Experimental Method
 
-- Logistic Regression
-- Random Forest
+### 5.1 Split And Preprocessing
 
-The API prototype uses Logistic Regression because it is easier to explain and
-because exact local additive contribution factors can be shown to an analyst.
+Experiment A uses a stratified 80/20 train/test split with `random_state=42`.
+The held-out set therefore contains 1,000 records. Five-fold stratified
+cross-validation is computed on the training data. Numeric fields use median
+imputation and standardization; categorical fields use most-frequent imputation
+and one-hot encoding. All transformations are fitted inside scikit-learn
+pipelines to avoid training/test preprocessing leakage.
 
-## 8. Evaluation
+### 5.2 Models
 
-### Research Finding 1
+Two baselines are evaluated:
 
-The full synthetic-data model achieves moderate ranking performance:
+- Logistic Regression with balanced class weights and up to 5,000 iterations;
+- Random Forest with balanced class weights, 300 trees, and minimum leaf size
+  of 10.
 
-- Logistic Regression ROC-AUC: about `0.806`
-- Random Forest ROC-AUC: about `0.830`
+Logistic Regression is the operational explanation baseline because its
+transformed feature contributions are additive and inspectable. Random Forest
+tests whether nonlinear relationships improve ranking. Neither model is treated
+as causal.
 
-### Research Finding 2
+### 5.3 Metrics
 
-The performance is heavily dependent on `late_payment_count`:
+ROC-AUC measures ranking across thresholds; 0.5 represents random ranking and
+1.0 perfect ranking [6]. Accuracy, precision, recall, and F1 describe behavior
+at a chosen classification cutoff. Brier score measures squared probability
+error, with lower values preferred. Calibration tables compare mean predicted
+probability with observed outcome frequency inside ten bins.
 
-- single-feature ROC-AUC for `late_payment_count`: about `0.827`
-- Logistic Regression ROC-AUC without `late_payment_count`: about `0.486`
-- Random Forest ROC-AUC without `late_payment_count`: about `0.492`
+No metric is sufficient by itself. In an imbalanced dataset, accuracy can remain
+high even when ranking is uninformative. A good ROC-AUC does not guarantee
+calibrated probabilities or an acceptable lending policy.
 
-This suggests that the current synthetic dataset does not yet contain enough
-independent behavioral signal for reliable thin-file scoring.
+### 5.4 Ablation, Errors, And Segments
 
-### Research Finding 3
+The ablation study retrains each model under six scenarios: a raw diagnostic
+ceiling, a leakage-safe baseline, removal of `late_payment_count`, behavioral
+features only, regional features only, and behavioral plus regional features.
+A Dummy Classifier provides a reference point.
 
-Feature-group ablation confirms the same weakness:
+Error analysis records false positives and false negatives at probability 0.50.
+Segment tables describe outcomes by gender, employment, district, and settlement
+type. Because these attributes are synthetic or simulated, the tables are
+diagnostic checks, not proof of fairness.
 
-| Scenario | Logistic Regression ROC-AUC | Random Forest ROC-AUC | Interpretation |
-| --- | ---: | ---: | --- |
-| Raw all features | 0.966 | 1.000 | Diagnostic ceiling with leakage-like fields included. |
-| No leakage baseline | 0.806 | 0.830 | Strong but dependent on repayment-history proxy signal. |
-| No `late_payment_count` | 0.486 | 0.492 | Near-random thin-file stress test. |
-| Behavioral only | 0.499 | 0.494 | Synthetic behavioral-only signal is weak. |
-| Regional only | 0.551 | 0.551 | Simulated local context alone is not sufficient. |
-| Behavioral + regional | 0.547 | 0.529 | Regional scaffold does not solve the thin-file problem yet. |
+### 5.5 Decision Policies And Portfolio Uncertainty
 
-This makes the next data need clear: the project requires real, consented,
-local repayment and behavioral data before claiming predictive validity.
+A model probability is not a lending decision. MicroScore defines a lower
+approve threshold, an upper decline threshold, and a manual-review interval
+between them. Four named policies expose different risk and inclusion postures.
 
-### Research Finding 4
+Seeded Monte Carlo portfolio simulation then applies a selected policy to a scored
+portfolio under baseline, adverse, and severe scenarios. A shared macro shock
+creates correlated movement; application-level shocks represent residual
+calibration uncertainty; common random numbers support paired scenario
+comparison. The simulation does not alter borrower scores. Its monetary outputs
+remain prototype amount units, not calibrated KZT forecasts or regulatory VaR.
 
-The public UCI benchmark runs successfully as a separate Experiment B:
+## 6. Results
 
-| Model | ROC-AUC | Brier score | F1 |
-| --- | ---: | ---: | ---: |
-| Logistic Regression | 0.710 | 0.209 | 0.465 |
-| Random Forest | 0.775 | 0.159 | 0.541 |
+### Research Finding 1: Moderate Synthetic Ranking
 
-This strengthens the project because the modeling pipeline is no longer tested
-only on synthetic data. However, it remains a Taiwan credit-card benchmark and
-does not validate Pavlodar microfinance deployment.
+| Model | Test ROC-AUC | Brier score | Precision | Recall | F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Logistic Regression | 0.806 | 0.186 | 0.896 | 0.712 | 0.793 |
+| Random Forest | 0.830 | 0.143 | 0.986 | 0.641 | 0.777 |
 
-### Research Finding 5
+Random Forest has the strongest held-out ranking and probability error, while
+Logistic Regression has higher recall and F1 at the default cutoff. The
+cross-validation ROC-AUC means are 0.828 and 0.822 respectively, showing that
+the single held-out ordering is not a universal model ranking.
 
-Error analysis shows an important failure mode. At a `0.50` threshold, the
-Logistic Regression baseline has:
+### Research Finding 2: One Feature Nearly Reproduces The Full Result
 
-- `63` false positives;
-- `221` false negatives;
-- false-positive rate about `0.269`;
-- false-negative rate about `0.289`.
+`late_payment_count` alone has directional ROC-AUC about 0.827, close to the
+full Random Forest's 0.830. It is also the largest Logistic Regression
+coefficient by absolute magnitude and accounts for approximately 65% of Random
+Forest impurity importance in the current artifact.
 
-The most confident false negatives often have `late_payment_count = 0`. This is
-consistent with the ablation result: when repayment-history proxy information
-is absent, the current synthetic data does not provide enough independent
-behavioral signal to identify all high-risk borrowers.
+This does not prove that late-payment history is invalid. It shows that the
+synthetic result depends on a field that may be missing, sparse, or structurally
+different for the intended thin-file population.
 
-### Research Finding 6
+### Research Finding 3: Thin-File Ablation Collapses Ranking
 
-Three-zone threshold policies make the access-vs-risk trade-off concrete:
+| Scenario | Logistic Regression ROC-AUC | Random Forest ROC-AUC |
+| --- | ---: | ---: |
+| Raw diagnostic ceiling | 0.966 | 1.000 |
+| Leakage-safe baseline | 0.806 | 0.830 |
+| No `late_payment_count` | 0.486 | 0.492 |
+| Behavioral only | 0.499 | 0.494 |
+| Regional only | 0.551 | 0.551 |
+| Behavioral + regional | 0.547 | 0.529 |
 
-| Policy | Auto Approval Rate | Manual Review Rate | Auto Decline Rate | High-Risk Approval Rate |
+![Figure 1. Held-out ROC-AUC by ablation scenario.](../reports/research-artifacts/ablation_roc_auc.png)
+
+After `late_payment_count` is removed, both models rank near chance. Random
+Forest still reports accuracy 0.749 in that scenario, illustrating why accuracy
+alone is misleading under class imbalance: it can favor the majority class
+without learning a useful ranking.
+
+The raw diagnostic ceiling also demonstrates why leakage checks matter. Near
+perfect performance disappears when target-like fields are excluded.
+
+### Research Finding 4: The Public Benchmark Is Useful But Not Local Validation
+
+| Model | Test ROC-AUC | Brier score | Precision | Recall | F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Logistic Regression | 0.710 | 0.209 | 0.368 | 0.632 | 0.465 |
+| Random Forest | 0.775 | 0.159 | 0.522 | 0.561 | 0.541 |
+
+The UCI result shows that the same pipeline can process real public data and
+produce coherent model, calibration, feature, and error artifacts. It does not
+validate Pavlodar borrowers, microfinance products, local data collection, or
+local decision thresholds.
+
+### Research Finding 5: Error Costs Point In Different Directions
+
+At threshold 0.50, the synthetic Logistic Regression produces 63 false
+positives and 221 false negatives on the 1,000-row test set. The false-positive
+rate is 0.269 and the false-negative rate is 0.289. In MicroScore's risk label,
+a false positive may send a lower-risk borrower to unnecessary scrutiny, while
+a false negative may expose the lender to an unrecognized higher-risk case.
+
+The most confident false negatives often have `late_payment_count = 0`, which
+is consistent with the ablation finding: the remaining synthetic variables do
+not provide enough independent signal.
+
+![Figure 2. Calibration of held-out synthetic probabilities.](../reports/research-artifacts/calibration_curve.png)
+
+### Research Finding 6: Policy Choice Changes The Product Outcome
+
+| Policy | Approve | Review | Decline | Share of all high-risk cases approved |
 | --- | ---: | ---: | ---: | ---: |
-| lender_protective | 0.127 | 0.265 | 0.608 | 0.093 |
-| balanced_review | 0.278 | 0.243 | 0.479 | 0.206 |
-| inclusion_first | 0.392 | 0.270 | 0.338 | 0.289 |
-| starter_loan_review | 0.239 | 0.394 | 0.367 | 0.172 |
+| Lender protective | 12.7% | 26.5% | 60.8% | 9.3% |
+| Balanced review | 27.8% | 24.3% | 47.9% | 20.6% |
+| Inclusion first | 39.2% | 27.0% | 33.8% | 28.9% |
+| Starter-loan review | 23.9% | 39.4% | 36.7% | 17.2% |
 
-This shows why the product should support analyst review rather than a simple
-binary threshold. Different lending policies change inclusion and risk exposure
-in opposite directions.
+The table exposes a real systems trade-off. More permissive thresholds increase
+automatic access but also approve a larger share of high-risk cases. A wider
+review band reduces automatic decisions but requires analyst capacity. These
+figures are scenario outputs, not recommended production policies.
 
-### Research Finding 7
+### Research Finding 7: Unconstrained Profit Optimization Is Not A Sufficient Objective
 
-Decision thresholds create a strong access-vs-sustainability trade-off. Under
-the current lending assumptions, a purely profit-maximizing threshold can
-approve almost nobody. The project therefore reports constrained thresholds and
-segment approval rates instead of optimizing only for profit.
+Under the current illustrative interest margin and loss-given-default
+assumptions, the nominal profit-optimal threshold approves no applicants. This
+is a warning about both the dataset and the objective: optimizing only the
+modeled financial result can eliminate access. MicroScore therefore reports
+minimum-approval constraints, segment outcomes, and review policies rather than
+presenting one profit-maximizing cutoff as the answer.
 
-## 9. Decision Threshold Analysis
+## 7. Product And Engineering Integration
 
-The threshold module estimates:
+The research result is connected to a working system rather than left in a
+notebook. The static frontend supports borrower, MFI analyst, and administrator
+workspaces. Public mode uses a browser-local synthetic API; local mode calls a
+FastAPI backend with typed schemas and SQLite persistence. The backend records
+application lifecycle, model version, score provenance, human decisions, audit
+events, and tenant scope.
 
-- approval rate;
-- default rate among approved borrowers;
-- good-borrower rejection rate;
-- bad-borrower approval rate;
-- expected profit/loss;
-- segment approval rates.
+The analyst view presents probability, risk band, local factors, warnings,
+scenario comparison, affordability indicators, and decision history. Model
+activation does not rewrite earlier decisions: older score packets are marked
+stale while retaining their original provenance. Monte Carlo runs store their
+seed, assumptions, portfolio fingerprint, model version, and result for later
+comparison.
 
-This reframes credit scoring as a decision system rather than a pure
-classification problem.
+This architecture does not make the model valid, but it makes the model's use
+inspectable. The public demo proves interface behavior only; it does not prove
+backend deployment, production security, or real-data readiness.
 
-The product prototype now adds seeded Monte Carlo portfolio simulation on top
-of the deterministic policy table. A shared macro shock creates correlated
-movement across borrowers, application-level shocks represent calibration
-uncertainty, and common random numbers support paired baseline/adverse/severe
-comparison. The output is a scenario range for approvals, defaults, exposure,
-and one-period financial result. Because both probabilities and financial
-assumptions remain unvalidated for a local MFI, this is a methodological
-uncertainty demonstration rather than a forecast or regulatory risk measure.
-Monetary outputs remain prototype amount units until the KZT calibration
-evidence checklist is satisfied.
+## 8. Threats To Validity And Ethical Boundary
 
-## 10. Fairness And Segment Audit
+The main limitations are substantive, not cosmetic:
 
-The current audit reports segment metrics by:
+1. **Synthetic target dependence.** Experiment A may reproduce assumptions from
+   data construction rather than borrower behavior.
+2. **No local outcome validation.** No consented Kazakhstan MFI repayment data
+   has been used.
+3. **Benchmark mismatch.** UCI records concern Taiwan credit-card customers,
+   not thin-file microfinance applicants.
+4. **No temporal test.** The synthetic split is random, so it cannot establish
+   stability across economic cycles or data drift.
+5. **Exploratory segment analysis.** Synthetic demographic and regional groups
+   cannot establish real fairness or equal access.
+6. **Proxy and privacy risk.** Digital behavior, location, income, and prior
+   repayment may encode protected or structural disadvantage.
+7. **Uncalibrated economics.** Interest margin, loss given default, operating
+   costs, shocks, and amount units are explicit scenario assumptions.
+8. **Prototype infrastructure.** Local authentication, SQLite, and the partial
+   PostgreSQL path are not production controls.
 
-- gender;
-- employment status;
-- Pavlodar district;
-- settlement type.
+MicroScore must not be used to approve, decline, price, or rank real borrowers.
+A future pilot would require data minimization and consent, legal and privacy
+review, independent validation, temporal and segment testing, probability
+calibration, human appeal and override procedures, monitoring, incident
+response, and accountable institutional ownership.
 
-These audits are exploratory and cannot prove fairness without real data.
+## 9. Reproducibility
 
-## 11. Product Prototype
+The core study can be reproduced from the repository:
 
-The project includes:
+```powershell
+.venv\Scripts\python -m microscore --reports
+.venv\Scripts\python -m microscore --benchmark uci-default
+powershell -ExecutionPolicy Bypass -File scripts\check.ps1
+.venv\Scripts\python scripts\build_research_paper.py
+```
 
-- FastAPI backend;
-- SQLite local persistence;
-- borrower, MFI analyst, and admin roles;
-- application submission;
-- MFI scoring;
-- segment analytics;
-- audit trail;
-- static web frontend;
-- local positive/protective explanation factors;
-- false-positive and false-negative research reports;
-- threshold policy reports;
-- tenant-scoped Monte Carlo portfolio stress ranges;
-- generated `reports/research-artifacts/` outputs;
-- decision-support recommendations.
+Experiment A artifacts are stored in `reports/research-artifacts/`; Experiment B
+artifacts are stored in
+`reports/benchmark-artifacts/uci-default-credit-card-clients/`. The artifact
+manifest records 5,000 rows, target name, test size, calibration bins, and
+`random_state=42`. Source code, tests, model card, data statement, Monte Carlo
+methodology, and the claim boundary in `docs/PILOT_EVIDENCE_CLAIMS.md` are
+versioned with the paper.
 
-## 12. Limitations
+## 10. Future Validation Plan
 
-- Borrower-level data is synthetic.
-- Regional features are partly assumptions.
-- Public benchmark metrics come from Taiwan credit-card data, not Kazakhstan
-  microfinance data.
-- No real MFI validation yet.
-- Pilot evidence claims are bounded by `docs/PILOT_EVIDENCE_CLAIMS.md`.
-- The public demo is synthetic and browser-local; it does not validate backend
-  deployment or real lending use.
-- No SHAP explanations yet for nonlinear/tree model variants.
-- No longitudinal repayment modeling yet.
-- No production security review yet.
-- Monte Carlo stress and financial assumptions are not calibrated on MFI
-  outcomes.
+The next scientifically meaningful step is not a more complex model. It is
+better evidence:
 
-## 13. Future Work
+1. define the outcome, observation window, and operational decision with an MFI;
+2. validate the minimum-data schema and consent process before collection;
+3. obtain privacy-reviewed, de-identified pilot or partner data;
+4. use temporal and out-of-institution evaluation where feasible;
+5. repeat leakage, proxy, ablation, calibration, error, and segment analysis;
+6. compare Logistic Regression with nonlinear models using stability,
+   interpretability, and operational cost as well as discrimination;
+7. estimate thresholds and portfolio stresses from observed local outcomes;
+8. establish monitoring, appeals, overrides, and retraining governance.
 
-- Replace assumptions with official and measured local indicators.
-- Compare synthetic Pavlodar and UCI benchmark failure modes in the research
-  paper and model card.
-- Add SHAP or TreeSHAP explanations for nonlinear/tree model variants.
-- Track generated report artifacts over model versions.
-- Expand false-positive and false-negative case analysis with stakeholder
-  review.
-- Seek anonymized pilot data from an MFI.
-- Deploy a public demo and record a two-minute walkthrough video.
-- Explore game-theoretic incentives after the scoring workflow stabilizes.
+## 11. Conclusion
 
-## 14. Conclusion
+MicroScore's strongest result is a limitation discovered through ablation. A
+synthetic Random Forest appears promising at ROC-AUC 0.830, yet its ranking
+falls to 0.492 when one repayment-history proxy is removed. The public UCI
+benchmark confirms that the pipeline can operate on real data, but does not
+transfer validity to Pavlodar microfinance.
 
-MicroScore is strongest when it is honest about uncertainty. The current model
-is not a real-world validated lending system. Its value is that it exposes the
-core research problem clearly: alternative credit scoring must distinguish real
-behavioral signal from leakage, proxy variables, and unfair access barriers.
+The project therefore treats credit scoring as an evidence and decision-system
+problem rather than a leaderboard problem. A defensible prototype must connect
+model metrics to feature provenance, probability calibration, policy trade-offs,
+human review, auditability, and explicit non-use boundaries. That is the central
+engineering lesson of MicroScore.
+
+## References
+
+[1] International Committee on Credit Reporting, *Use of Alternative Data to
+Enhance Credit Reporting to Enable Access to Digital Finance Services by
+Individuals and SMEs Operating in the Informal Economy*, World Bank, 2018.
+[World Bank document](https://documents.worldbank.org/en/publication/documents-reports/documentdetail/099456306092223565)
+
+[2] International Committee on Credit Reporting, *The Use of Alternative Data
+in Credit Risk Assessment: Opportunities, Risks, and Challenges*, World Bank,
+2024. [World Bank PDF](https://openknowledge.worldbank.org/bitstreams/dde85d69-37ac-415e-bc9d-9d6990189da2/download)
+
+[3] I.-C. Yeh, *Default of Credit Card Clients*, UCI Machine Learning
+Repository, 2009. [DOI](https://doi.org/10.24432/C55S3H)
+
+[4] I.-C. Yeh and C.-H. Lien, "The comparisons of data mining techniques for
+the predictive accuracy of probability of default of credit card clients,"
+*Expert Systems with Applications*, vol. 36, no. 2, pp. 2473-2480, 2009.
+[DOI](https://doi.org/10.1016/j.eswa.2007.12.020)
+
+[5] M. Mitchell et al., "Model Cards for Model Reporting," in *Proceedings of
+the Conference on Fairness, Accountability, and Transparency*, pp. 220-229,
+2019. [DOI](https://doi.org/10.1145/3287560.3287596)
+
+[6] T. Fawcett, "An introduction to ROC analysis," *Pattern Recognition
+Letters*, vol. 27, no. 8, pp. 861-874, 2006.
+[DOI](https://doi.org/10.1016/j.patrec.2005.10.010)
+
+[7] Bureau of National Statistics of the Agency for Strategic Planning and
+Reforms of the Republic of Kazakhstan, "Pavlodar Region," accessed September
+27, 2026. [Official statistics](https://stat.gov.kz/ru/region/pavlodar/)
+
+[8] MicroScore repository, source code and reproducible artifacts.
+[Repository](https://github.com/alex-tereshkovv/micro-score)

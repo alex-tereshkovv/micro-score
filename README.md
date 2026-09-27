@@ -112,7 +112,7 @@ Manual API and web-server commands are documented in
 ## Read The Project
 
 - [Project brief](docs/PROJECT_BRIEF.md) — the shortest complete overview
-- [Research paper](docs/RESEARCH_PAPER.md) — question, method, evidence, limitations
+- [Research paper PDF](output/pdf/MicroScore_Research_Paper.pdf) · [source](docs/RESEARCH_PAPER.md) — question, method, evidence, limitations
 - [Technical interview guide](docs/TECHNICAL_INTERVIEW_GUIDE.md) — explain the central engineering and ML decisions
 - [Architecture](docs/ARCHITECTURE.md) — runtimes, data flow, boundaries, and gaps
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight

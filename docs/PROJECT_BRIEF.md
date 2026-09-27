@@ -23,7 +23,7 @@ product demo for reviewing risk, explanations, and policy trade-offs.
 2. Two-minute presentation: https://alex-tereshkovv.github.io/micro-score/showcase.html
 3. Engineering evidence: https://alex-tereshkovv.github.io/micro-score/evidence.html
 4. Role-based demo: https://alex-tereshkovv.github.io/micro-score/
-5. Research paper: [RESEARCH_PAPER.md](RESEARCH_PAPER.md)
+5. Research paper: [PDF](../output/pdf/MicroScore_Research_Paper.pdf) · [source](RESEARCH_PAPER.md)
 6. Model governance: [MODEL_CARD.md](MODEL_CARD.md)
 7. Technical interview preparation: [TECHNICAL_INTERVIEW_GUIDE.md](TECHNICAL_INTERVIEW_GUIDE.md)
 

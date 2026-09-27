@@ -17,6 +17,11 @@ The GitHub Pages workflow publishes the `apps/web/` directory:
 - `styles.css`
 - `assets/`
 
+The Pages workflow also stages the reproducible engineering case study and
+research paper from `output/pdf/` into `apps/web/assets/` before upload. The
+generated PDFs remain versioned outputs; they are not built from untrusted user
+input during deployment.
+
 No database, API server, real borrower records, or model training artifacts are
 deployed.
 

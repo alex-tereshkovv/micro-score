@@ -9,7 +9,10 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "apps" / "web"
 EVIDENCE_PAGE = WEB_ROOT / "evidence.html"
-DEPLOYMENT_ONLY_ASSETS = {"assets/MicroScore_Engineering_Case_Study.pdf"}
+DEPLOYMENT_ONLY_ASSETS = {
+    "assets/MicroScore_Engineering_Case_Study.pdf",
+    "assets/MicroScore_Research_Paper.pdf",
+}
 
 
 class EvidenceParser(HTMLParser):
