@@ -9,7 +9,7 @@ borrowers in Pavlodar, Kazakhstan.
 
 - [Role-based product demo](https://alex-tereshkovv.github.io/micro-score/)
 - [Three-minute engineering case study](https://alex-tereshkovv.github.io/micro-score/#/review)
-- [Two-minute guided presentation](https://alex-tereshkovv.github.io/micro-score/showcase.html)
+- [Two- or five-minute technical walkthrough](https://alex-tereshkovv.github.io/micro-score/showcase.html)
 - [Engineering evidence hub](https://alex-tereshkovv.github.io/micro-score/evidence.html)
 
 Demo accounts: `borrower@test.com`, `analyst@test.com`, and

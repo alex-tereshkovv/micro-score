@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#0f262e" />
     <meta
       name="description"
-      content="A two-minute guided walkthrough of the MicroScore responsible credit-risk engineering project."
+      content="A two- or five-minute guided technical walkthrough of the MicroScore responsible credit-risk engineering project."
     />
-    <title>MicroScore | Two-minute Walkthrough</title>
+    <title>MicroScore | Technical Walkthrough</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
-    <link rel="stylesheet" href="./showcase.css?v=20260921-showcase-v1" />
+    <link rel="stylesheet" href="./showcase.css?v=20260927-technical-defense-v2" />
   </head>
   <body>
     <div class="showcase-shell">
@@ -22,12 +22,26 @@
         </a>
         <div class="showcase-header-meta">
           <span>Computer Engineering</span>
-          <strong>Two-minute walkthrough</strong>
+          <strong data-tour-label>Two-minute overview</strong>
         </div>
         <div class="showcase-header-actions">
+          <div class="showcase-mode-switch" role="group" aria-label="Walkthrough depth">
+            <button type="button" data-tour-mode="overview" aria-pressed="true"><b>2 min</b><span>Overview</span></button>
+            <button type="button" data-tour-mode="technical" aria-pressed="false" aria-label="Five-minute technical defense"><b>5 min</b><span>Technical</span></button>
+          </div>
           <button class="showcase-quiet-button" type="button" data-autoplay aria-pressed="false">
             <span data-autoplay-icon aria-hidden="true">▶</span>
             <span data-autoplay-label>Play tour</span>
+          </button>
+          <button
+            class="showcase-quiet-button showcase-guide-button"
+            type="button"
+            data-guide-toggle
+            aria-controls="presenter-guide"
+            aria-expanded="false"
+          >
+            <span aria-hidden="true">?</span>
+            <span>Guide</span>
           </button>
           <a class="showcase-exit" href="./#/review">Exit</a>
         </div>
@@ -246,25 +260,113 @@
             </p>
             <div class="finale-actions">
               <a class="showcase-primary-action" href="./?demo=static#/login">Open role-based demo</a>
-              <a class="showcase-secondary-action" href="./assets/MicroScore_Engineering_Case_Study.pdf" download>Download evidence PDF</a>
+              <a class="showcase-secondary-action" href="./assets/MicroScore_Research_Paper.pdf">Read research paper</a>
+              <a class="showcase-text-action" href="./assets/MicroScore_Engineering_Case_Study.pdf">Engineering report</a>
               <a class="showcase-text-action" href="./evidence.html">Trace engineering evidence →</a>
             </div>
           </div>
           <div class="finale-proof">
             <div><strong>126</strong><span>Python unit and integration tests</span></div>
-            <div><strong>10 pages</strong><span>Reproducible engineering evidence report</span></div>
+            <div><strong>10 pages</strong><span>Reproducible research paper</span></div>
             <div><strong>Public</strong><span>Browser demo with synthetic data only</span></div>
             <p><span></span>Release gate passed before publication</p>
           </div>
         </article>
       </main>
 
+      <aside id="presenter-guide" class="presenter-guide" data-guide-panel aria-hidden="true">
+        <header class="presenter-guide-header">
+          <div>
+            <span>Presenter guide</span>
+            <strong data-guide-title>01 · Frame the problem</strong>
+          </div>
+          <button type="button" data-guide-close aria-label="Close presenter guide">×</button>
+        </header>
+        <div class="presenter-guide-body">
+          <article data-guide-scene="0">
+            <p class="guide-kicker">Core argument</p>
+            <h3>This is a decision-system project, not a model leaderboard.</h3>
+            <p>Explain the thin-file problem, the Pavlodar context, and the synthetic-data boundary in the same breath. The boundary is part of the engineering result.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>Why is this Computer Engineering?</dd></div>
+              <div><dt>Answer</dt><dd>It joins data pipelines, ML, typed APIs, persistence, security controls, frontend workflows, and reproducible release evidence.</dd></div>
+            </dl>
+            <a href="./assets/MicroScore_Research_Paper.pdf#page=3">Evidence · research questions and scope →</a>
+          </article>
+          <article data-guide-scene="1" hidden>
+            <p class="guide-kicker">Core argument</p>
+            <h3>The ablation result is more important than the headline score.</h3>
+            <p>Define ROC-AUC as ranking quality across thresholds. Then show that removing <code>late_payment_count</code> moves Random Forest from 0.830 to 0.492—near random ranking.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>Why Logistic Regression if Random Forest scores higher?</dd></div>
+              <div><dt>Answer</dt><dd>Logistic Regression is the operational explanation baseline because contributions are additive and inspectable; neither model is treated as causal.</dd></div>
+            </dl>
+            <a href="./assets/MicroScore_Research_Paper.pdf#page=6">Evidence · ablation and benchmark results →</a>
+          </article>
+          <article data-guide-scene="2" hidden>
+            <p class="guide-kicker">Core argument</p>
+            <h3>A probability becomes useful only inside a reviewable workflow.</h3>
+            <p>Trace one application through intake, score provenance, local explanation, affordability checks, human decision, and append-only history.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>How do frontend, API, and database fit together?</dd></div>
+              <div><dt>Answer</dt><dd>The browser calls typed FastAPI contracts; repositories persist application, score, decision, model, simulation, and audit records with tenant scope.</dd></div>
+            </dl>
+            <a href="./?demo=static#/mfi">Evidence · open the analyst workflow →</a>
+          </article>
+          <article data-guide-scene="3" hidden>
+            <p class="guide-kicker">Core argument</p>
+            <h3>Monte Carlo tests policy uncertainty, not individual borrowers.</h3>
+            <p>Describe the fixed seed, shared macro shock, application-level residual shocks, and paired baseline/adverse/severe scenarios. Repeating inputs and seed reproduces the result.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>Is this a loss forecast or regulatory VaR?</dd></div>
+              <div><dt>Answer</dt><dd>No. Inputs are scenario assumptions and monetary outputs are prototype units. The layer compares policies and exposes downside uncertainty.</dd></div>
+            </dl>
+            <a href="./assets/MicroScore_Research_Paper.pdf#page=5">Evidence · simulation method →</a>
+          </article>
+          <article data-guide-scene="4" hidden>
+            <p class="guide-kicker">Core argument</p>
+            <h3>The system preserves provenance and constrains unsafe state changes.</h3>
+            <p>Connect versioned models to immutable score packets, terminal decision guards, tenant-scoped repositories, secret-safe audit events, and release checks.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>Is PostgreSQL production-ready?</dd></div>
+              <div><dt>Answer</dt><dd>The 52-method adapter and migration contract are implemented, but managed hosting, identity, email delivery, privacy review, and real-data operations remain gates.</dd></div>
+            </dl>
+            <a href="./evidence.html#proof">Evidence · claim-to-proof map →</a>
+          </article>
+          <article data-guide-scene="5" hidden>
+            <p class="guide-kicker">Core argument</p>
+            <h3>Honest non-claims are part of responsible engineering.</h3>
+            <p>State clearly that public behavior is demonstrated, local predictive validity is not, and production authorization is blocked until external evidence exists.</p>
+            <dl>
+              <div><dt>Expect</dt><dd>What would make the project ready for a real pilot?</dd></div>
+              <div><dt>Answer</dt><dd>Consented local data, temporal and external validation, calibration, privacy and legal review, appeal paths, monitoring, and accountable institutional ownership.</dd></div>
+            </dl>
+            <a href="./evidence.html#limits">Evidence · current boundary →</a>
+          </article>
+          <article data-guide-scene="6" hidden>
+            <p class="guide-kicker">Close in one sentence</p>
+            <h3>High-impact models need systems that expose evidence, uncertainty, and human responsibility.</h3>
+            <p>End with the strongest finding, one engineering consequence, and one next validation step. Do not finish on the number of features.</p>
+            <dl>
+              <div><dt>Inspect</dt><dd>Research paper, working demo, evidence hub, source repository, and automated release gate.</dd></div>
+              <div><dt>Next</dt><dd>Privacy-safe validation with local experts or an MFI partner.</dd></div>
+            </dl>
+            <a href="./assets/MicroScore_Research_Paper.pdf">Evidence · read the complete paper →</a>
+          </article>
+        </div>
+        <footer class="presenter-guide-footer">
+          <span><kbd>G</kbd> guide</span>
+          <span><kbd>←</kbd><kbd>→</kbd> scenes</span>
+          <span><kbd>Space</kbd> play</span>
+        </footer>
+      </aside>
+
       <footer class="showcase-controls">
         <button class="showcase-nav-button" type="button" data-prev aria-label="Previous scene">←</button>
         <div class="showcase-progress-wrap">
           <div class="showcase-progress-meta">
             <strong data-scene-label>01 · The problem</strong>
-            <span><b data-scene-current>1</b> / <span data-scene-total>7</span></span>
+            <span><b data-mode-duration>2 min</b> · <b data-scene-current>1</b> / <span data-scene-total>7</span></span>
           </div>
           <div class="showcase-track" role="tablist" aria-label="Walkthrough scenes">
             <button type="button" class="is-active" data-scene-target="0" role="tab" aria-selected="true" aria-label="Scene 1: The problem"><i></i></button>
@@ -281,6 +383,6 @@
     </div>
 
     <noscript>This walkthrough requires JavaScript for scene navigation. The main MicroScore demo remains available.</noscript>
-    <script src="./showcase.js?v=20260921-showcase-v1"></script>
+    <script src="./showcase.js?v=20260927-technical-defense-v2"></script>
   </body>
 </html>

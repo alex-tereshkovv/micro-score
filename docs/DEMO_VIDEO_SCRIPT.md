@@ -1,13 +1,14 @@
 # Demo Video Script
 
-This script is for a two-minute admissions or portfolio demo video. Keep the
-recording calm, direct, and honest: MicroScore is a research-backed product
-prototype, not a deployed lending system.
+This script supports a two-minute portfolio overview and a five-minute technical
+defense. Keep the recording calm, direct, and honest: MicroScore is a
+research-backed product prototype, not a deployed lending system.
 
 ## Recording Setup
 
-- Use `showcase.html?autoplay=1` for the polished two-minute narrative. Use the
-  role demo only when a longer live-product recording is required.
+- Use `showcase.html?autoplay=1` for the polished two-minute narrative. Use
+  `showcase.html?mode=technical&guide=1` to rehearse the five-minute technical
+  defense. Close Presenter Guide before recording a clean autoplay pass.
 - Close unrelated browser tabs before recording. Admissions reviewers do not
   need to meet your entire tab ecosystem.
 - Record at 1920×1080 or 1440×900. The presentation is deterministic, uses no
@@ -27,14 +28,15 @@ staff/admin MFA code: 246810
 
 ## Presentation Mode Voiceover
 
-The public recording route is:
+The public overview route is:
 
 ```text
 https://alex-tereshkovv.github.io/micro-score/showcase.html?autoplay=1
 ```
 
 Each scene lasts 17 seconds. Use the arrow keys to retake a scene, Space to
-pause or resume, Home/End to jump, and Escape to return to the case study.
+pause or resume, `G` to open Presenter Guide, Home/End to jump, and Escape to
+return to the case study.
 
 ### 0:00 - 0:17 — The problem
 
@@ -89,6 +91,36 @@ report, a public synthetic-data demo, and the inspected source repository.
 Closing line: “MicroScore is not a claim that a model should decide who receives
 credit. It is an engineering argument that high-impact models should live inside
 systems that make evidence, uncertainty, and human responsibility visible.”
+
+## Five-Minute Technical Defense
+
+Open:
+
+```text
+https://alex-tereshkovv.github.io/micro-score/showcase.html?mode=technical&guide=1
+```
+
+Technical mode allocates 40 seconds per scene. Presenter Guide contains the
+core argument, the most likely follow-up question, a compact answer, and a link
+to the corresponding evidence. Rehearse until the guide is unnecessary.
+
+1. **Problem and scope:** explain thin-file lending, why this is a systems
+   problem, and why synthetic data limits the claim.
+2. **Research decision:** define ROC-AUC, explain the `0.830 → 0.492` ablation,
+   discuss `late_payment_count`, and justify Logistic Regression as the
+   explanation baseline rather than a causal model.
+3. **Product workflow:** trace intake → score packet → explanation →
+   affordability checks → human decision → append-only history.
+4. **Monte Carlo:** distinguish borrower scoring from seeded portfolio-policy
+   stress, explain shared and residual shocks, and reject a forecasting or VaR
+   interpretation.
+5. **Architecture:** connect browser, typed FastAPI contracts, repository layer,
+   model registry, audit events, tenant scope, and terminal state guards.
+6. **Boundary:** state what remains blocked before a real pilot: consented data,
+   external and temporal validation, calibration, privacy/legal review,
+   production identity, delivery, monitoring, and appeals.
+7. **Close:** summarize the research finding, the architecture change it caused,
+   and the next validation step. End on evidence and judgment, not feature count.
 
 ## Caption Summary
 

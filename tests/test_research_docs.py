@@ -42,6 +42,7 @@ class ResearchDocsTests(unittest.TestCase):
         builder = PROJECT_ROOT / "scripts" / "build_research_paper.py"
         paper_pdf = PROJECT_ROOT / "output" / "pdf" / "MicroScore_Research_Paper.pdf"
         self.assertTrue(builder.exists())
+        self.assertIn("invariant=1", builder.read_text(encoding="utf-8"))
         self.assertTrue(paper_pdf.exists())
         self.assertGreater(paper_pdf.stat().st_size, 250_000)
 
@@ -179,8 +180,11 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("portfolio-dashboard.js", static_deployment)
         self.assertIn("localhost ports", static_deployment)
         self.assertIn("showcase.html?autoplay=1", video_script)
+        self.assertIn("showcase.html?mode=technical&guide=1", video_script)
         self.assertIn("0:00 - 0:17", video_script)
         self.assertIn("Each scene lasts 17 seconds", video_script)
+        self.assertIn("40 seconds per scene", video_script)
+        self.assertIn("Presenter Guide", video_script)
         self.assertIn("Space to", video_script)
         self.assertIn("What Not To Say", video_script)
         self.assertIn("borrower@test.com", video_script)

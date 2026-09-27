@@ -62,15 +62,18 @@ Static demo mode without FastAPI:
 http://127.0.0.1:5173?demo=static
 ```
 
-Recording-ready admissions walkthrough:
+Recording-ready technical walkthrough:
 
 ```text
 http://127.0.0.1:5173/showcase.html
 http://127.0.0.1:5173/showcase.html?autoplay=1
+http://127.0.0.1:5173/showcase.html?mode=technical&guide=1
 ```
 
 The presentation uses seven deterministic scenes, supports arrow-key navigation,
-and can auto-advance in approximately two minutes without loading API data.
+and can auto-advance as either a two-minute overview or a five-minute technical
+defense without loading API data. Presenter Guide explains the argument, likely
+questions, and evidence for the active scene; press `G` to open it.
 
 Public engineering evidence hub:
 

@@ -569,6 +569,7 @@ def build_pdf(output_path: Path = DEFAULT_OUTPUT, source_path: Path = DEFAULT_SO
         author="Alexandr",
         subject="MicroScore interpretable credit-risk research paper",
         creator="MicroScore reproducible research-paper builder",
+        invariant=1,
     )
     frame = Frame(
         doc.leftMargin,

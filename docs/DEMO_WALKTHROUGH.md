@@ -1,8 +1,8 @@
 # Demo Walkthrough
 
-This walkthrough is for a two-minute admissions or portfolio review demo. It is
-designed for the static public demo, but the same flow also works with the local
-FastAPI prototype.
+This walkthrough supports a two-minute portfolio review and a five-minute
+technical defense. It is designed for the static public demo, but the same flow
+also works with the local FastAPI prototype.
 
 ## Demo URL
 
@@ -17,6 +17,17 @@ Planned public demo:
 ```text
 https://alex-tereshkovv.github.io/micro-score/
 ```
+
+Guided presentation modes:
+
+```text
+https://alex-tereshkovv.github.io/micro-score/showcase.html
+https://alex-tereshkovv.github.io/micro-score/showcase.html?mode=technical&guide=1
+```
+
+The technical route adds presenter guidance for defending model choice,
+ROC-AUC, proxy risk, ablation, Monte Carlo, threshold policies, and the
+frontend/API/database architecture. Press `G` to show or hide it.
 
 ## Demo Accounts
 
