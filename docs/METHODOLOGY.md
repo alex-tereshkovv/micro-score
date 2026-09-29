@@ -221,6 +221,26 @@ standard and thin-file scores into a human-review recommendation with rationale
 and next steps. This is intentionally framed as analyst support, not automated
 lending approval.
 
+## Model Robustness And Sampling Uncertainty
+
+The main ablation is challenged beyond the single `random_state=42` held-out
+split. `src/microscore/robustness.py` retrains the leakage-safe baseline and the
+no-`late_payment_count` scenario across ten deterministic stratified splits,
+computes 1,000-replicate stratified bootstrap intervals on the fixed held-out
+set, and applies controlled digital-access, affordability, and missing-history
+stresses to the same held-out records.
+
+The repeated-split result confirms the central finding: baseline mean ROC-AUC
+is `0.826` for Logistic Regression and `0.829` for Random Forest, while the
+thin-file means are `0.469` and `0.501`. Missing repayment history moves about
+`0.284-0.287` probability on average and flips `39.2%-50.2%` of classifications
+at the diagnostic `0.50` threshold.
+
+This suite measures sensitivity inside the synthetic experiment. It is not a
+temporal test, an external validation study, or evidence that the chosen stress
+magnitudes represent Pavlodar borrowers. The full protocol and artifact map are
+in [ROBUSTNESS_AND_UNCERTAINTY.md](ROBUSTNESS_AND_UNCERTAINTY.md).
+
 ## Monte Carlo Portfolio Uncertainty
 
 The Policy Lab now complements deterministic threshold tables with a seeded

@@ -85,6 +85,21 @@ Current ablation study:
 The ablation workflow also includes a Dummy Classifier baseline and Brier score
 for probability-quality review.
 
+Current robustness checks:
+
+| Scenario | Model | Mean ROC-AUC across 10 splits | Observed range |
+| --- | --- | ---: | ---: |
+| No leakage baseline | Logistic Regression | 0.826 | 0.806-0.844 |
+| No leakage baseline | Random Forest | 0.829 | 0.818-0.844 |
+| No `late_payment_count` | Logistic Regression | 0.469 | 0.444-0.492 |
+| No `late_payment_count` | Random Forest | 0.501 | 0.474-0.540 |
+
+The 1,000-replicate held-out bootstrap intervals for the thin-file ROC-AUCs
+both span `0.5`. A missing-repayment-history input stress flips `39.2%` of
+Logistic Regression and `50.2%` of Random Forest classifications at threshold
+`0.50`. These are synthetic sensitivity diagnostics, not temporal or local
+validation. See [ROBUSTNESS_AND_UNCERTAINTY.md](ROBUSTNESS_AND_UNCERTAINTY.md).
+
 Current public benchmark:
 
 | Dataset | Model | ROC-AUC | Brier score | Notes |

@@ -1,0 +1,5 @@
+scenario,model,runs,roc_auc_mean,roc_auc_std,roc_auc_min,roc_auc_max,roc_auc_p025,roc_auc_p975,brier_score_mean,brier_score_std
+leakage_safe_baseline,Logistic Regression,10,0.8261,0.0112,0.8063,0.8436,0.8076,0.8427,0.1729,0.0067
+leakage_safe_baseline,Random Forest,10,0.8292,0.0065,0.8181,0.8438,0.8196,0.8413,0.1376,0.0046
+no_late_payment_count,Logistic Regression,10,0.469,0.017,0.4442,0.4916,0.4449,0.4904,0.2519,0.0009
+no_late_payment_count,Random Forest,10,0.5007,0.0185,0.4743,0.5402,0.4754,0.5336,0.206,0.0015

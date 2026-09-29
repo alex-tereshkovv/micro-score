@@ -24,6 +24,7 @@ from .modeling import (
 from .policy import run_policy_analysis
 from .reporting import DEFAULT_REPORTS_DIR, generate_research_artifacts
 from .regional import add_pavlodar_regional_context, regional_summary
+from .robustness import run_robustness_suite
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +75,11 @@ def parse_args() -> argparse.Namespace:
         "--reports",
         action="store_true",
         help="Generate reproducible research artifacts under reports/research-artifacts.",
+    )
+    parser.add_argument(
+        "--robustness",
+        action="store_true",
+        help="Run repeated-split, bootstrap, and covariate-shift diagnostics.",
     )
     parser.add_argument(
         "--reports-dir",
@@ -128,6 +134,7 @@ def main() -> int:
             args.ablation,
             args.error_analysis,
             args.policy_analysis,
+            args.robustness,
         )
     ):
         artifacts = generate_research_artifacts(
@@ -316,6 +323,27 @@ def main() -> int:
             .head(16)
             .to_string(index=False)
         )
+
+    if args.robustness:
+        robustness = run_robustness_suite(load_dataset(args.data))
+
+        print("\nRepeated-split robustness")
+        print(robustness.split_summary.round(4).to_string(index=False))
+
+        print("\nHeld-out bootstrap intervals")
+        print(robustness.bootstrap_intervals.round(4).to_string(index=False))
+
+        print("\nControlled covariate-shift stress")
+        shift_columns = [
+            "model",
+            "scenario",
+            "roc_auc",
+            "brier_score",
+            "delta_roc_auc_vs_baseline",
+            "mean_abs_probability_shift",
+            "classification_flip_rate",
+        ]
+        print(robustness.covariate_shift[shift_columns].round(4).to_string(index=False))
 
     if args.reports:
         artifacts = generate_research_artifacts(

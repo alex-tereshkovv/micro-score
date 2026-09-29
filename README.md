@@ -30,7 +30,7 @@ lending service and does not collect real borrower data.
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 126 automated tests plus research, API, database, and browser smoke checks |
+| Quality gate | 130 automated tests plus research, API, database, and browser smoke checks |
 
 ## Why This Matters
 
@@ -48,12 +48,16 @@ of the evidence explicit.
 | Synthetic Random Forest | ROC-AUC `0.830` | Stronger nonlinear baseline |
 | `late_payment_count` only | ROC-AUC `0.827` | One feature nearly reproduces the full result |
 | Random Forest without that feature | ROC-AUC `0.492` | Thin-file signal falls near random |
+| 10-split Random Forest without that feature | mean ROC-AUC `0.501` | The collapse persists across split seeds |
+| Missing repayment-history stress | `50.2%` classification flips | Operational data availability can reverse decisions |
 | Public UCI Random Forest | ROC-AUC `0.775` | Pipeline works on a real public benchmark, but not local MFI data |
 
 The ablation result is the central research finding: the current synthetic
 dataset is useful for engineering the system, but it cannot justify real
 lending claims. Threshold policies also show that approval access, manual
-review workload, and loss exposure move in different directions.
+review workload, and loss exposure move in different directions. Repeated
+splits, held-out bootstrap intervals, and explicit covariate-shift tests now
+separate score robustness from portfolio-level Monte Carlo uncertainty.
 
 ## System Design
 
@@ -117,6 +121,7 @@ Manual API and web-server commands are documented in
 - [Architecture](docs/ARCHITECTURE.md) — runtimes, data flow, boundaries, and gaps
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight
 - [Monte Carlo methodology](docs/MONTE_CARLO_METHODOLOGY.md) — assumptions and statistical boundaries
+- [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress
 - [Engineering quality](docs/ENGINEERING_QUALITY.md) — verification strategy
 - [Pilot data schema](docs/PILOT_DATA_SCHEMA.md) — minimum-data and privacy boundary
 - [Engineering case study PDF](output/pdf/MicroScore_Engineering_Case_Study.pdf)

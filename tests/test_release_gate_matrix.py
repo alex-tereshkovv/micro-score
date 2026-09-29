@@ -204,6 +204,22 @@ MATRIX_ROWS = [
             "research_governance_docs_exist",
         ],
     },
+    {
+        "area": "Model robustness and uncertainty",
+        "artifacts": [
+            "tests/test_robustness.py",
+            "tests/test_reporting.py",
+            "src/microscore/robustness.py",
+            "docs/ROBUSTNESS_AND_UNCERTAINTY.md",
+        ],
+        "markers": [
+            "bootstrap_metric_intervals",
+            "run_repeated_split_stability",
+            "repayment_history_missing",
+            "robustness_summary.csv",
+            "not a temporal test",
+        ],
+    },
 ]
 
 

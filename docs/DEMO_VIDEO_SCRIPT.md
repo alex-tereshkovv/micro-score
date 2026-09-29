@@ -85,7 +85,7 @@ is privacy-safe validation with local experts or an MFI partner.
 
 ### 1:42 - 1:59 — Evidence and close
 
-End on the evidence: 126 Python tests, a reproducible ten-page engineering
+End on the evidence: 130 Python tests, a reproducible ten-page engineering
 report, a public synthetic-data demo, and the inspected source repository.
 
 Closing line: “MicroScore is not a claim that a model should decide who receives

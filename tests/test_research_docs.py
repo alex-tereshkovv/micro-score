@@ -29,6 +29,7 @@ class ResearchDocsTests(unittest.TestCase):
             "PUBLIC_DEMO_PLAN.md",
             "RELEASE_CHECKLIST.md",
             "RESEARCH_PAPER.md",
+            "ROBUSTNESS_AND_UNCERTAINTY.md",
             "SCREENSHOT_CHECKLIST.md",
             "STAKEHOLDER_INTERVIEW_GUIDE.md",
             "STATIC_DEMO_DEPLOYMENT.md",
@@ -56,6 +57,7 @@ class ResearchDocsTests(unittest.TestCase):
         for marker in [
             "An Interpretable Decision-Support Prototype",
             "Research Finding 3: Thin-File Ablation Collapses Ranking",
+            "Research Finding 4: The Ablation Result Survives Resampling",
             "Threats To Validity And Ethical Boundary",
             "The strongest result is not the headline score",
             "https://github.com/alex-tereshkovv/micro-score",
@@ -78,6 +80,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("ARCHITECTURE.md", readme)
         self.assertIn("PILOT_DATA_SCHEMA.md", readme)
         self.assertIn("MONTE_CARLO_METHODOLOGY.md", readme)
+        self.assertIn("ROBUSTNESS_AND_UNCERTAINTY.md", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
         self.assertIn("Key limitation", readme)
@@ -445,7 +448,8 @@ class ResearchDocsTests(unittest.TestCase):
             )
         ]
         self.assertEqual(finding_numbers, list(range(1, len(finding_numbers) + 1)))
-        self.assertEqual(len(finding_numbers), 7)
+        self.assertEqual(len(finding_numbers), 8)
+        self.assertIn("1,000 stratified bootstrap replicates", research_paper)
 
     def test_kzt_calibration_and_proxy_monitoring_boundaries_are_documented(self) -> None:
         kzt_pack = (DOCS_ROOT / "KZT_CALIBRATION_ASSUMPTIONS.md").read_text(
@@ -481,6 +485,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("proxy_monitoring.csv", model_card)
         self.assertIn("Proxy Monitoring v2", methodology)
         self.assertIn("proxy_monitoring.csv", reports_readme)
+        self.assertIn("robustness_summary.csv", reports_readme)
         self.assertIn("KZT calibration assumptions", validation_tracker)
 
     def test_pilot_evidence_claims_audit_separates_claim_classes(self) -> None:

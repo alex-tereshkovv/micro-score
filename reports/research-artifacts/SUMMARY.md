@@ -26,8 +26,13 @@ real-world lending validity.
 - `segment_policy_analysis.csv`
 - `example_explanation_summary.csv`
 - `example_explanation_factors.csv`
+- `robustness_split_runs.csv`
+- `robustness_summary.csv`
+- `bootstrap_intervals.csv`
+- `covariate_shift_stress.csv`
 - `calibration_curve.png`
 - `ablation_roc_auc.png`
+- `robustness_roc_auc.png`
 
 ## Model Metrics
 
@@ -58,6 +63,49 @@ real-world lending validity.
 | behavioral_plus_regional | Dummy Classifier | 28 | 0.5095 | 0.349 | 0.0 |
 | behavioral_plus_regional | Logistic Regression | 28 | 0.5469 | 0.2492 | -0.2594 |
 | behavioral_plus_regional | Random Forest | 28 | 0.529 | 0.2079 | -0.3008 |
+
+## Repeated-Split Robustness
+
+These runs vary the stratified train/test seed. The range is an empirical
+stability diagnostic, not a population-level confidence interval.
+
+| scenario | model | runs | roc_auc_mean | roc_auc_std | roc_auc_min | roc_auc_max | brier_score_mean |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| leakage_safe_baseline | Logistic Regression | 10 | 0.8261 | 0.0112 | 0.8063 | 0.8436 | 0.1729 |
+| leakage_safe_baseline | Random Forest | 10 | 0.8292 | 0.0065 | 0.8181 | 0.8438 | 0.1376 |
+| no_late_payment_count | Logistic Regression | 10 | 0.469 | 0.017 | 0.4442 | 0.4916 | 0.2519 |
+| no_late_payment_count | Random Forest | 10 | 0.5007 | 0.0185 | 0.4743 | 0.5402 | 0.206 |
+
+## Held-Out Bootstrap Intervals
+
+These stratified percentile intervals quantify sampling uncertainty on the
+fixed held-out split. They do not address geographic or temporal transport.
+
+| scenario | model | metric | point_estimate | ci_lower | ci_upper | confidence_level | bootstrap_iterations |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| leakage_safe_baseline | Logistic Regression | roc_auc | 0.8063 | 0.781 | 0.8287 | 0.95 | 1000 |
+| leakage_safe_baseline | Logistic Regression | brier_score | 0.1855 | 0.1717 | 0.2008 | 0.95 | 1000 |
+| leakage_safe_baseline | Random Forest | roc_auc | 0.8299 | 0.8043 | 0.8527 | 0.95 | 1000 |
+| leakage_safe_baseline | Random Forest | brier_score | 0.1426 | 0.1335 | 0.1527 | 0.95 | 1000 |
+| no_late_payment_count | Logistic Regression | roc_auc | 0.4863 | 0.4446 | 0.5286 | 0.95 | 1000 |
+| no_late_payment_count | Logistic Regression | brier_score | 0.2511 | 0.249 | 0.2533 | 0.95 | 1000 |
+| no_late_payment_count | Random Forest | roc_auc | 0.4918 | 0.4482 | 0.5316 | 0.95 | 1000 |
+| no_late_payment_count | Random Forest | brier_score | 0.2071 | 0.2038 | 0.2107 | 0.95 | 1000 |
+
+## Controlled Covariate-Shift Stress
+
+These deterministic input perturbations are sensitivity tests, not forecasts.
+
+| model | scenario | roc_auc | brier_score | delta_roc_auc_vs_baseline | mean_abs_probability_shift | classification_flip_rate |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logistic Regression | baseline | 0.8063 | 0.1855 | 0.0 | 0.0 | 0.0 |
+| Logistic Regression | digital_access_contraction | 0.806 | 0.1876 | -0.0003 | 0.0057 | 0.001 |
+| Logistic Regression | affordability_pressure | 0.8067 | 0.1844 | 0.0004 | 0.0047 | 0.004 |
+| Logistic Regression | repayment_history_missing | 0.488 | 0.1812 | -0.3183 | 0.2839 | 0.392 |
+| Random Forest | baseline | 0.8299 | 0.1426 | 0.0 | 0.0 | 0.0 |
+| Random Forest | digital_access_contraction | 0.8315 | 0.1427 | 0.0016 | 0.0146 | 0.013 |
+| Random Forest | affordability_pressure | 0.8256 | 0.1432 | -0.0043 | 0.0238 | 0.018 |
+| Random Forest | repayment_history_missing | 0.5074 | 0.2109 | -0.3225 | 0.2868 | 0.502 |
 
 ## Calibration Preview
 

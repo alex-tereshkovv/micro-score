@@ -51,7 +51,7 @@
           </div>
           <div class="hero-metrics">
             <div><strong>90+</strong><span>traceable engineering increments</span></div>
-            <div><strong>126</strong><span>Python unit and integration tests</span></div>
+            <div><strong>130</strong><span>Python unit and integration tests</span></div>
             <div><strong>52 / 52</strong><span>PostgreSQL repository methods</span></div>
             <div><strong>3 layers</strong><span>research, product, public review</span></div>
           </div>
@@ -70,7 +70,7 @@
             <p class="evidence-eyebrow">01 · Development journey</p>
             <h2>The architecture followed the evidence.</h2>
           </div>
-          <p>Eight repository milestones show how a notebook-scale experiment became a governed, role-based engineering system.</p>
+          <p>Nine repository milestones show how a notebook-scale experiment became a governed, role-based engineering system.</p>
         </div>
 
         <div class="journey-grid">
@@ -154,6 +154,16 @@
               <a href="https://github.com/alex-tereshkovv/micro-score/commit/95cd744" target="_blank" rel="noreferrer">Presentation mode · 95cd744 ↗</a>
             </div>
           </article>
+          <article data-milestone>
+            <div class="journey-date"><span>September 29</span><em>2026</em></div>
+            <div class="journey-marker">09</div>
+            <div class="journey-copy">
+              <span>Robustness audit</span>
+              <h3>Challenge the central result across samples and shifts</h3>
+              <p>Ten repeated splits, 1,000 bootstrap replicates, and controlled input stresses turned one ablation score into a reproducible stability finding.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/reports/research-artifacts/robustness_summary.csv" target="_blank" rel="noreferrer">Inspect robustness summary ↗</a>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -172,11 +182,11 @@
             <span>Research integrity</span>
             <h3>Weak independent signal → human decision support</h3>
             <dl>
-              <div><dt>Observed</dt><dd>Removing `late_payment_count` reduced synthetic ROC-AUC to 0.492.</dd></div>
+              <div><dt>Observed</dt><dd>Across ten splits, removing `late_payment_count` left Random Forest at mean ROC-AUC 0.501.</dd></div>
               <div><dt>Choice</dt><dd>Keep the model advisory and expose proxy sensitivity.</dd></div>
               <div><dt>Tradeoff</dt><dd>Less automation, stronger accountability.</dd></div>
             </dl>
-            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/reports/research-artifacts/ablation_study.csv" target="_blank" rel="noreferrer">Inspect ablation artifact ↗</a>
+            <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/reports/research-artifacts/robustness_summary.csv" target="_blank" rel="noreferrer">Inspect robustness artifact ↗</a>
           </article>
           <article data-decision>
             <div class="decision-number">02</div>
@@ -251,27 +261,33 @@
             <div role="cell"><span class="boundary-pill">Human review only</span></div>
           </article>
           <article role="row">
-            <div role="cell"><span class="proof-index">03</span><strong>Reproducible uncertainty</strong><small>Seed, fingerprint, paired scenarios, diagnostics</small></div>
+            <div role="cell"><span class="proof-index">03</span><strong>Model robustness, not one lucky split</strong><small>Repeated seeds, bootstrap intervals, controlled covariate shifts</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/reports/research-artifacts/robustness_summary.csv" target="_blank" rel="noreferrer">Robustness artifact ↗</a></div>
+            <div role="cell"><code>test_robustness.py</code><code>robustness_split_runs.csv</code></div>
+            <div role="cell"><span class="boundary-pill">Not temporal validation</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">04</span><strong>Reproducible uncertainty</strong><small>Seed, fingerprint, paired scenarios, diagnostics</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/simulation.py" target="_blank" rel="noreferrer">Simulation engine ↗</a></div>
             <div role="cell"><code>test_api_simulation.py</code><code>static-demo-smoke.js</code></div>
             <div role="cell"><span class="boundary-pill">Not a loss forecast</span></div>
           </article>
           <article role="row">
-            <div role="cell"><span class="proof-index">04</span><strong>Tenant and secret controls</strong><small>Scoped records, safe previews, session lifecycle</small></div>
+            <div role="cell"><span class="proof-index">05</span><strong>Tenant and secret controls</strong><small>Scoped records, safe previews, session lifecycle</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/security.py" target="_blank" rel="noreferrer">Security module ↗</a></div>
             <div role="cell"><code>test_api_security.py</code><code>live-security-workflow-smoke.py</code></div>
             <div role="cell"><span class="boundary-pill">Prototype identity</span></div>
           </article>
           <article role="row">
-            <div role="cell"><span class="proof-index">05</span><strong>PostgreSQL migration path</strong><small>Versioned schema and 52-method repository surface</small></div>
+            <div role="cell"><span class="proof-index">06</span><strong>PostgreSQL migration path</strong><small>Versioned schema and 52-method repository surface</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/src/microscore_api/postgres_repository.py" target="_blank" rel="noreferrer">Repository adapter ↗</a></div>
             <div role="cell"><code>test_postgres_repository_adapter.py</code><code>postgresql-migration-smoke.py</code></div>
             <div role="cell"><span class="boundary-pill">Runtime switch blocked</span></div>
           </article>
           <article role="row">
-            <div role="cell"><span class="proof-index">06</span><strong>Release discipline</strong><small>One command proves research, product, storage, and security</small></div>
+            <div role="cell"><span class="proof-index">07</span><strong>Release discipline</strong><small>One command proves research, product, storage, and security</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/scripts/check.ps1" target="_blank" rel="noreferrer">Release gate ↗</a></div>
-            <div role="cell"><code>126 Python tests</code><code>10 smoke workflows</code></div>
+            <div role="cell"><code>130 Python tests</code><code>10 smoke workflows</code></div>
             <div role="cell"><span class="boundary-pill">Evidence can still evolve</span></div>
           </article>
         </div>
@@ -315,7 +331,7 @@
         <div class="cta-grid">
           <a href="./showcase.html"><span>2 min</span><strong>Watch the overview</strong><em>→</em></a>
           <a href="./showcase.html?mode=technical&amp;guide=1"><span>5 min</span><strong>Practice the technical defense</strong><em>→</em></a>
-          <a href="./assets/MicroScore_Research_Paper.pdf"><span>10 pages</span><strong>Read the research paper</strong><em>↓</em></a>
+          <a href="./assets/MicroScore_Research_Paper.pdf"><span>Full paper</span><strong>Read the research paper</strong><em>↓</em></a>
         </div>
       </section>
     </main>

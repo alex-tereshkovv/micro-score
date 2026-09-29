@@ -38,8 +38,13 @@ Expected files:
 - `segment_policy_analysis.csv`
 - `example_explanation_summary.csv`
 - `example_explanation_factors.csv`
+- `robustness_split_runs.csv`
+- `robustness_summary.csv`
+- `bootstrap_intervals.csv`
+- `covariate_shift_stress.csv`
 - `calibration_curve.png`, when plotting dependencies are available
 - `ablation_roc_auc.png`, when plotting dependencies are available
+- `robustness_roc_auc.png`, when plotting dependencies are available
 
 These files are generated from synthetic borrower-level data. They are useful
 for research review and portfolio presentation, but they should not be treated
@@ -48,6 +53,11 @@ as validation for real lending decisions.
 `proxy_monitoring.csv` is a research guardrail. It flags repayment-history,
 monetary-scale, affordability, debt/formal-credit, and digital-access proxies
 that need review before KZT, thin-file, fairness, or pilot-readiness claims.
+
+The robustness files answer three narrower questions: whether the ablation
+finding survives different split seeds, how wide held-out bootstrap intervals
+are, and how much probabilities move under explicit synthetic input stresses.
+They do not replace temporal, geographic, or external validation.
 
 Benchmark artifacts are generated from public datasets such as UCI Default of
 Credit Card Clients. They validate the modeling pipeline on real public

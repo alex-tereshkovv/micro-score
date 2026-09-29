@@ -60,6 +60,8 @@ class ReportingTests(unittest.TestCase):
                 ablation_model_factories=factories,
                 random_state=23,
                 n_bins=5,
+                robustness_random_states=(7, 19, 23),
+                bootstrap_iterations=100,
             )
 
             for path in artifacts.files:
@@ -81,6 +83,9 @@ class ReportingTests(unittest.TestCase):
             segment_policy = pd.read_csv(artifacts.segment_policy_analysis_csv)
             explanation_summary = pd.read_csv(artifacts.explanation_summary_csv)
             explanation_factors = pd.read_csv(artifacts.explanation_factors_csv)
+            robustness_summary = pd.read_csv(artifacts.robustness_summary_csv)
+            bootstrap_intervals = pd.read_csv(artifacts.bootstrap_intervals_csv)
+            covariate_shift = pd.read_csv(artifacts.covariate_shift_csv)
 
             self.assertIn("test_brier_score", model_metrics.columns)
             self.assertIn("delta_test_roc_auc_vs_no_leakage", ablation.columns)
@@ -95,6 +100,9 @@ class ReportingTests(unittest.TestCase):
             self.assertIn("manual_review_rate", segment_policy.columns)
             self.assertIn("high_risk_probability", explanation_summary.columns)
             self.assertIn("direction", explanation_factors.columns)
+            self.assertIn("roc_auc_std", robustness_summary.columns)
+            self.assertIn("ci_lower", bootstrap_intervals.columns)
+            self.assertIn("classification_flip_rate", covariate_shift.columns)
             self.assertIn(
                 "MicroScore Research Artifacts",
                 artifacts.summary_markdown.read_text(encoding="utf-8"),
@@ -108,6 +116,8 @@ class ReportingTests(unittest.TestCase):
                 "Prototype amount units; not calibrated KZT.",
             )
             self.assertIn("proxy_monitoring.csv", manifest["files"])
+            self.assertEqual(manifest["bootstrap_iterations"], 100)
+            self.assertIn("robustness_summary.csv", manifest["files"])
 
 
 if __name__ == "__main__":

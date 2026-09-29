@@ -16,6 +16,13 @@ from .modeling import calibration_table
 from .paths import DEFAULT_DATA_PATH, PROJECT_ROOT, resolve_data_path
 from .policy import PolicyAnalysisReport, ThresholdPolicy, run_policy_analysis
 from .reporting import ResearchArtifactPaths, generate_research_artifacts
+from .robustness import (
+    RobustnessReport,
+    bootstrap_metric_intervals,
+    run_covariate_shift_stress,
+    run_repeated_split_stability,
+    run_robustness_suite,
+)
 from .regional import add_pavlodar_regional_context, regional_summary
 
 __all__ = [
@@ -30,12 +37,14 @@ __all__ = [
     "PolicyAnalysisReport",
     "PROJECT_ROOT",
     "ResearchArtifactPaths",
+    "RobustnessReport",
     "TARGET_COLUMN",
     "ThresholdPolicy",
     "ablation_scenarios",
     "add_behavioral_features",
     "add_pavlodar_regional_context",
     "calibration_table",
+    "bootstrap_metric_intervals",
     "load_uci_default_benchmark",
     "logistic_local_explanation",
     "make_model_frame",
@@ -49,5 +58,8 @@ __all__ = [
     "run_decision_analysis",
     "run_error_analysis",
     "run_policy_analysis",
+    "run_covariate_shift_stress",
+    "run_repeated_split_stability",
+    "run_robustness_suite",
     "run_uci_default_benchmark",
 ]

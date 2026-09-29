@@ -39,6 +39,7 @@ automated proof in the local gate or an explicitly documented manual follow-up.
 | Pre-pilot release readiness gate | `tests/test_api_integration.py`, `scripts/static-demo-smoke.js`, `scripts/live-security-workflow-smoke.py`, `tests/test_web_static.py`, `docs/RELEASE_CHECKLIST.md` | `/admin/governance/pre-pilot-readiness`, `PrePilotReadinessResponse`, `production_data_allowed`, `public_demo_allowed`, `pre_pilot_readiness_gate` |
 | Privacy intake and sensitive-field rejection | `tests/test_api_integration.py`, `tests/test_api_privacy.py`, `scripts/application-intake-smoke.js`, `scripts/static-demo-smoke.js`, `tests/test_web_static.py` | `consent_confirmed`, `borrower_consent`, `find_forbidden_signal_paths`, `privacy_guards`, `Unexpected behavioral field` |
 | Research documentation boundaries | `tests/test_research_docs.py`, `tests/test_reporting.py`, `tests/test_modeling.py`, `docs/RELEASE_CHECKLIST.md` | `synthetic data is not real-world lending`, `Model Card and Data Statement`, `calibration volatility`, `Monte Carlo portfolio simulation`, `research_governance_docs_exist` |
+| Model robustness and uncertainty | `tests/test_robustness.py`, `tests/test_reporting.py`, `src/microscore/robustness.py`, `docs/ROBUSTNESS_AND_UNCERTAINTY.md` | `bootstrap_metric_intervals`, `run_repeated_split_stability`, `repayment_history_missing`, `robustness_summary.csv`, `not a temporal test` |
 
 The matrix is enforced by `tests/test_release_gate_matrix.py`, which verifies
 that each matrix row references real test or smoke files and that its key

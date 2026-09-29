@@ -145,7 +145,29 @@ independent signal for the intended thin-file claim.
 - Report generation: `src/microscore/reporting.py`
 - Result table: `reports/research-artifacts/ablation_study.csv`
 
-## 5. Why Threshold Policies Instead Of One Cutoff?
+## 5. How Do You Know The Ablation Is Not One Lucky Split?
+
+### Short answer
+
+I do not rely on one point estimate. I repeat the baseline and thin-file
+experiments across ten stratified splits, bootstrap the fixed held-out sample
+1,000 times, and test deterministic input shifts. The baseline stays around
+`0.83` mean ROC-AUC, while the no-`late_payment_count` Random Forest stays near
+chance at `0.501` mean ROC-AUC. Its held-out bootstrap interval spans `0.5`.
+
+The missing-history stress is operationally important: it changes about half
+of Random Forest classifications at the diagnostic threshold. That supports a
+data-availability warning, but it still does not replace temporal or external
+validation.
+
+### Show the evidence
+
+- Protocol: `docs/ROBUSTNESS_AND_UNCERTAINTY.md`
+- Implementation: `src/microscore/robustness.py`
+- Summary: `reports/research-artifacts/robustness_summary.csv`
+- Tests: `tests/test_robustness.py`
+
+## 6. Why Threshold Policies Instead Of One Cutoff?
 
 ### Short answer
 
@@ -171,7 +193,7 @@ good-borrower decline, segment outcomes, and illustrative financial results.
 - Single-threshold analysis: `src/microscore/decision.py`
 - Product integration: `src/microscore_api/analytics.py`
 
-## 6. What Does Monte Carlo Add?
+## 7. What Does Monte Carlo Add?
 
 ### Short answer
 
@@ -199,7 +221,7 @@ are not based on real local MFI outcomes.
 - Engine: `src/microscore_api/simulation.py`
 - Run registry and tenant scope: `src/microscore_api/database.py`
 
-## 7. How Do Frontend, API, And Database Fit Together?
+## 8. How Do Frontend, API, And Database Fit Together?
 
 ### Short answer
 
@@ -242,7 +264,7 @@ the migration complete.
 - SQLite repository: `src/microscore_api/database.py`
 - PostgreSQL boundary: `src/microscore_api/postgres_repository.py`
 
-## 8. Why Human-In-The-Loop?
+## 9. Why Human-In-The-Loop?
 
 The data is synthetic, the model is not locally validated, probabilities may be
 miscalibrated, and threshold choices contain social and financial judgments.
@@ -253,7 +275,7 @@ Human review alone is not a complete safeguard: reviewers can introduce bias or
 rubber-stamp the model. That is why MicroScore also records decision history,
 model provenance, lifecycle events, and segment outcomes.
 
-## 9. What Are The Strongest Engineering Decisions?
+## 10. What Are The Strongest Engineering Decisions?
 
 - The same research package powers experimentation and API scoring instead of
   duplicating model logic.
@@ -265,7 +287,7 @@ model provenance, lifecycle events, and segment outcomes.
 - Tests cover research logic, API privacy and lifecycle, repository behavior,
   browser workflows, migration artifacts, and live smoke paths.
 
-## 10. What Would You Change With Real Pilot Data?
+## 11. What Would You Change With Real Pilot Data?
 
 1. Define the target and observation window with the MFI before training.
 2. Use consented, minimized data and separate identifiers from modeling fields.

@@ -1,0 +1,9 @@
+scenario,model,metric,point_estimate,ci_lower,ci_upper,interval_width,confidence_level,bootstrap_iterations
+leakage_safe_baseline,Logistic Regression,roc_auc,0.8063,0.781,0.8287,0.0478,0.95,1000
+leakage_safe_baseline,Logistic Regression,brier_score,0.1855,0.1717,0.2008,0.0292,0.95,1000
+leakage_safe_baseline,Random Forest,roc_auc,0.8299,0.8043,0.8527,0.0484,0.95,1000
+leakage_safe_baseline,Random Forest,brier_score,0.1426,0.1335,0.1527,0.0191,0.95,1000
+no_late_payment_count,Logistic Regression,roc_auc,0.4863,0.4446,0.5286,0.0841,0.95,1000
+no_late_payment_count,Logistic Regression,brier_score,0.2511,0.249,0.2533,0.0043,0.95,1000
+no_late_payment_count,Random Forest,roc_auc,0.4918,0.4482,0.5316,0.0834,0.95,1000
+no_late_payment_count,Random Forest,brier_score,0.2071,0.2038,0.2107,0.0069,0.95,1000

@@ -27,6 +27,13 @@ from .modeling import (
 )
 from .paths import DEFAULT_DATA_PATH, PROJECT_ROOT
 from .policy import run_policy_analysis
+from .robustness import (
+    DEFAULT_BOOTSTRAP_ITERATIONS,
+    DEFAULT_CONFIDENCE_LEVEL,
+    DEFAULT_SPLIT_SEEDS,
+    RobustnessReport,
+    run_robustness_suite,
+)
 
 DEFAULT_REPORTS_DIR = PROJECT_ROOT / "reports" / "research-artifacts"
 
@@ -51,6 +58,10 @@ class ResearchArtifactPaths:
     segment_policy_analysis_csv: Path
     explanation_summary_csv: Path
     explanation_factors_csv: Path
+    robustness_split_runs_csv: Path
+    robustness_summary_csv: Path
+    bootstrap_intervals_csv: Path
+    covariate_shift_csv: Path
     plot_paths: tuple[Path, ...] = ()
 
     @property
@@ -71,6 +82,10 @@ class ResearchArtifactPaths:
             self.segment_policy_analysis_csv,
             self.explanation_summary_csv,
             self.explanation_factors_csv,
+            self.robustness_split_runs_csv,
+            self.robustness_summary_csv,
+            self.bootstrap_intervals_csv,
+            self.covariate_shift_csv,
             *self.plot_paths,
         )
 
@@ -271,6 +286,79 @@ def _write_ablation_plot(ablation: pd.DataFrame, output_path: Path) -> Path | No
         return None
 
 
+def _write_robustness_plot(
+    split_summary: pd.DataFrame,
+    output_path: Path,
+) -> Path | None:
+    """Plot repeated-split mean ROC-AUC with the observed seed range."""
+
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except Exception:
+        return None
+
+    try:
+        plot_frame = split_summary.copy()
+        plot_frame["label"] = (
+            plot_frame["scenario"].map(
+                {
+                    "leakage_safe_baseline": "Baseline",
+                    "no_late_payment_count": "No late-payment count",
+                }
+            ).fillna(plot_frame["scenario"])
+            + " / "
+            + plot_frame["model"]
+        )
+        plot_frame = plot_frame.sort_values(["scenario", "model"])
+        positions = np.arange(len(plot_frame))
+        means = plot_frame["roc_auc_mean"].to_numpy()
+        lower = means - plot_frame["roc_auc_min"].to_numpy()
+        upper = plot_frame["roc_auc_max"].to_numpy() - means
+        colors = plot_frame["model"].map(
+            {
+                "Logistic Regression": "#078b84",
+                "Random Forest": "#315f9f",
+            }
+        ).fillna("#64747d")
+
+        fig, ax = plt.subplots(figsize=(10, 5.5))
+        ax.bar(positions, means, color=colors, alpha=0.9)
+        ax.errorbar(
+            positions,
+            means,
+            yerr=np.vstack([lower, upper]),
+            fmt="none",
+            ecolor="#162f39",
+            capsize=5,
+            linewidth=1.4,
+        )
+        ax.axhline(0.5, color="#b53b3b", linestyle="--", linewidth=1, label="Random ranking")
+        ax.set_xticks(positions, plot_frame["label"], rotation=18, ha="right")
+        ax.set_ylim(0, 1)
+        ax.set_ylabel("ROC-AUC")
+        ax.set_title("MicroScore Repeated-Split Robustness")
+        ax.text(
+            0.01,
+            0.02,
+            "Bars: mean across split seeds; whiskers: observed minimum-maximum.",
+            transform=ax.transAxes,
+            fontsize=9,
+            color="#55676f",
+        )
+        ax.grid(True, axis="y", alpha=0.22)
+        ax.legend(loc="upper right")
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=180)
+        plt.close(fig)
+        return output_path
+    except Exception:
+        plt.close("all")
+        return None
+
 def _write_summary(
     output_path: Path,
     *,
@@ -286,6 +374,7 @@ def _write_summary(
     segment_policy_analysis: pd.DataFrame,
     explanation_summary: pd.DataFrame,
     explanation_factors: pd.DataFrame,
+    robustness: RobustnessReport,
     artifact_paths: ResearchArtifactPaths,
 ) -> None:
     model_columns = [
@@ -362,6 +451,35 @@ def _write_summary(
         "manual_review_rate",
         "auto_decline_rate",
     ]
+    robustness_columns = [
+        "scenario",
+        "model",
+        "runs",
+        "roc_auc_mean",
+        "roc_auc_std",
+        "roc_auc_min",
+        "roc_auc_max",
+        "brier_score_mean",
+    ]
+    bootstrap_columns = [
+        "scenario",
+        "model",
+        "metric",
+        "point_estimate",
+        "ci_lower",
+        "ci_upper",
+        "confidence_level",
+        "bootstrap_iterations",
+    ]
+    shift_columns = [
+        "model",
+        "scenario",
+        "roc_auc",
+        "brier_score",
+        "delta_roc_auc_vs_baseline",
+        "mean_abs_probability_shift",
+        "classification_flip_rate",
+    ]
 
     files = "\n".join(
         f"- `{path.name}`"
@@ -392,6 +510,26 @@ real-world lending validity.
 ## Ablation Highlights
 
 {_markdown_table(ablation[ablation_columns], max_rows=18)}
+
+## Repeated-Split Robustness
+
+These runs vary the stratified train/test seed. The range is an empirical
+stability diagnostic, not a population-level confidence interval.
+
+{_markdown_table(robustness.split_summary[robustness_columns])}
+
+## Held-Out Bootstrap Intervals
+
+These stratified percentile intervals quantify sampling uncertainty on the
+fixed held-out split. They do not address geographic or temporal transport.
+
+{_markdown_table(robustness.bootstrap_intervals[bootstrap_columns])}
+
+## Controlled Covariate-Shift Stress
+
+These deterministic input perturbations are sensitivity tests, not forecasts.
+
+{_markdown_table(robustness.covariate_shift[shift_columns], max_rows=16)}
 
 ## Calibration Preview
 
@@ -446,6 +584,9 @@ def generate_research_artifacts(
     random_state: int = RANDOM_STATE,
     test_size: float = 0.2,
     n_bins: int = 10,
+    robustness_random_states: tuple[int, ...] = DEFAULT_SPLIT_SEEDS,
+    bootstrap_iterations: int = DEFAULT_BOOTSTRAP_ITERATIONS,
+    confidence_level: float = DEFAULT_CONFIDENCE_LEVEL,
 ) -> ResearchArtifactPaths:
     """Generate CSV, Markdown, and optional PNG research artifacts."""
 
@@ -482,6 +623,15 @@ def generate_research_artifacts(
         random_state=random_state,
         test_size=test_size,
     )
+    robustness = run_robustness_suite(
+        base_frame,
+        model_factories=factories,
+        random_states=robustness_random_states,
+        bootstrap_iterations=bootstrap_iterations,
+        confidence_level=confidence_level,
+        random_state=random_state,
+        test_size=test_size,
+    )
 
     paths = ResearchArtifactPaths(
         output_dir=output_path,
@@ -500,6 +650,10 @@ def generate_research_artifacts(
         segment_policy_analysis_csv=output_path / "segment_policy_analysis.csv",
         explanation_summary_csv=output_path / "example_explanation_summary.csv",
         explanation_factors_csv=output_path / "example_explanation_factors.csv",
+        robustness_split_runs_csv=output_path / "robustness_split_runs.csv",
+        robustness_summary_csv=output_path / "robustness_summary.csv",
+        bootstrap_intervals_csv=output_path / "bootstrap_intervals.csv",
+        covariate_shift_csv=output_path / "covariate_shift_stress.csv",
         plot_paths=(),
     )
 
@@ -537,12 +691,32 @@ def generate_research_artifacts(
         index=False,
     )
     _round_for_report(explanation_factors).to_csv(paths.explanation_factors_csv, index=False)
+    _round_for_report(robustness.split_runs).to_csv(
+        paths.robustness_split_runs_csv,
+        index=False,
+    )
+    _round_for_report(robustness.split_summary).to_csv(
+        paths.robustness_summary_csv,
+        index=False,
+    )
+    _round_for_report(robustness.bootstrap_intervals).to_csv(
+        paths.bootstrap_intervals_csv,
+        index=False,
+    )
+    _round_for_report(robustness.covariate_shift).to_csv(
+        paths.covariate_shift_csv,
+        index=False,
+    )
 
     plot_paths = tuple(
         path
         for path in (
             _write_calibration_plot(calibration, output_path / "calibration_curve.png"),
             _write_ablation_plot(ablation, output_path / "ablation_roc_auc.png"),
+            _write_robustness_plot(
+                robustness.split_summary,
+                output_path / "robustness_roc_auc.png",
+            ),
         )
         if path is not None
     )
@@ -563,6 +737,10 @@ def generate_research_artifacts(
         segment_policy_analysis_csv=paths.segment_policy_analysis_csv,
         explanation_summary_csv=paths.explanation_summary_csv,
         explanation_factors_csv=paths.explanation_factors_csv,
+        robustness_split_runs_csv=paths.robustness_split_runs_csv,
+        robustness_summary_csv=paths.robustness_summary_csv,
+        bootstrap_intervals_csv=paths.bootstrap_intervals_csv,
+        covariate_shift_csv=paths.covariate_shift_csv,
         plot_paths=plot_paths,
     )
 
@@ -574,11 +752,21 @@ def generate_research_artifacts(
         "random_state": random_state,
         "test_size": test_size,
         "n_bins": n_bins,
+        "robustness_split_seeds": list(robustness_random_states),
+        "bootstrap_iterations": bootstrap_iterations,
+        "confidence_level": confidence_level,
+        "covariate_shift_scenarios": sorted(
+            robustness.covariate_shift["scenario"].unique().tolist()
+        ),
         "files": [path.name for path in paths.files],
         "data_warning": "Synthetic borrower-level data; not validated for real lending.",
         "monetary_warning": "Prototype amount units; not calibrated KZT.",
         "proxy_monitoring_warning": (
             "Proxy monitoring is a research guardrail and does not change product decisions."
+        ),
+        "robustness_warning": (
+            "Resampling and synthetic covariate shifts test model sensitivity; "
+            "they do not establish temporal, geographic, or production validity."
         ),
     }
     paths.manifest_json.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -596,6 +784,7 @@ def generate_research_artifacts(
         segment_policy_analysis=policy_analysis.segment_policy_table,
         explanation_summary=explanation_summary,
         explanation_factors=explanation_factors,
+        robustness=robustness,
         artifact_paths=paths,
     )
     return paths

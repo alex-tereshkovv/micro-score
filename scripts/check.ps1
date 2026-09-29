@@ -76,6 +76,11 @@ try {
     Write-Host "Python: $python"
     Write-Host "Node:   $node"
 
+    Invoke-Step "Generate research robustness artifacts" {
+        & $python -m microscore --reports
+        Assert-LastExitCode "Research artifact generation"
+    }
+
     Invoke-Step "Build research paper PDF" {
         & $python scripts\build_research_paper.py
         Assert-LastExitCode "Research paper PDF build"

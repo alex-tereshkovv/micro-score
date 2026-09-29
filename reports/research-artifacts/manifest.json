@@ -6,6 +6,26 @@
   "random_state": 42,
   "test_size": 0.2,
   "n_bins": 10,
+  "robustness_split_seeds": [
+    7,
+    19,
+    42,
+    73,
+    101,
+    137,
+    211,
+    307,
+    401,
+    509
+  ],
+  "bootstrap_iterations": 1000,
+  "confidence_level": 0.95,
+  "covariate_shift_scenarios": [
+    "affordability_pressure",
+    "baseline",
+    "digital_access_contraction",
+    "repayment_history_missing"
+  ],
   "files": [
     "SUMMARY.md",
     "manifest.json",
@@ -22,10 +42,16 @@
     "segment_policy_analysis.csv",
     "example_explanation_summary.csv",
     "example_explanation_factors.csv",
+    "robustness_split_runs.csv",
+    "robustness_summary.csv",
+    "bootstrap_intervals.csv",
+    "covariate_shift_stress.csv",
     "calibration_curve.png",
-    "ablation_roc_auc.png"
+    "ablation_roc_auc.png",
+    "robustness_roc_auc.png"
   ],
   "data_warning": "Synthetic borrower-level data; not validated for real lending.",
   "monetary_warning": "Prototype amount units; not calibrated KZT.",
-  "proxy_monitoring_warning": "Proxy monitoring is a research guardrail and does not change product decisions."
+  "proxy_monitoring_warning": "Proxy monitoring is a research guardrail and does not change product decisions.",
+  "robustness_warning": "Resampling and synthetic covariate shifts test model sensitivity; they do not establish temporal, geographic, or production validity."
 }

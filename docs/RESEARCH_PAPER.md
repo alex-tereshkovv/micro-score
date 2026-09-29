@@ -11,7 +11,9 @@ through a reproducible machine-learning pipeline and a working decision-support
 prototype. Experiment A uses 5,000 synthetic borrower records to compare
 Logistic Regression and Random Forest, audit leakage and proxy dependence, test
 feature-group ablations, examine calibration and classification errors, and
-compare three-zone lending policies. Experiment B applies the same evaluation
+compare three-zone lending policies. Repeated-split evaluation, stratified
+bootstrap intervals, and deterministic covariate-shift stresses test whether
+the central ablation result is stable. Experiment B applies the same evaluation
 discipline to the public UCI Default of Credit Card Clients dataset. On the
 synthetic held-out set, Random Forest reaches ROC-AUC 0.830 and Logistic
 Regression reaches 0.806. However, `late_payment_count` alone reaches
@@ -59,8 +61,9 @@ The study asks four questions:
    may not exist for genuinely thin-file borrowers?
 3. How do probability thresholds change approval access, manual-review load,
    and exposure to high-risk cases?
-4. Can the same evaluation pipeline operate on a real public benchmark without
-   treating that benchmark as local validation?
+4. Does the main ablation result survive repeated splits, held-out resampling,
+   and controlled input-availability stresses?
+5. Can public data test portability without proving local validity?
 
 ## 3. Background And Related Work
 
@@ -189,6 +192,22 @@ calibration uncertainty; common random numbers support paired scenario
 comparison. The simulation does not alter borrower scores. Its monetary outputs
 remain prototype amount units, not calibrated KZT forecasts or regulatory VaR.
 
+### 5.6 Model Robustness And Sampling Uncertainty
+
+Model robustness is evaluated separately from portfolio simulation. First, the
+leakage-safe baseline and the no-`late_payment_count` ablation are retrained on
+ten deterministic stratified 80/20 splits. The resulting mean, standard
+deviation, and observed minimum-maximum describe sensitivity to split choice;
+they are not population confidence intervals.
+
+Second, 1,000 stratified bootstrap replicates of the fixed held-out set produce
+95% percentile intervals for ROC-AUC and Brier score. Third, models trained on
+the unmodified data score held-out records under three deterministic stresses:
+reduced digital activity, affordability pressure, and missing repayment
+history. The stress magnitudes are explicit synthetic perturbations, not
+economic forecasts. Metrics include probability movement and the share of
+classifications that cross the 0.50 diagnostic threshold.
+
 ## 6. Results
 
 ### Research Finding 1: Moderate Synthetic Ranking
@@ -235,7 +254,32 @@ without learning a useful ranking.
 The raw diagnostic ceiling also demonstrates why leakage checks matter. Near
 perfect performance disappears when target-like fields are excluded.
 
-### Research Finding 4: The Public Benchmark Is Useful But Not Local Validation
+### Research Finding 4: The Ablation Result Survives Resampling
+
+| Scenario | Model | Mean ROC-AUC | Standard deviation | Observed range |
+| --- | --- | ---: | ---: | ---: |
+| Leakage-safe baseline | Logistic Regression | 0.826 | 0.011 | 0.806-0.844 |
+| Leakage-safe baseline | Random Forest | 0.829 | 0.007 | 0.818-0.844 |
+| No late-payment count | Logistic Regression | 0.469 | 0.017 | 0.444-0.492 |
+| No late-payment count | Random Forest | 0.501 | 0.019 | 0.474-0.540 |
+
+![Figure 2. Mean held-out ROC-AUC and observed range across ten split seeds.](../reports/research-artifacts/robustness_roc_auc.png)
+
+The fixed-split 95% bootstrap intervals tell the same story. Baseline ROC-AUC
+is 0.806 [0.781, 0.829] for Logistic Regression and 0.830 [0.804, 0.853] for
+Random Forest. Without `late_payment_count`, the intervals become 0.486
+[0.445, 0.529] and 0.492 [0.448, 0.532], both spanning random ranking.
+
+Input stress also reveals a deployment dependency. Removing repayment-history
+availability reduces ROC-AUC by 0.318-0.323 and moves the absolute predicted
+probability by about 0.284 on average. At the diagnostic 0.50 threshold, 39.2%
+of Logistic Regression classifications and 50.2% of Random Forest
+classifications flip. The smaller digital-access and affordability stresses
+move at most 1.8% of classifications in this synthetic test. These results do
+not validate any stress magnitude; they show where data-availability monitoring
+must be concentrated.
+
+### Research Finding 5: The Public Benchmark Is Useful But Not Local Validation
 
 | Model | Test ROC-AUC | Brier score | Precision | Recall | F1 |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -247,7 +291,7 @@ produce coherent model, calibration, feature, and error artifacts. It does not
 validate Pavlodar borrowers, microfinance products, local data collection, or
 local decision thresholds.
 
-### Research Finding 5: Error Costs Point In Different Directions
+### Research Finding 6: Error Costs Point In Different Directions
 
 At threshold 0.50, the synthetic Logistic Regression produces 63 false
 positives and 221 false negatives on the 1,000-row test set. The false-positive
@@ -259,9 +303,9 @@ The most confident false negatives often have `late_payment_count = 0`, which
 is consistent with the ablation finding: the remaining synthetic variables do
 not provide enough independent signal.
 
-![Figure 2. Calibration of held-out synthetic probabilities.](../reports/research-artifacts/calibration_curve.png)
+![Figure 3. Calibration of held-out synthetic probabilities.](../reports/research-artifacts/calibration_curve.png)
 
-### Research Finding 6: Policy Choice Changes The Product Outcome
+### Research Finding 7: Policy Choice Changes The Product Outcome
 
 | Policy | Approve | Review | Decline | Share of all high-risk cases approved |
 | --- | ---: | ---: | ---: | ---: |
@@ -275,7 +319,7 @@ automatic access but also approve a larger share of high-risk cases. A wider
 review band reduces automatic decisions but requires analyst capacity. These
 figures are scenario outputs, not recommended production policies.
 
-### Research Finding 7: Unconstrained Profit Optimization Is Not A Sufficient Objective
+### Research Finding 8: Unconstrained Profit Optimization Is Not A Sufficient Objective
 
 Under the current illustrative interest margin and loss-given-default
 assumptions, the nominal profit-optimal threshold approves no applicants. This
@@ -346,9 +390,10 @@ Experiment A artifacts are stored in `reports/research-artifacts/`; Experiment B
 artifacts are stored in
 `reports/benchmark-artifacts/uci-default-credit-card-clients/`. The artifact
 manifest records 5,000 rows, target name, test size, calibration bins, and
-`random_state=42`. Source code, tests, model card, data statement, Monte Carlo
-methodology, and the claim boundary in `docs/PILOT_EVIDENCE_CLAIMS.md` are
-versioned with the paper.
+`random_state=42`, together with the ten robustness split seeds, bootstrap
+iteration count, confidence level, and covariate-shift scenarios. Source code,
+tests, model card, data statement, Monte Carlo methodology, and the claim
+boundary in `docs/PILOT_EVIDENCE_CLAIMS.md` are versioned with the paper.
 
 ## 10. Future Validation Plan
 
@@ -371,7 +416,9 @@ MicroScore's strongest result is a limitation discovered through ablation. A
 synthetic Random Forest appears promising at ROC-AUC 0.830, yet its ranking
 falls to 0.492 when one repayment-history proxy is removed. The public UCI
 benchmark confirms that the pipeline can operate on real data, but does not
-transfer validity to Pavlodar microfinance.
+transfer validity to Pavlodar microfinance. Repeated splits, bootstrap
+intervals, and missing-history stress confirm that the proxy-dependence finding
+is not an accident of one held-out sample.
 
 The project therefore treats credit scoring as an evidence and decision-system
 problem rather than a leaderboard problem. A defensible prototype must connect
