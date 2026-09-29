@@ -46,7 +46,10 @@ class AdmissionsReportTests(unittest.TestCase):
             self.assertGreater(output.stat().st_size, 100_000)
 
             reader = PdfReader(str(output))
-            self.assertEqual(len(reader.pages), 10)
+            # Arial on Windows produces 10 pages, while the metrically different
+            # DejaVu fallback used in Linux CI can move the final section to page 11.
+            self.assertGreaterEqual(len(reader.pages), 10)
+            self.assertLessEqual(len(reader.pages), 11)
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
             normalized_text = " ".join(text.split())
             for marker in [
