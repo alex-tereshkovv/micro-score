@@ -111,14 +111,13 @@ Main local components:
 - tenant-scoped, seeded Monte Carlo simulation for baseline/adverse/severe
   portfolio outcomes with audited assumptions, snapshot fingerprints, numerical
   precision diagnostics, and an immutable run registry;
-- SQLite demo database generated under `data/app/`, with explicit storage
+- SQLite demo database generated under `data/app/` by default, with explicit storage
   readiness metadata exposed through `/health`, plus
   `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
-  the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
-  JSONB mapping coverage, disposable PostgreSQL migration-smoke CI,
-  a partial PostgreSQL adapter with model registry, audit, organization,
-  identity/session, and staff invite delivery method groups completed,
-  tenant-scope parity checks, and remaining migration blockers;
+  the versioned `migrations/postgresql/0001_initial_schema.sql`, JSONB mapping,
+  PostgreSQL Runtime v1, explicit backend selection, credential-safe health
+  metadata, and disposable PostgreSQL 16 runtime parity CI across all seven
+  repository method groups;
 - seeded accounts for borrower, analyst, and admin testing;
 - scoring functions from the internal `microscore` package.
 
@@ -190,32 +189,18 @@ while the research is still pre-pilot.
 | Environment | Purpose | Data |
 | --- | --- | --- |
 | GitHub Pages | Public demo and technical review | Synthetic browser data only |
-| Local FastAPI | Product development | Seeded SQLite demo data |
+| Local FastAPI | Product development | Seeded SQLite by default; optional PostgreSQL Runtime v1 |
 | Research CLI | Model experiments | Synthetic and public benchmark datasets |
 | Future cloud API | Pilot candidate | Requires privacy, security, and legal review |
 
 ## Known Architecture Gaps
 
 - No production authentication provider yet.
-- No PostgreSQL repository backend, managed database secret, deployment, or
-  repository-level disposable PostgreSQL parity CI yet. A versioned 0001 schema
-  draft exists, is applied in disposable migration-smoke CI, and has a
-  `postgresql-repository-adapter-v9` surface with
-  `all_repository_method_groups_v1` covering `create_model_version`,
-  `get_model_version`, `get_active_model_version`, `list_model_versions`, and
-  `activate_model_version`, plus `record_audit_event`, `list_audit_events`,
-  `create_organization`, `get_organization`, `list_organizations`, and
-  `assign_user_organization`, plus user/MFA/session lifecycle methods from
-  `create_user` through `revoke_session_by_id`, plus staff invite delivery,
-  outbox worker-state, and idempotent webhook event methods from
-  `create_staff_invite` through
-  `update_staff_invite_delivery_worker_state`, plus tenant-scoped application
-  lifecycle methods from `create_application` through `clear_applications`,
-  plus portfolio simulation and analytics methods from
-  `create_portfolio_simulation` through `decision_analytics`; full backend
-  selection remains blocked until a runtime PostgreSQL repository, managed
-  database configuration, production migration runner, and repository-level
-  disposable PostgreSQL parity CI exist.
+- PostgreSQL Runtime v1 and repository-level disposable PostgreSQL parity CI are
+  implemented for all 52 methods. Managed database deployment is not: production
+  migration orchestration, encrypted backup/restore drills, retention,
+  least-privilege roles, monitoring, high availability, and secret rotation
+  remain required before real pilot data.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
 - Monte Carlo stress shifts and financial assumptions are transparent defaults,

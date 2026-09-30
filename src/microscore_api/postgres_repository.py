@@ -17,11 +17,18 @@ import json
 import os
 from typing import Any, NoReturn
 
+from .repository_errors import (
+    DuplicateModelVersionError,
+    DuplicateOrganizationError,
+    DuplicateUserError,
+    InvalidApplicationTransitionError,
+)
 
-POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v9"
+
+POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT_VERSION = "postgresql-repository-adapter-v10"
 POSTGRESQL_REPOSITORY_ADAPTER_MODULE = "microscore_api.postgres_repository"
 POSTGRESQL_REPOSITORY_ADAPTER_STATUS = "implemented"
-POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "all_repository_method_groups_v1"
+POSTGRESQL_REPOSITORY_ADAPTER_STAGE = "runtime_backend_v1"
 DEFAULT_SESSION_TTL_HOURS = 8.0
 STAFF_ROLES = {"admin", "mfi_analyst"}
 DECISION_VALUES = ("approve", "review", "decline")
@@ -188,18 +195,16 @@ POSTGRESQL_REPOSITORY_IMPLEMENTED_METHODS = (
     *POSTGRESQL_PORTFOLIO_ANALYTICS_METHODS,
 )
 POSTGRESQL_REPOSITORY_ADAPTER_LIMITATION = (
-    "PostgreSQL Repository Adapter v9 implements every SQLite repository "
+    "PostgreSQL Repository Adapter v10 implements every SQLite repository "
     "method group through an injected DB-API compatible connection factory, "
     "including model registry, audit, organization, identity/session, staff "
     "invite delivery, application lifecycle, portfolio simulation, and MFI "
-    "analytics flows. Runtime backend selection remains disabled until a "
-    "managed PostgreSQL connection, production migration runner, and "
-    "repository-level disposable PostgreSQL parity CI are implemented."
+    "analytics flows. Runtime selection and disposable PostgreSQL parity are "
+    "implemented, but managed hosting, backups, retention, secret rotation, "
+    "and operational recovery still require production validation."
 )
 
 
-class InvalidApplicationTransitionError(ValueError):
-    """Raised when an application lifecycle transition is not allowed."""
 USER_COLUMNS = (
     "email",
     "password_hash",
@@ -1331,7 +1336,7 @@ def repository_contract_summary() -> dict[str, object]:
         "status": POSTGRESQL_REPOSITORY_ADAPTER_STATUS,
         "stage": POSTGRESQL_REPOSITORY_ADAPTER_STAGE,
         "present": True,
-        "runtime_enabled": False,
+        "runtime_enabled": True,
         "method_count": len(methods),
         "implemented_method_count": len(implemented_methods),
         "implemented_methods": list(implemented_methods),
@@ -1370,6 +1375,12 @@ def _coerce_bool(value: object) -> bool:
 
 def _json_dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _is_unique_violation(exc: Exception) -> bool:
+    """Recognize DB-API unique violations without importing a driver here."""
+
+    return str(getattr(exc, "sqlstate", "")) == "23505"
 
 
 def _now_iso() -> str:
@@ -1433,15 +1444,19 @@ def _row_to_mapping(
     row: object,
     columns: tuple[str, ...] = MODEL_VERSION_COLUMNS,
 ) -> dict[str, Any]:
+    mapped: dict[str, Any]
     if isinstance(row, Mapping):
-        return dict(row)
-    if hasattr(row, "keys") and hasattr(row, "__getitem__"):
-        return {str(key): row[key] for key in row.keys()}
-    if isinstance(row, tuple):
-        return dict(zip(columns, row))
-    if isinstance(row, list):
-        return dict(zip(columns, row))
-    raise TypeError(f"Unsupported PostgreSQL row type: {type(row).__name__}")
+        mapped = dict(row)
+    elif hasattr(row, "keys") and hasattr(row, "__getitem__"):
+        mapped = {str(key): row[key] for key in row.keys()}
+    elif isinstance(row, (tuple, list)):
+        mapped = dict(zip(columns, row))
+    else:
+        raise TypeError(f"Unsupported PostgreSQL row type: {type(row).__name__}")
+    return {
+        key: value.isoformat() if isinstance(value, datetime) else value
+        for key, value in mapped.items()
+    }
 
 
 def postgres_model_version_from_row(row: object) -> dict[str, Any]:
@@ -2078,12 +2093,11 @@ def portfolio_analytics_method_group_parity_snapshot(
 
 
 class PostgresRepositoryAdapter:
-    """Partial PostgreSQL adapter for completed method-group parity tests.
+    """Complete PostgreSQL query adapter with an injected connection factory.
 
-    The adapter intentionally accepts an injected connection factory rather than
-    opening ``MICROSCORE_DATABASE_URL`` by itself. That keeps the production
-    backend disabled while still letting parity tests execute the first
-    repository method groups.
+    ``postgres_runtime.PostgresRuntimeRepository`` owns environment parsing,
+    driver loading, schema verification, and safe runtime selection. Keeping the
+    SQL adapter injectable preserves fast SQLite-vs-PostgreSQL parity tests.
     """
 
     def __init__(self, connection_factory: Callable[[], Any] | None = None) -> None:
@@ -2105,8 +2119,8 @@ class PostgresRepositoryAdapter:
         if self._connection_factory is None:
             raise RuntimeError(
                 "PostgreSQL repository adapter requires an injected "
-                "connection_factory for parity tests. Runtime backend selection "
-                "is still disabled."
+                "connection_factory. Use PostgresRuntimeRepository for configured "
+                "runtime backend selection."
             )
         connection = self._connection_factory()
         try:
@@ -2189,20 +2203,25 @@ class PostgresRepositoryAdapter:
         role: str,
         organization_id: str | None = None,
     ) -> dict[str, Any]:
-        self._write(
-            [
-                (
-                    CREATE_USER_SQL,
-                    {
-                        "email": email,
-                        "password_hash": password_hash,
-                        "role": role,
-                        "organization_id": organization_id,
-                        "created_at": _now_iso(),
-                    },
-                )
-            ]
-        )
+        try:
+            self._write(
+                [
+                    (
+                        CREATE_USER_SQL,
+                        {
+                            "email": email,
+                            "password_hash": password_hash,
+                            "role": role,
+                            "organization_id": organization_id,
+                            "created_at": _now_iso(),
+                        },
+                    )
+                ]
+            )
+        except Exception as exc:
+            if _is_unique_violation(exc):
+                raise DuplicateUserError(email) from exc
+            raise
         self.record_audit_event(
             actor_email=email,
             action="user_registered",
@@ -2424,26 +2443,31 @@ class PostgresRepositoryAdapter:
         random_state: int,
         metrics: dict[str, Any],
         limitations: list[str],
-        created_by: str,
+        created_by: str | None,
     ) -> dict[str, Any]:
-        self._write(
-            [
-                (
-                    CREATE_MODEL_VERSION_SQL,
-                    {
-                        "version": version,
-                        "model_name": model_name,
-                        "feature_schema_version": feature_schema_version,
-                        "training_data_label": training_data_label,
-                        "random_state": random_state,
-                        "metrics_json": _json_dumps(metrics),
-                        "limitations_json": _json_dumps(limitations),
-                        "created_by": created_by,
-                        "created_at": _now_iso(),
-                    },
-                )
-            ]
-        )
+        try:
+            self._write(
+                [
+                    (
+                        CREATE_MODEL_VERSION_SQL,
+                        {
+                            "version": version,
+                            "model_name": model_name,
+                            "feature_schema_version": feature_schema_version,
+                            "training_data_label": training_data_label,
+                            "random_state": random_state,
+                            "metrics_json": _json_dumps(metrics),
+                            "limitations_json": _json_dumps(limitations),
+                            "created_by": created_by,
+                            "created_at": _now_iso(),
+                        },
+                    )
+                ]
+            )
+        except Exception as exc:
+            if _is_unique_violation(exc):
+                raise DuplicateModelVersionError(version) from exc
+            raise
         return self.get_model_version(version) or {}
 
     def activate_model_version(self, version: str) -> dict[str, Any] | None:
@@ -2501,19 +2525,24 @@ class PostgresRepositoryAdapter:
         name: str,
         region: str,
     ) -> dict[str, Any]:
-        self._write(
-            [
-                (
-                    CREATE_ORGANIZATION_SQL,
-                    {
-                        "organization_id": organization_id,
-                        "name": name,
-                        "region": region,
-                        "created_at": _now_iso(),
-                    },
-                )
-            ]
-        )
+        try:
+            self._write(
+                [
+                    (
+                        CREATE_ORGANIZATION_SQL,
+                        {
+                            "organization_id": organization_id,
+                            "name": name,
+                            "region": region,
+                            "created_at": _now_iso(),
+                        },
+                    )
+                ]
+            )
+        except Exception as exc:
+            if _is_unique_violation(exc):
+                raise DuplicateOrganizationError(organization_id) from exc
+            raise
         return self.get_organization(organization_id) or {}
 
     def get_organization(self, organization_id: str) -> dict[str, Any] | None:
@@ -3299,11 +3328,11 @@ class PostgresRepositoryAdapterSkeleton:
             **repository_contract_summary(),
             "backend": self.backend,
             "database_url_env": self.database_url_env,
+            "runtime_enabled": self.runtime_enabled,
         }
 
     def connect(self) -> NoReturn:
         raise RuntimeError(
-            "PostgreSQL repository adapter runtime is disabled. "
-            "Use PostgresRepositoryAdapter with an injected connection_factory "
-            "only in parity tests until production storage controls are implemented."
+            "This contract-only skeleton runtime is disabled and does not open connections. Use "
+            "PostgresRuntimeRepository for the enabled PostgreSQL runtime."
         )

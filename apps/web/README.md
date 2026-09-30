@@ -97,8 +97,11 @@ password: password123
 staff/admin MFA code: 246810
 ```
 
-Applications are stored in the local SQLite database until an admin clears them
-from the Admin tab or the local database file is removed.
+Applications are stored in the local SQLite database by default until an admin
+clears them from the Admin tab or the local database file is removed. Developers
+can explicitly select PostgreSQL Runtime v1 with
+`MICROSCORE_STORAGE_BACKEND=postgresql` and `MICROSCORE_DATABASE_URL`; the
+public static demo never connects to either database.
 
 The borrower workspace automatically lists the signed-in account's applications
 with a visual lifecycle from submission through a terminal MFI decision. Its

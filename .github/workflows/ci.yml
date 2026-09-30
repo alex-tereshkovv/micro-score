@@ -118,3 +118,8 @@ jobs:
 
       - name: Validate and apply PostgreSQL migration draft
         run: python scripts/postgresql-migration-smoke.py
+
+      - name: Run PostgreSQL repository runtime parity
+        env:
+          MICROSCORE_STORAGE_BACKEND: postgresql
+        run: python scripts/postgresql-runtime-smoke.py

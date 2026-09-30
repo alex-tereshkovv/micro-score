@@ -463,13 +463,14 @@ async function main() {
     postgresqlReadinessInitial.status !== "blocked"
     || postgresqlReadinessInitial.runtime_backend !== "sqlite"
     || postgresqlReadinessInitial.target_backend !== "postgresql"
-    || postgresqlReadinessInitial.repository_backend_status !== "not_implemented"
+    || postgresqlReadinessInitial.repository_backend_status !== "implemented"
     || postgresqlReadinessInitial.production_ready
     || !postgresqlReadinessInitial.missing_environment?.includes("MICROSCORE_DATABASE_URL")
     || postgresqlReadinessInitial.migration_artifact_count !== 1
     || postgresqlReadinessInitial.latest_migration_version !== "0001_initial_schema"
     || !postgresqlReadinessInitial.versioned_migration_contract_present
     || !postgresqlReadinessInitial.disposable_migration_ci_present
+    || !postgresqlReadinessInitial.disposable_repository_ci_present
     || postgresqlReadinessInitial.repository_adapter_contract_status !== "implemented"
     || postgresqlReadinessInitial.repository_adapter_contract_method_count !== 52
     || postgresqlReadinessInitial.repository_adapter_implemented_method_count !== 52
@@ -481,7 +482,7 @@ async function main() {
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("portfolio_analytics")
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("model_registry")
     || !postgresqlReadinessInitial.repository_adapter_completed_method_groups?.includes("audit")
-    || postgresqlReadinessInitial.repository_adapter_stage !== "all_repository_method_groups_v1"
+    || postgresqlReadinessInitial.repository_adapter_stage !== "runtime_backend_v1"
     || !postgresqlReadinessInitial.repository_adapter_model_registry_read_present
     || !postgresqlReadinessInitial.repository_adapter_model_registry_write_present
     || !postgresqlReadinessInitial.repository_adapter_model_registry_group_present
@@ -505,11 +506,12 @@ async function main() {
     || postgresqlParityChecks.get("postgresql_staff_invites_delivery_method_group_adapter")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_application_lifecycle_method_group_adapter")?.status !== "pass"
     || postgresqlParityChecks.get("postgresql_portfolio_analytics_method_group_adapter")?.status !== "pass"
-    || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "blocker"
+    || postgresqlParityChecks.get("postgresql_repository_backend")?.status !== "pass"
+    || postgresqlParityChecks.get("postgresql_disposable_ci")?.status !== "pass"
     || postgresqlBlockers.has("postgresql_versioned_migrations_missing")
     || postgresqlBlockers.has("postgresql_disposable_migration_ci_missing")
     || !postgresqlReadinessInitial.schema_inventory?.some((row) => row.table === "loan_applications" && row.json_columns?.includes("behavioral_signals_json"))
-    || !String(postgresqlReadinessInitial.limitation || "").includes("schema and parity contract")
+    || !String(postgresqlReadinessInitial.limitation || "").includes("Runtime v1")
   ) {
     throw new Error("Expected PostgreSQL readiness to expose the versioned migration draft and remaining storage blockers");
   }
@@ -1551,6 +1553,7 @@ async function main() {
       postgresql_migration_artifacts: postgresqlReadinessInitial.migration_artifact_count,
       postgresql_latest_migration: postgresqlReadinessInitial.latest_migration_version,
       postgresql_disposable_migration_ci: postgresqlReadinessInitial.disposable_migration_ci_present,
+      postgresql_disposable_repository_ci: postgresqlReadinessInitial.disposable_repository_ci_present,
       postgresql_repository_adapter_contract: postgresqlReadinessInitial.repository_adapter_contract_status,
       postgresql_repository_adapter_methods: postgresqlReadinessInitial.repository_adapter_contract_method_count,
       postgresql_repository_adapter_implemented_methods: postgresqlReadinessInitial.repository_adapter_implemented_method_count,

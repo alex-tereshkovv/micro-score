@@ -27,6 +27,13 @@ from .postgres_repository import (
     POSTGRESQL_STAFF_INVITE_METHODS,
     repository_contract_summary,
 )
+from .repository_errors import (
+    DuplicateModelVersionError,
+    DuplicateOrganizationError,
+    DuplicateUserError,
+    InvalidApplicationTransitionError,
+    UnsupportedStorageBackendError,
+)
 
 DEFAULT_API_DB_PATH = PROJECT_ROOT / "data" / "app" / "microscore.sqlite3"
 DEFAULT_SESSION_TTL_HOURS = 8.0
@@ -47,6 +54,11 @@ POSTGRESQL_DISPOSABLE_MIGRATION_CI_MARKERS = (
     "pg_isready",
     "MICROSCORE_DATABASE_URL",
     "scripts/postgresql-migration-smoke.py",
+)
+POSTGRESQL_DISPOSABLE_REPOSITORY_CI_MARKERS = (
+    "postgres:16",
+    "MICROSCORE_STORAGE_BACKEND: postgresql",
+    "scripts/postgresql-runtime-smoke.py",
 )
 REQUIRED_SCHEMA_TABLES = (
     "mfi_organizations",
@@ -93,30 +105,11 @@ POSTGRESQL_MIGRATION_CHECKLIST = (
     "Run SQLite parity tests plus PostgreSQL integration tests against a disposable database.",
 )
 POSTGRESQL_READINESS_LIMITATION = (
-    "PostgreSQL Migration Readiness v1 is a schema and parity contract. It "
-    "does not connect to PostgreSQL, does not run production migrations, and "
-    "does not make the prototype storage production-ready."
+    "PostgreSQL Runtime v1 is implemented and exercised against disposable "
+    "PostgreSQL in CI. The public demo still runs on browser-local synthetic "
+    "state, and managed backups, restore drills, retention, secret rotation, "
+    "and production operations remain unverified."
 )
-
-
-class DuplicateUserError(ValueError):
-    """Raised when an email is already registered."""
-
-
-class DuplicateOrganizationError(ValueError):
-    """Raised when an organization id is already registered."""
-
-
-class DuplicateModelVersionError(ValueError):
-    """Raised when a model version is already registered."""
-
-
-class InvalidApplicationTransitionError(ValueError):
-    """Raised when an application lifecycle transition is not allowed."""
-
-
-class UnsupportedStorageBackendError(ValueError):
-    """Raised when configuration requests a repository backend not implemented yet."""
 
 
 def default_database_path() -> Path:
@@ -136,6 +129,27 @@ def configured_storage_backend() -> str:
     if backend in POSTGRESQL_STORAGE_ALIASES:
         return "postgresql"
     return backend
+
+
+def create_repository(db_path: str | Path | None = None) -> Any:
+    """Build the configured repository while keeping SQLite the safe default."""
+
+    backend = configured_storage_backend()
+    if backend == DEFAULT_STORAGE_BACKEND:
+        return MicroScoreRepository(db_path)
+    if backend == "postgresql":
+        if db_path is not None:
+            raise UnsupportedStorageBackendError(
+                "db_path is SQLite-only; configure PostgreSQL with "
+                "MICROSCORE_DATABASE_URL."
+            )
+        from .postgres_runtime import PostgresRuntimeRepository
+
+        return PostgresRuntimeRepository.from_environment()
+    raise UnsupportedStorageBackendError(
+        f"MICROSCORE_STORAGE_BACKEND={backend!r} is not supported. "
+        "Use 'sqlite' or 'postgresql'."
+    )
 
 
 def _now_iso() -> str:
@@ -708,14 +722,11 @@ class MicroScoreRepository:
                 },
                 {
                     "id": "postgresql_repository_backend",
-                    "status": "planned",
+                    "status": "ready",
                     "detail": (
-                        "PostgreSQL is not an active backend in this prototype. "
-                        "The adapter now implements every SQLite repository method "
-                        "group, including tenant-scoped portfolio simulation and "
-                        "analytics flows, but runtime backend selection still needs "
-                        "a managed database connection, production migration runner, "
-                        "and repository-level disposable PostgreSQL parity CI."
+                        "PostgreSQL Runtime v1 implements every SQLite repository "
+                        "method group and can be selected explicitly with environment "
+                        "configuration; SQLite remains the default local backend."
                     ),
                 },
                 {
@@ -805,11 +816,12 @@ class MicroScoreRepository:
                     ),
                 },
             ],
-            "postgresql_migration_status": "planned",
+            "postgresql_migration_status": "implemented",
             "postgresql_migration_checklist": list(POSTGRESQL_MIGRATION_CHECKLIST),
             "limitation": (
-                "PostgreSQL Readiness v1 documents the storage contract and startup "
-                "validation while the runtime repository remains SQLite-only."
+                "This process is using SQLite. PostgreSQL Runtime v1 exists and is "
+                "verified in disposable CI, but managed database operations remain "
+                "outside the prototype boundary."
             ),
         }
 
@@ -948,6 +960,17 @@ class MicroScoreRepository:
             for marker in POSTGRESQL_DISPOSABLE_MIGRATION_CI_MARKERS
         )
 
+    def postgresql_disposable_repository_ci_present(self) -> bool:
+        """Return whether CI runs the real repository against PostgreSQL."""
+
+        if not POSTGRESQL_CI_WORKFLOW_PATH.exists():
+            return False
+        workflow = POSTGRESQL_CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        return all(
+            marker in workflow
+            for marker in POSTGRESQL_DISPOSABLE_REPOSITORY_CI_MARKERS
+        )
+
     def postgresql_repository_adapter_contract(self) -> dict[str, Any]:
         """Return the contract-only PostgreSQL repository adapter summary."""
 
@@ -960,6 +983,9 @@ class MicroScoreRepository:
         migration_artifacts = self.postgresql_migration_artifacts()
         disposable_migration_ci_present = (
             self.postgresql_disposable_migration_ci_present()
+        )
+        disposable_repository_ci_present = (
+            self.postgresql_disposable_repository_ci_present()
         )
         repository_adapter_contract = self.postgresql_repository_adapter_contract()
         repository_adapter_contract_present = bool(
@@ -1394,61 +1420,47 @@ class MicroScoreRepository:
             },
             {
                 "key": "postgresql_repository_backend",
-                "status": "blocker",
+                "status": "pass",
                 "sqlite_evidence": (
-                    "Runtime repository supports sqlite only and rejects postgresql "
-                    "at startup; the adapter now covers the full repository "
-                    "method contract through injected PostgreSQL parity specs."
+                    "SQLite remains the default development backend; the runtime "
+                    "factory can explicitly select PostgreSQL for the complete "
+                    "repository contract."
                     if repository_adapter_contract_present
-                    else "Runtime repository supports sqlite only and rejects postgresql at startup."
+                    else "The PostgreSQL repository contract is missing."
                 ),
-                "postgres_requirement": "Implement a PostgreSQL repository backend behind the same API contract.",
+                "postgres_requirement": "Select PostgreSQL behind the same API repository contract.",
                 "action": (
-                    "Build the runtime PostgreSQL repository backend from the "
-                    "completed adapter method groups, wire managed configuration, "
-                    "and keep SQLite fallback explicit."
+                    "Keep MICROSCORE_STORAGE_BACKEND explicit and never expose the "
+                    "database URL in health or readiness responses."
                 ),
             },
             {
                 "key": "postgresql_disposable_ci",
-                "status": "blocker",
+                "status": "pass" if disposable_repository_ci_present else "blocker",
                 "sqlite_evidence": (
-                    "CI applies the migration draft to disposable PostgreSQL, but "
-                    "repository parity cannot run until a PostgreSQL backend exists."
-                    if disposable_migration_ci_present
-                    else "Current CI uses SQLite plus local live-smoke temporary databases."
+                    "CI runs the repository runtime workflow against disposable PostgreSQL 16."
+                    if disposable_repository_ci_present
+                    else "CI does not run repository runtime parity against PostgreSQL."
                 ),
                 "postgres_requirement": "Run parity tests against a disposable PostgreSQL database in CI.",
                 "action": (
-                    "Implement the PostgreSQL repository backend, then promote this "
-                    "migration smoke into backend parity tests."
-                    if disposable_migration_ci_present
-                    else "Add disposable PostgreSQL service tests before claiming storage production readiness."
+                    "Keep scripts/postgresql-runtime-smoke.py in the required PostgreSQL CI job."
+                    if disposable_repository_ci_present
+                    else "Add disposable PostgreSQL repository runtime tests before enabling the backend."
                 ),
             },
         ]
 
-        blockers = [
-            {
-                "key": "postgresql_repository_backend_not_implemented",
-                "severity": "blocker",
-                "summary": "The runtime repository backend is still SQLite-only.",
-                "action": "Implement and test a PostgreSQL repository backend before real pilot data.",
-            },
-            {
-                "key": "postgresql_disposable_parity_ci_missing",
-                "severity": "blocker",
-                "summary": (
-                    "CI applies the migration draft, but does not run repository parity "
-                    "tests against PostgreSQL yet."
-                ),
-                "action": (
-                    "Implement the PostgreSQL repository backend, then run the existing "
-                    "API/database contract tests against disposable PostgreSQL before "
-                    "enabling the backend."
-                ),
-            },
-        ]
+        blockers: list[dict[str, str]] = []
+        if not disposable_repository_ci_present:
+            blockers.append(
+                {
+                    "key": "postgresql_disposable_parity_ci_missing",
+                    "severity": "blocker",
+                    "summary": "CI does not run repository parity against PostgreSQL yet.",
+                    "action": "Run scripts/postgresql-runtime-smoke.py against disposable PostgreSQL.",
+                }
+            )
         if not versioned_migration_contract_present:
             blockers.append(
                 {
@@ -1514,16 +1526,22 @@ class MicroScoreRepository:
                 }
             )
 
-        status_value = "blocked" if blockers else "planned"
+        status_value = "blocked" if blockers else "ready"
         return {
             "status": status_value,
             "generated_at": _now_iso(),
             "runtime_backend": self.storage_backend,
             "target_backend": "postgresql",
-            "repository_backend_status": "not_implemented",
-            "migration_ready": False,
+            "repository_backend_status": "implemented",
+            "migration_ready": (
+                versioned_migration_contract_present
+                and disposable_migration_ci_present
+                and disposable_repository_ci_present
+                and repository_adapter_contract_present
+                and not missing_tables
+            ),
             "production_ready": False,
-            "live_connection_tested": False,
+            "live_connection_tested": disposable_repository_ci_present,
             "required_environment": list(POSTGRESQL_REQUIRED_ENVIRONMENT),
             "configured_environment": configured_environment,
             "missing_environment": missing_environment,
@@ -1537,6 +1555,7 @@ class MicroScoreRepository:
             ),
             "versioned_migration_contract_present": versioned_migration_contract_present,
             "disposable_migration_ci_present": disposable_migration_ci_present,
+            "disposable_repository_ci_present": disposable_repository_ci_present,
             "repository_adapter_contract_status": repository_adapter_contract.get(
                 "status"
             ),

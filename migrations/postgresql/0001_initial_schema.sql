@@ -1,9 +1,10 @@
--- MicroScore PostgreSQL Migration Draft v1
+-- MicroScore PostgreSQL Migration v1
 -- Version: 0001_initial_schema
--- Purpose: mirror the current SQLite prototype schema with PostgreSQL-native
---          data types before a real PostgreSQL repository backend exists.
--- Safety: this file is a reviewed readiness artifact. It is not executed by the
---         runtime yet and does not make storage production-ready by itself.
+-- Purpose: mirror the SQLite prototype schema with PostgreSQL-native data types
+--          for the optional PostgreSQL Runtime v1 backend.
+-- Safety: application runtime selection and disposable CI parity do not make a
+--         database production-ready without managed backups, retention, secret
+--         rotation, monitoring, recovery drills, and least-privilege roles.
 
 BEGIN;
 

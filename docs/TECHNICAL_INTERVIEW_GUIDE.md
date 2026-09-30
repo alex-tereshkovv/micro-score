@@ -251,10 +251,11 @@ and persistence layer.
 
 ### Database boundary
 
-SQLite is appropriate for the local prototype because it is simple and fully
-reproducible. PostgreSQL schema and adapter work exists, but the project reports
-the remaining runtime, migration, secret, and parity blockers instead of calling
-the migration complete.
+SQLite is appropriate as the default local backend because it is simple and
+fully reproducible. PostgreSQL Runtime v1 now executes the same 52-method
+repository contract and is tested against disposable PostgreSQL 16. That closes
+the code/runtime parity gap, but it does not prove managed backups, restore
+drills, retention, monitoring, high availability, or secret rotation.
 
 ### Show the evidence
 
@@ -263,6 +264,8 @@ the migration complete.
 - API: `src/microscore_api/main.py`
 - SQLite repository: `src/microscore_api/database.py`
 - PostgreSQL boundary: `src/microscore_api/postgres_repository.py`
+- PostgreSQL runtime: `src/microscore_api/postgres_runtime.py`
+- Disposable runtime proof: `scripts/postgresql-runtime-smoke.py`
 
 ## 9. Why Human-In-The-Loop?
 
@@ -297,8 +300,9 @@ model provenance, lifecycle events, and segment outcomes.
 6. Compare Logistic Regression with nonlinear models, but select on evidence,
    stability, interpretability, and operational cost rather than ROC-AUC alone.
 7. Establish monitoring, appeal, override, incident, and retraining procedures.
-8. Complete production identity, secrets, PostgreSQL, backups, deployment, and
-   independent security/privacy review before handling real borrower records.
+8. Complete production identity, secrets, managed PostgreSQL operations,
+   backup/restore, deployment, and independent security/privacy review before
+   handling real borrower records.
 
 ## Rapid-Fire Questions
 

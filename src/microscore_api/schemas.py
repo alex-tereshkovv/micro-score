@@ -95,7 +95,7 @@ class StorageCapabilityResponse(BaseModel):
 
 
 class StorageReadinessResponse(BaseModel):
-    backend: Literal["sqlite"]
+    backend: Literal["sqlite", "postgresql"]
     status: Literal["ready"]
     production_ready: bool
     database_path: str
@@ -104,7 +104,7 @@ class StorageReadinessResponse(BaseModel):
     json_columns: list[str]
     tenant_scoped_tables: list[str]
     capabilities: list[StorageCapabilityResponse]
-    postgresql_migration_status: Literal["planned"]
+    postgresql_migration_status: Literal["planned", "implemented"]
     postgresql_migration_checklist: list[str]
     limitation: str
 
@@ -112,6 +112,7 @@ class StorageReadinessResponse(BaseModel):
 class PostgresSchemaTableResponse(BaseModel):
     table: str
     present_in_sqlite: bool
+    present_in_runtime: bool | None = None
     column_count: int = Field(ge=0)
     primary_key_columns: list[str] = Field(default_factory=list)
     json_columns: list[str] = Field(default_factory=list)
@@ -161,7 +162,7 @@ class PostgresRepositoryAdapterContractGroupResponse(BaseModel):
 class PostgresMigrationReadinessResponse(BaseModel):
     status: Literal["ready", "planned", "blocked"]
     generated_at: str
-    runtime_backend: Literal["sqlite"]
+    runtime_backend: Literal["sqlite", "postgresql"]
     target_backend: Literal["postgresql"]
     repository_backend_status: Literal["not_implemented", "implemented"]
     migration_ready: bool = False
@@ -178,6 +179,7 @@ class PostgresMigrationReadinessResponse(BaseModel):
     latest_migration_version: str | None = None
     versioned_migration_contract_present: bool = False
     disposable_migration_ci_present: bool = False
+    disposable_repository_ci_present: bool = False
     repository_adapter_contract_status: Literal[
         "missing",
         "contract_only",

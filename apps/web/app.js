@@ -5312,7 +5312,7 @@ function renderPostgresqlReadiness(payload) {
     .map((table) => `
       <tr>
         <td>${escapeHtml(table.table)}</td>
-        <td>${table.present_in_sqlite ? "Yes" : "No"}</td>
+        <td>${(payload.runtime_backend === "postgresql" ? table.present_in_runtime : table.present_in_sqlite) ? "Yes" : "No"}</td>
         <td>${Number(table.column_count || 0)}</td>
         <td>${escapeHtml((table.primary_key_columns || []).join(", ") || "-")}</td>
         <td>${escapeHtml((table.json_columns || []).join(", ") || "-")}</td>
@@ -5342,7 +5342,7 @@ function renderPostgresqlReadiness(payload) {
         <div><dt>JSON cols</dt><dd>${Number(payload.json_column_count || 0)}</dd></div>
         <div><dt>Tenant cols</dt><dd>${Number(payload.tenant_scope_count || 0)}</dd></div>
         <div><dt>Migrations</dt><dd>${Number(payload.migration_artifact_count || 0)}${payload.latest_migration_version ? ` · ${escapeHtml(payload.latest_migration_version)}` : ""}</dd></div>
-        <div><dt>PG CI</dt><dd>${payload.disposable_migration_ci_present ? "Migration smoke" : "Missing"}</dd></div>
+        <div><dt>PG CI</dt><dd>${payload.disposable_repository_ci_present ? "Runtime parity" : payload.disposable_migration_ci_present ? "Migration only" : "Missing"}</dd></div>
         <div><dt>Adapter</dt><dd>${escapeHtml(formatPolicyName(payload.repository_adapter_contract_status || "missing"))}${payload.repository_adapter_implemented_method_count ? ` · ${Number(payload.repository_adapter_implemented_method_count)}/${Number(payload.repository_adapter_contract_method_count || 0)} methods` : ""}</dd></div>
         <div><dt>Adapter stage</dt><dd>${escapeHtml(payload.repository_adapter_stage || "not_started")}</dd></div>
         <div><dt>Live PG</dt><dd>${payload.live_connection_tested ? "Tested" : "Not tested"}</dd></div>
@@ -5363,7 +5363,7 @@ function renderPostgresqlReadiness(payload) {
           <thead>
             <tr>
               <th>Table</th>
-              <th>SQLite</th>
+              <th>${payload.runtime_backend === "postgresql" ? "Live PG" : "SQLite"}</th>
               <th>Columns</th>
               <th>PK</th>
               <th>JSON</th>

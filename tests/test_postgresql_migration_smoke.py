@@ -100,6 +100,24 @@ class PostgresqlMigrationSmokeTests(unittest.TestCase):
         self.assertIn("psql failed with exit code", script)
         self.assertNotIn("print(database_url", script)
 
+    def test_postgresql_runtime_smoke_covers_repository_boundaries(self) -> None:
+        script = (PROJECT_ROOT / "scripts" / "postgresql-runtime-smoke.py").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("create_repository", script)
+        self.assertIn("MICROSCORE_STORAGE_BACKEND", script)
+        self.assertIn("seed_demo_data", script)
+        self.assertIn("get_user_by_token", script)
+        self.assertIn("list_applications", script)
+        self.assertIn("record_application_decision", script)
+        self.assertIn("record_staff_invite_delivery_attempt", script)
+        self.assertIn("create_portfolio_simulation", script)
+        self.assertIn("segment_analytics", script)
+        self.assertIn("decision_analytics", script)
+        self.assertIn("postgresql_migration_readiness", script)
+        self.assertNotIn("print(repository.database_url", script)
+
 
 if __name__ == "__main__":
     unittest.main()

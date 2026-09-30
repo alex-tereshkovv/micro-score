@@ -122,7 +122,7 @@ class ApiIntegrationTests(unittest.TestCase):
             "loan_applications.organization_id",
             storage["tenant_scoped_tables"],
         )
-        self.assertEqual(storage["postgresql_migration_status"], "planned")
+        self.assertEqual(storage["postgresql_migration_status"], "implemented")
 
         borrower_token = self._register("borrower@example.com", "borrower")
         application_response = self.client.post(
@@ -856,14 +856,14 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             checks["storage_backend"]["evidence"]["postgresql_migration_status"],
-            "planned",
+            "implemented",
         )
         self.assertEqual(
             checks["storage_backend"]["evidence"]["postgresql_readiness_status"],
             "blocked",
         )
         self.assertIn(
-            "postgresql_repository_backend_not_implemented",
+                "postgresql_database_url_missing",
             checks["storage_backend"]["evidence"]["postgresql_blocker_keys"],
         )
         self.assertNotIn(
@@ -886,6 +886,11 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(
             checks["storage_backend"]["evidence"][
                 "postgresql_disposable_migration_ci_present"
+            ]
+        )
+        self.assertTrue(
+            checks["storage_backend"]["evidence"][
+                "postgresql_disposable_repository_ci_present"
             ]
         )
         self.assertEqual(
@@ -930,7 +935,7 @@ class ApiIntegrationTests(unittest.TestCase):
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_stage"
             ],
-            "all_repository_method_groups_v1",
+            "runtime_backend_v1",
         )
         self.assertTrue(payload["next_required_controls"])
         self.assertIn(
@@ -964,10 +969,10 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["status"], "blocked")
         self.assertEqual(payload["runtime_backend"], "sqlite")
         self.assertEqual(payload["target_backend"], "postgresql")
-        self.assertEqual(payload["repository_backend_status"], "not_implemented")
-        self.assertFalse(payload["migration_ready"])
+        self.assertEqual(payload["repository_backend_status"], "implemented")
+        self.assertTrue(payload["migration_ready"])
         self.assertFalse(payload["production_ready"])
-        self.assertFalse(payload["live_connection_tested"])
+        self.assertTrue(payload["live_connection_tested"])
         self.assertIn("MICROSCORE_DATABASE_URL", payload["missing_environment"])
         self.assertEqual(payload["present_table_count"], payload["required_table_count"])
         self.assertGreaterEqual(payload["json_column_count"], 1)
@@ -976,11 +981,12 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(payload["versioned_migration_contract_present"])
         self.assertTrue(payload["disposable_migration_ci_present"])
+        self.assertTrue(payload["disposable_repository_ci_present"])
         self.assertEqual(payload["repository_adapter_contract_status"], "implemented")
         self.assertTrue(payload["repository_adapter_contract_present"])
         self.assertEqual(
             payload["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v9",
+            "postgresql-repository-adapter-v10",
         )
         self.assertEqual(
             payload["repository_adapter_module"],
@@ -988,7 +994,7 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["repository_adapter_stage"],
-            "all_repository_method_groups_v1",
+            "runtime_backend_v1",
         )
         self.assertEqual(payload["repository_adapter_contract_method_count"], 52)
         self.assertEqual(payload["repository_adapter_implemented_method_count"], 52)
@@ -1179,16 +1185,15 @@ class ApiIntegrationTests(unittest.TestCase):
             ]["status"],
             "pass",
         )
-        self.assertEqual(parity["postgresql_repository_backend"]["status"], "blocker")
-        self.assertEqual(parity["postgresql_disposable_ci"]["status"], "blocker")
+        self.assertEqual(parity["postgresql_repository_backend"]["status"], "pass")
+        self.assertEqual(parity["postgresql_disposable_ci"]["status"], "pass")
         blockers = {row["key"] for row in payload["blockers"]}
-        self.assertIn("postgresql_repository_backend_not_implemented", blockers)
         self.assertNotIn("postgresql_versioned_migrations_missing", blockers)
         self.assertNotIn("postgresql_disposable_migration_ci_missing", blockers)
         self.assertNotIn("postgresql_repository_adapter_contract_missing", blockers)
-        self.assertIn("postgresql_disposable_parity_ci_missing", blockers)
+        self.assertNotIn("postgresql_disposable_parity_ci_missing", blockers)
         self.assertIn("postgresql_database_url_missing", blockers)
-        self.assertIn("schema and parity contract", payload["limitation"])
+        self.assertIn("Runtime v1", payload["limitation"])
         serialized = json.dumps(payload)
         self.assertNotIn("postgres://", serialized)
         self.assertNotIn("password=", serialized)

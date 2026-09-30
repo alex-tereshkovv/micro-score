@@ -162,24 +162,21 @@ git diff --check
   and tenant-isolation evidence, keeps `production_data_allowed=false` while
   blockers or warnings remain, and separates public demo readiness from real
   borrower pilot permission.
-- PostgreSQL Migration Readiness v1 exposes
+- PostgreSQL Runtime v1 exposes
   `/admin/storage/postgresql-readiness`, schema inventory, JSON-column mapping
-  coverage, the reviewed `migrations/postgresql/0001_initial_schema.sql` draft,
+  coverage, the versioned `migrations/postgresql/0001_initial_schema.sql`,
   tenant-scope parity checks, disposable migration-smoke CI evidence through
-  `scripts/postgresql-migration-smoke.py`, the fully grouped
-  `microscore_api.postgres_repository` adapter v9
-  (`all_repository_method_groups_v1`, 52 implemented methods out of 52, seven
-  completed method groups), missing
-  `MICROSCORE_DATABASE_URL`, and blockers for the unimplemented PostgreSQL
-  repository backend and repository-level PostgreSQL parity CI.
+  `scripts/postgresql-migration-smoke.py`, executable runtime parity through
+  `scripts/postgresql-runtime-smoke.py`, and the fully grouped
+  `microscore_api.postgres_repository` adapter v10
+  (`runtime_backend_v1`, 52 implemented methods out of 52, seven completed
+  method groups). SQLite remains the default; a SQLite process still reports a
+  missing `MICROSCORE_DATABASE_URL` without exposing secret values.
 - Storage readiness remains explicit: SQLite is the prototype backend,
-  PostgreSQL migration remains blocked/planned even with the 0001 draft,
-  migration-smoke CI, and completed model registry, audit, organization,
-  identity/session, staff invite delivery, application lifecycle, portfolio
-  simulation, and analytics adapter groups present, and no
-  release should imply production storage readiness until a real backend,
-  managed database connection, production migration runner, and repository
-  parity CI gate exist.
+  while PostgreSQL can be selected for the same repository contract. No release
+  should imply managed-production storage readiness until database deployment,
+  backup/restore, retention, monitoring, least-privilege roles, secret rotation,
+  and operational recovery have been validated.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

@@ -333,13 +333,14 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         postgresql_readiness["status"] == "blocked"
         and postgresql_readiness["runtime_backend"] == "sqlite"
         and postgresql_readiness["target_backend"] == "postgresql"
-        and postgresql_readiness["repository_backend_status"] == "not_implemented"
+        and postgresql_readiness["repository_backend_status"] == "implemented"
         and not postgresql_readiness["production_ready"]
         and "MICROSCORE_DATABASE_URL" in postgresql_readiness["missing_environment"]
         and postgresql_readiness["migration_artifact_count"] == 1
         and postgresql_readiness["latest_migration_version"] == "0001_initial_schema"
         and postgresql_readiness["versioned_migration_contract_present"]
         and postgresql_readiness["disposable_migration_ci_present"]
+        and postgresql_readiness["disposable_repository_ci_present"]
         and postgresql_readiness["repository_adapter_contract_status"] == "implemented"
         and postgresql_readiness["repository_adapter_contract_method_count"] == 52
         and postgresql_readiness["repository_adapter_implemented_method_count"] == 52
@@ -372,7 +373,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
             "audit"
             in postgresql_readiness["repository_adapter_completed_method_groups"]
         )
-        and postgresql_readiness["repository_adapter_stage"] == "all_repository_method_groups_v1"
+        and postgresql_readiness["repository_adapter_stage"] == "runtime_backend_v1"
         and postgresql_readiness["repository_adapter_model_registry_read_present"]
         and postgresql_readiness["repository_adapter_model_registry_write_present"]
         and postgresql_readiness["repository_adapter_model_registry_group_present"]
@@ -399,7 +400,8 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_parity["postgresql_staff_invites_delivery_method_group_adapter"]["status"] == "pass"
         and postgresql_parity["postgresql_application_lifecycle_method_group_adapter"]["status"] == "pass"
         and postgresql_parity["postgresql_portfolio_analytics_method_group_adapter"]["status"] == "pass"
-        and postgresql_parity["postgresql_repository_backend"]["status"] == "blocker",
+        and postgresql_parity["postgresql_repository_backend"]["status"] == "pass"
+        and postgresql_parity["postgresql_disposable_ci"]["status"] == "pass",
         "PostgreSQL readiness should expose the migration draft and remaining blockers",
     )
     assert_true(

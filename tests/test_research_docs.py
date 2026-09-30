@@ -25,6 +25,7 @@ class ResearchDocsTests(unittest.TestCase):
             "IMPACT.md",
             "PILOT_DATA_SCHEMA.md",
             "PILOT_EVIDENCE_CLAIMS.md",
+            "POSTGRESQL_RUNTIME.md",
             "PROXY_FEATURE_MONITORING.md",
             "PUBLIC_DEMO_PLAN.md",
             "RELEASE_CHECKLIST.md",
@@ -81,6 +82,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("PILOT_DATA_SCHEMA.md", readme)
         self.assertIn("MONTE_CARLO_METHODOLOGY.md", readme)
         self.assertIn("ROBUSTNESS_AND_UNCERTAINTY.md", readme)
+        self.assertIn("POSTGRESQL_RUNTIME.md", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
         self.assertIn("Key limitation", readme)

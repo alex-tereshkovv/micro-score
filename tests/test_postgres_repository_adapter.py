@@ -1552,10 +1552,10 @@ class PostgresRepositoryAdapterTests(unittest.TestCase):
         self.assertEqual(summary["status"], "implemented")
         self.assertEqual(
             summary["stage"],
-            "all_repository_method_groups_v1",
+            "runtime_backend_v1",
         )
         self.assertTrue(summary["present"])
-        self.assertFalse(summary["runtime_enabled"])
+        self.assertTrue(summary["runtime_enabled"])
         self.assertEqual(summary["method_count"], 52)
         self.assertEqual(summary["implemented_method_count"], 52)
         self.assertEqual(summary["pending_method_count"], 0)

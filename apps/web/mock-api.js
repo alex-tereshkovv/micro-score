@@ -67,7 +67,7 @@
   ];
   const PRE_PILOT_RELEASE_TARGET = "public portfolio demo and controlled MFI validation planning, not real borrower onboarding";
   const PRE_PILOT_READINESS_LIMITATION = "Pre-Pilot Readiness Gate v1 aggregates live prototype evidence for release planning. It does not grant permission to collect real borrower data; production IdP/TOTP/WebAuthn, managed PostgreSQL, real KZT calibration, legal/privacy sign-off, and transactional invite delivery must be completed before a real pilot.";
-  const POSTGRESQL_READINESS_LIMITATION = "PostgreSQL Migration Readiness v1 is a schema and parity contract. It does not connect to PostgreSQL, does not run production migrations, and does not make the prototype storage production-ready.";
+  const POSTGRESQL_READINESS_LIMITATION = "PostgreSQL Runtime v1 is implemented and exercised against disposable PostgreSQL in CI. The static demo remains browser-local, and managed backups, restore drills, retention, secret rotation, and production operations remain unverified.";
   const POSTGRESQL_SCHEMA_INVENTORY = [
     {
       table: "mfi_organizations",
@@ -261,11 +261,11 @@
   ];
   const POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT = {
     module: "microscore_api.postgres_repository",
-    version: "postgresql-repository-adapter-v9",
+    version: "postgresql-repository-adapter-v10",
     status: "implemented",
-    stage: "all_repository_method_groups_v1",
+    stage: "runtime_backend_v1",
     present: true,
-    runtime_enabled: false,
+    runtime_enabled: true,
     method_count: 52,
     implemented_method_count: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS.length,
     implemented_methods: POSTGRESQL_REPOSITORY_ADAPTER_IMPLEMENTED_METHODS,
@@ -1812,18 +1812,6 @@
       .reduce((total, table) => total + table.tenant_scope_columns.length, 0);
     const blockers = [
       {
-        key: "postgresql_repository_backend_not_implemented",
-        severity: "blocker",
-        summary: "The runtime repository backend is still SQLite-only.",
-        action: "Implement and test a PostgreSQL repository backend before real pilot data.",
-      },
-      {
-        key: "postgresql_disposable_parity_ci_missing",
-        severity: "blocker",
-        summary: "CI applies the migration draft, but does not run repository parity tests against PostgreSQL yet.",
-        action: "Implement the PostgreSQL repository backend, then run the existing API/database contract tests against disposable PostgreSQL before enabling the backend.",
-      },
-      {
         key: "postgresql_database_url_missing",
         severity: "blocker",
         summary: "PostgreSQL connection environment is not configured (MICROSCORE_DATABASE_URL).",
@@ -1840,10 +1828,10 @@
       generated_at: nowIso(),
       runtime_backend: "sqlite",
       target_backend: "postgresql",
-      repository_backend_status: "not_implemented",
-      migration_ready: false,
+      repository_backend_status: "implemented",
+      migration_ready: true,
       production_ready: false,
-      live_connection_tested: false,
+      live_connection_tested: true,
       required_environment: ["MICROSCORE_DATABASE_URL"],
       configured_environment: [],
       missing_environment: ["MICROSCORE_DATABASE_URL"],
@@ -1855,6 +1843,7 @@
       latest_migration_version: presentArtifacts[0]?.version || null,
       versioned_migration_contract_present: versionedMigrationContractPresent,
       disposable_migration_ci_present: true,
+      disposable_repository_ci_present: true,
       repository_adapter_contract_status: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.status,
       repository_adapter_contract_present: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.present,
       repository_adapter_contract_version: POSTGRESQL_REPOSITORY_ADAPTER_CONTRACT.version,
@@ -1983,17 +1972,17 @@
         },
         {
           key: "postgresql_repository_backend",
-          status: "blocker",
-          sqlite_evidence: "Runtime repository supports sqlite only and rejects postgresql at startup; the adapter now covers the full repository method contract through injected PostgreSQL parity specs.",
-          postgres_requirement: "Implement a PostgreSQL repository backend behind the same API contract.",
-          action: "Build the runtime PostgreSQL repository backend from the completed adapter method groups, wire managed configuration, and keep SQLite fallback explicit.",
+          status: "pass",
+          sqlite_evidence: "SQLite remains the default demo backend; runtime selection can explicitly activate the complete PostgreSQL repository.",
+          postgres_requirement: "Select PostgreSQL behind the same API repository contract.",
+          action: "Keep backend selection explicit and database credentials out of browser-visible responses.",
         },
         {
           key: "postgresql_disposable_ci",
-          status: "blocker",
-          sqlite_evidence: "CI applies the migration draft to disposable PostgreSQL, but repository parity cannot run until a PostgreSQL backend exists.",
+          status: "pass",
+          sqlite_evidence: "CI runs the real repository runtime workflow against disposable PostgreSQL 16.",
           postgres_requirement: "Run parity tests against a disposable PostgreSQL database in CI.",
-          action: "Implement the PostgreSQL repository backend, then promote this migration smoke into backend parity tests.",
+          action: "Keep scripts/postgresql-runtime-smoke.py in the required PostgreSQL CI job.",
         },
       ],
       blockers,
@@ -2089,7 +2078,7 @@
         evidence: {
           backend: "sqlite_static_demo",
           production_ready: false,
-          postgresql_migration_status: "planned",
+          postgresql_migration_status: "implemented",
           postgresql_readiness_status: postgresql.status,
           postgresql_repository_backend_status: postgresql.repository_backend_status,
           postgresql_schema_inventory_table_count: postgresql.present_table_count,
@@ -2098,6 +2087,7 @@
           postgresql_latest_migration_version: postgresql.latest_migration_version,
           postgresql_versioned_migration_contract_present: postgresql.versioned_migration_contract_present,
           postgresql_disposable_migration_ci_present: postgresql.disposable_migration_ci_present,
+          postgresql_disposable_repository_ci_present: postgresql.disposable_repository_ci_present,
           postgresql_repository_adapter_contract_status: postgresql.repository_adapter_contract_status,
           postgresql_repository_adapter_contract_method_count: postgresql.repository_adapter_contract_method_count,
           postgresql_repository_adapter_implemented_method_count: postgresql.repository_adapter_implemented_method_count,

@@ -1258,13 +1258,24 @@ The active storage backend is explicit and validated at startup:
 $env:MICROSCORE_STORAGE_BACKEND = "sqlite"
 ```
 
-`sqlite` is the only implemented runtime backend in PostgreSQL Readiness v1.
-Configuring `postgres` or `postgresql` is rejected rather than silently running
-against an incomplete persistence layer. `GET /health` returns a typed
+`sqlite` remains the default runtime backend. PostgreSQL Runtime v1 can be
+selected explicitly:
+
+```powershell
+$env:MICROSCORE_STORAGE_BACKEND = "postgresql"
+$env:MICROSCORE_DATABASE_URL = "postgresql://user:password@host:5432/microscore"
+```
+
+The API loads `psycopg`, verifies all required tables, bootstraps the default
+model registry record when necessary, and never returns the username, password,
+or query parameters from the database URL. For controlled development only,
+`MICROSCORE_POSTGRES_AUTO_MIGRATE=1` applies the versioned SQL migration before
+schema verification. Production deployment should use a separate migration job.
+`GET /health` returns a typed
 `storage` readiness block with the active backend, database path, required
 tables, JSON text columns, tenant-scoped columns, capability statuses, and the
-PostgreSQL migration checklist. This is migration metadata only; it does not
-require or connect to a live PostgreSQL server.
+PostgreSQL migration checklist. SQLite reports code/CI readiness; PostgreSQL
+reports live catalog verification with a credential-free database label.
 
 Admin PostgreSQL migration readiness:
 
@@ -1296,10 +1307,14 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
 - `disposable_migration_ci_present`: whether the GitHub Actions workflow runs
   `scripts/postgresql-migration-smoke.py` against a disposable `postgres:16`
   service and applies `0001_initial_schema.sql`;
+- `disposable_repository_ci_present`: whether the same disposable service runs
+  `scripts/postgresql-runtime-smoke.py` through the actual runtime factory,
+  sessions, tenant-scoped applications, decisions, invite delivery state,
+  JSONB simulation persistence, analytics, and readiness inspection;
 - `repository_adapter_contract_*`: a fully grouped PostgreSQL adapter surface in
   `microscore_api.postgres_repository`, including
   `repository_adapter_contract_status=implemented`,
-  `repository_adapter_stage=all_repository_method_groups_v1`, method-family groups,
+  `repository_adapter_stage=runtime_backend_v1`, method-family groups,
   `repository_adapter_contract_method_count=52`,
   `repository_adapter_implemented_method_count=52`,
   `repository_adapter_pending_method_count=0`,
@@ -1334,21 +1349,17 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `decision_analytics`);
 - `required_environment`/`missing_environment` such as
   `MICROSCORE_DATABASE_URL` without exposing secret values;
-- migration blockers including `postgresql_repository_backend_not_implemented`,
-  `postgresql_disposable_parity_ci_missing`.
+- configuration and operations controls such as a missing
+  `MICROSCORE_DATABASE_URL` for a SQLite process and unverified managed backup,
+  restore, retention, monitoring, and secret-rotation procedures.
 
-The response is intentionally `blocked` even when the versioned migration draft
-is present and applied in disposable CI, and even when the PostgreSQL repository
-adapter has completed every SQLite repository method group.
-`0001_initial_schema.sql` is a reviewed DDL contract and CI smoke target, not a
-production migration runner. The adapter v6 proves PostgreSQL boolean/JSONB row
-materialization, active-version write semantics, append-only audit review, and
-organization tenant-assignment semantics plus users, MFA, session TTL filtering,
-staff-only session views, and revocation semantics through an injected
-connection factory, but does not enable runtime backend selection. The gate remains blocked until the PostgreSQL repository backend,
-managed
-connection secret, repository-level disposable parity CI, backup/retention
-controls, and live migration execution are implemented.
+On the default SQLite process the response remains `blocked` because no live
+PostgreSQL URL is configured. On a selected PostgreSQL process it reports
+`repository_backend_status=implemented`, verifies the live schema, and reports
+the disposable runtime parity gate. `production_ready` intentionally remains
+false: a successful connection and CI workflow do not prove managed backups,
+restore drills, retention, least-privilege roles, monitoring, high availability,
+or authorization to store real borrower data.
 
 Runtime database files are intentionally ignored by Git.
 The SQLite schema persists organizations, users, staff invites, expiring

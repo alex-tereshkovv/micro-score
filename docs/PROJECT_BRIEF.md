@@ -11,7 +11,7 @@ product demo for reviewing risk, explanations, and policy trade-offs.
 | --- | --- |
 | What is it? | A credit-risk decision-support prototype for underserved borrowers. |
 | Who is it for? | Borrowers with limited formal credit history and regional MFIs. |
-| Current product | Public static web demo plus local FastAPI/SQLite prototype. |
+| Current product | Public static demo plus FastAPI with SQLite default and PostgreSQL Runtime v1. |
 | Current research | Synthetic Pavlodar experiment plus public UCI benchmark. |
 | Main finding | The synthetic model depends too strongly on `late_payment_count`. |
 | Key limitation | It is not validated on real Kazakhstan MFI borrower data. |
@@ -41,7 +41,8 @@ borrower names, identity numbers, phone numbers, bank records, or addresses.
   analytics, and portfolio uncertainty.
 - An admin workspace for audit, identity, model, and readiness review.
 - A local FastAPI API with seeded users, tenant scoping, lifecycle controls,
-  model provenance, and SQLite persistence.
+  model provenance, SQLite persistence by default, and an optional 52-method
+  PostgreSQL runtime exercised against disposable PostgreSQL 16 in CI.
 - A research pipeline with leakage checks, ablation, calibration, error and
   segment analysis, threshold policies, and a public benchmark.
 - A static GitHub Pages demo that exercises the main workflows without a local
@@ -92,7 +93,8 @@ and human oversight could support regional lending decisions.
 1. Validate data definitions and workflow assumptions with local experts.
 2. Obtain consented, privacy-reviewed pilot data or a stronger public proxy.
 3. Test temporal stability, calibration, and segment performance out of sample.
-4. Complete production identity, storage, deployment, and monitoring controls.
+4. Complete production identity, managed database operations, deployment, and
+   monitoring controls.
 5. Re-estimate policy economics and Monte Carlo stresses from observed outcomes.
 
 ## Project Takeaway

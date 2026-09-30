@@ -152,7 +152,7 @@ class ApiDatabaseTests(unittest.TestCase):
             "postgresql_portfolio_analytics_method_group_adapter",
             capability_ids,
         )
-        self.assertEqual(readiness["postgresql_migration_status"], "planned")
+        self.assertEqual(readiness["postgresql_migration_status"], "implemented")
         self.assertTrue(
             any("PostgreSQL" in item for item in readiness["postgresql_migration_checklist"])
         )
@@ -163,10 +163,10 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(readiness["status"], "blocked")
         self.assertEqual(readiness["runtime_backend"], "sqlite")
         self.assertEqual(readiness["target_backend"], "postgresql")
-        self.assertEqual(readiness["repository_backend_status"], "not_implemented")
-        self.assertFalse(readiness["migration_ready"])
+        self.assertEqual(readiness["repository_backend_status"], "implemented")
+        self.assertTrue(readiness["migration_ready"])
         self.assertFalse(readiness["production_ready"])
-        self.assertFalse(readiness["live_connection_tested"])
+        self.assertTrue(readiness["live_connection_tested"])
         self.assertIn("MICROSCORE_DATABASE_URL", readiness["required_environment"])
         self.assertIn("MICROSCORE_DATABASE_URL", readiness["missing_environment"])
         self.assertEqual(
@@ -179,6 +179,7 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertEqual(readiness["latest_migration_version"], "0001_initial_schema")
         self.assertTrue(readiness["versioned_migration_contract_present"])
         self.assertTrue(readiness["disposable_migration_ci_present"])
+        self.assertTrue(readiness["disposable_repository_ci_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_status"],
             "implemented",
@@ -186,7 +187,7 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(readiness["repository_adapter_contract_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_version"],
-            "postgresql-repository-adapter-v9",
+            "postgresql-repository-adapter-v10",
         )
         self.assertEqual(
             readiness["repository_adapter_module"],
@@ -194,7 +195,7 @@ class ApiDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(
             readiness["repository_adapter_stage"],
-            "all_repository_method_groups_v1",
+            "runtime_backend_v1",
         )
         self.assertEqual(readiness["repository_adapter_contract_method_count"], 52)
         self.assertEqual(readiness["repository_adapter_implemented_method_count"], 52)
@@ -403,16 +404,15 @@ class ApiDatabaseTests(unittest.TestCase):
             ]["status"],
             "pass",
         )
-        self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "blocker")
-        self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "blocker")
+        self.assertEqual(parity_keys["postgresql_repository_backend"]["status"], "pass")
+        self.assertEqual(parity_keys["postgresql_disposable_ci"]["status"], "pass")
         blocker_keys = {row["key"] for row in readiness["blockers"]}
-        self.assertIn("postgresql_repository_backend_not_implemented", blocker_keys)
         self.assertNotIn("postgresql_versioned_migrations_missing", blocker_keys)
         self.assertNotIn("postgresql_disposable_migration_ci_missing", blocker_keys)
         self.assertNotIn("postgresql_repository_adapter_contract_missing", blocker_keys)
-        self.assertIn("postgresql_disposable_parity_ci_missing", blocker_keys)
+        self.assertNotIn("postgresql_disposable_parity_ci_missing", blocker_keys)
         self.assertIn("postgresql_database_url_missing", blocker_keys)
-        self.assertIn("schema and parity contract", readiness["limitation"])
+        self.assertIn("Runtime v1", readiness["limitation"])
 
     def test_postgresql_initial_migration_draft_covers_sqlite_contract(self) -> None:
         sql = (
@@ -432,6 +432,7 @@ class ApiDatabaseTests(unittest.TestCase):
 
     def test_postgresql_disposable_migration_ci_is_tracked(self) -> None:
         self.assertTrue(self.repository.postgresql_disposable_migration_ci_present())
+        self.assertTrue(self.repository.postgresql_disposable_repository_ci_present())
 
     def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
         configured = os.environ.copy()

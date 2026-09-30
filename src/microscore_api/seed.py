@@ -9,6 +9,7 @@ from .database import (
     DuplicateOrganizationError,
     DuplicateUserError,
     MicroScoreRepository,
+    create_repository,
 )
 from .scoring import get_scoring_service
 from .security import hash_password
@@ -498,7 +499,7 @@ def seed_demo_data(
     *,
     score_applications: bool = True,
 ) -> dict[str, Any]:
-    repository = repository or MicroScoreRepository()
+    repository = repository or create_repository()
     created_users: list[str] = []
     existing_users: list[str] = []
     created_portfolio_borrowers: list[str] = []

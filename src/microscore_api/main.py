@@ -39,6 +39,7 @@ from .database import (
     DuplicateUserError,
     InvalidApplicationTransitionError,
     MicroScoreRepository,
+    create_repository,
     configured_session_ttl_hours,
 )
 from .analytics import policy_analytics as build_policy_analytics
@@ -595,8 +596,8 @@ security = HTTPBearer()
 
 
 @lru_cache(maxsize=1)
-def get_repository() -> MicroScoreRepository:
-    return MicroScoreRepository()
+def get_repository() -> Any:
+    return create_repository()
 
 
 @lru_cache(maxsize=1)
@@ -2296,6 +2297,9 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_disposable_migration_ci_present": postgresql_readiness[
                     "disposable_migration_ci_present"
                 ],
+                "postgresql_disposable_repository_ci_present": postgresql_readiness[
+                    "disposable_repository_ci_present"
+                ],
                 "postgresql_repository_adapter_contract_status": postgresql_readiness[
                     "repository_adapter_contract_status"
                 ],
@@ -3101,7 +3105,7 @@ def health(repository: MicroScoreRepository = Depends(get_repository)) -> Health
     return {
         "status": "ok",
         "service": "microscore-api",
-        "database": str(repository.db_path),
+        "database": str(getattr(repository, "database_label", repository.db_path)),
         "storage": repository.storage_readiness(),
     }
 
