@@ -18,6 +18,7 @@ class ResearchDocsTests(unittest.TestCase):
             "BENCHMARK_DATASETS.md",
             "DATA_STATEMENT.md",
             "DEMO_VIDEO_SCRIPT.md",
+            "DEPLOYMENT_CANDIDATE.md",
             "DEMO_WALKTHROUGH.md",
             "ENGINEERING_QUALITY.md",
             "MODEL_CARD.md",
@@ -83,6 +84,8 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("MONTE_CARLO_METHODOLOGY.md", readme)
         self.assertIn("ROBUSTNESS_AND_UNCERTAINTY.md", readme)
         self.assertIn("POSTGRESQL_RUNTIME.md", readme)
+        self.assertIn("DEPLOYMENT_CANDIDATE.md", readme)
+        self.assertIn("docker compose up --build --detach", readme)
         self.assertIn("Why This Matters", readme)
         self.assertIn("Research Findings", readme)
         self.assertIn("Key limitation", readme)

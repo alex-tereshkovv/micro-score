@@ -23,14 +23,14 @@ lending service and does not collect real borrower data.
 | Field | Current state |
 | --- | --- |
 | Purpose | Explore interpretable alternative credit risk with human review |
-| Product | Static demo plus FastAPI with SQLite default and PostgreSQL Runtime v1 |
+| Product | Static demo plus containerized FastAPI with SQLite/PostgreSQL runtimes |
 | Models | Logistic Regression and Random Forest |
 | Research tracks | Synthetic Pavlodar experiment + public UCI benchmark |
 | Main finding | Synthetic performance depends heavily on `late_payment_count` |
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 135 automated tests plus research, API, database, and browser smoke checks |
+| Quality gate | 139 automated tests plus research, HTTP, database, container, and browser smoke checks |
 
 ## Why This Matters
 
@@ -77,8 +77,10 @@ The browser demo makes the workflows reviewable without a server. Local mode
 uses the same interface with a real API, persistence, tenant scoping, model
 registry, audit events, and application lifecycle rules. SQLite remains the
 zero-configuration local default. PostgreSQL Runtime v1 can execute the same
-52-method repository contract and is exercised against disposable PostgreSQL
-16 in CI. That runtime proof is not presented as managed-production readiness:
+52-method repository contract and is exercised through both repository and live
+FastAPI workflows against disposable PostgreSQL 16 in CI. Deployment Candidate
+v1 also builds and health-checks the complete container stack. This proof is not
+presented as managed-production readiness:
 backups, restore drills, retention, secret rotation, monitoring, and deployment
 controls still remain outside the prototype boundary.
 
@@ -94,6 +96,12 @@ Run the complete Windows demo:
 
 ```powershell
 .\Start-MicroScore.cmd
+```
+
+Or start the production-shaped synthetic stack with Docker Compose:
+
+```powershell
+docker compose up --build --detach
 ```
 
 Run the research pipeline and full quality gate:
@@ -113,6 +121,7 @@ Manual API and web-server commands are documented in
 - `src/microscore/` — research, modeling, ablation, policy, and reporting code
 - `src/microscore_api/` — FastAPI product prototype and repositories
 - `migrations/postgresql/` — reviewed PostgreSQL migration artifacts
+- `compose.yaml` — health-gated web, API, migration, seed, and PostgreSQL stack
 - `reports/` — reproducible research and benchmark outputs
 - `tests/` — unit, integration, API, database, and frontend checks
 
@@ -123,6 +132,7 @@ Manual API and web-server commands are documented in
 - [Technical interview guide](docs/TECHNICAL_INTERVIEW_GUIDE.md) — explain the central engineering and ML decisions
 - [Architecture](docs/ARCHITECTURE.md) — runtimes, data flow, boundaries, and gaps
 - [PostgreSQL Runtime v1](docs/POSTGRESQL_RUNTIME.md) — backend selection, CI parity, and operational limits
+- [Deployment Candidate v1](docs/DEPLOYMENT_CANDIDATE.md) — containers, health gates, and one-command topology
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight
 - [Monte Carlo methodology](docs/MONTE_CARLO_METHODOLOGY.md) — assumptions and statistical boundaries
 - [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress

@@ -92,7 +92,12 @@ class ApiClient:
         return decoded
 
 
-def wait_for_api(client: ApiClient, process: subprocess.Popen[str]) -> None:
+def wait_for_api(
+    client: ApiClient,
+    process: subprocess.Popen[str],
+    *,
+    expected_backend: str,
+) -> dict[str, Any]:
     deadline = time.time() + 30
     last_error: Exception | None = None
     while time.time() < deadline:
@@ -102,7 +107,14 @@ def wait_for_api(client: ApiClient, process: subprocess.Popen[str]) -> None:
         try:
             health = client.request("GET", "/health")
             assert_true(health.get("status") == "ok", "Health endpoint did not return ok")
-            return
+            storage = health.get("storage") or {}
+            assert_true(
+                storage.get("backend") == expected_backend,
+                f"Health endpoint selected {storage.get('backend')!r}, expected {expected_backend!r}",
+            )
+            database_label = str(health.get("database", ""))
+            assert_true("@" not in database_label, "Health endpoint leaked database credentials")
+            return health
         except Exception as exc:  # noqa: BLE001 - retry startup failures.
             last_error = exc
             time.sleep(0.35)
@@ -129,9 +141,18 @@ def seed_database(db_path: Path) -> dict[str, Any]:
     return seed_demo_data(repository)
 
 
-def start_api(db_path: Path, port: int) -> subprocess.Popen[str]:
+def seed_configured_database() -> dict[str, Any]:
+    from microscore_api.database import create_repository
+    from microscore_api.seed import seed_demo_data
+
+    return seed_demo_data(create_repository())
+
+
+def start_api(db_path: Path | None, port: int) -> subprocess.Popen[str]:
     env = os.environ.copy()
-    env["MICROSCORE_API_DB_PATH"] = str(db_path)
+    if db_path is not None:
+        env["MICROSCORE_STORAGE_BACKEND"] = "sqlite"
+        env["MICROSCORE_API_DB_PATH"] = str(db_path)
     env["PYTHONPATH"] = (
         str(SRC_ROOT)
         if not env.get("PYTHONPATH")
@@ -408,27 +429,64 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
     }
 
 
-def main() -> None:
-    started_at = time.time()
-    with tempfile.TemporaryDirectory(prefix="microscore-live-smoke-") as tempdir:
-        db_path = Path(tempdir) / "live-api-workflow.sqlite3"
-        seed_result = seed_database(db_path)
-        port = free_port()
-        client = ApiClient(f"http://127.0.0.1:{port}")
-        process = start_api(db_path, port)
-        try:
-            wait_for_api(client, process)
-            workflow = run_workflow(client)
-        finally:
-            terminate_process(process)
+def run_live_process(
+    *,
+    backend: str,
+    database_label: str,
+    db_path: Path | None,
+    seed_result: dict[str, Any],
+    started_at: float,
+) -> None:
+    port = free_port()
+    client = ApiClient(f"http://127.0.0.1:{port}")
+    process = start_api(db_path, port)
+    try:
+        health = wait_for_api(client, process, expected_backend=backend)
+        workflow = run_workflow(client)
+    finally:
+        terminate_process(process)
 
     print(json.dumps({
         "mode": "live-api-workflow-smoke",
-        "database": "temporary-sqlite",
+        "database": database_label,
+        "storage_backend": backend,
+        "health_database": health["database"],
         "seeded_applications": len(seed_result["demo_application_ids"]),
         "runtime_seconds": round(time.time() - started_at, 2),
         **workflow,
     }, sort_keys=True))
+
+
+def main() -> None:
+    started_at = time.time()
+    backend = os.environ.get("MICROSCORE_STORAGE_BACKEND", "sqlite").strip().lower()
+    if backend == "postgresql":
+        if not os.environ.get("MICROSCORE_DATABASE_URL", "").strip():
+            raise SmokeFailure(
+                "MICROSCORE_DATABASE_URL is required for the PostgreSQL live API smoke"
+            )
+        seed_result = seed_configured_database()
+        run_live_process(
+            backend="postgresql",
+            database_label="disposable-postgresql",
+            db_path=None,
+            seed_result=seed_result,
+            started_at=started_at,
+        )
+        return
+    if backend != "sqlite":
+        raise SmokeFailure(f"Unsupported smoke backend: {backend}")
+
+    with tempfile.TemporaryDirectory(prefix="microscore-live-smoke-") as tempdir:
+        db_path = Path(tempdir) / "live-api-workflow.sqlite3"
+        seed_result = seed_database(db_path)
+        run_live_process(
+            backend="sqlite",
+            database_label="temporary-sqlite",
+            db_path=db_path,
+            seed_result=seed_result,
+            started_at=started_at,
+        )
 
 
 if __name__ == "__main__":

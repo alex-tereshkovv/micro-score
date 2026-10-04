@@ -66,6 +66,18 @@ node scripts\frontend-workflow-smoke.js
 .venv\Scripts\python scripts\live-api-workflow-smoke.py
 ```
 
+- CI runs that same live HTTP workflow with
+  `MICROSCORE_STORAGE_BACKEND=postgresql` against disposable PostgreSQL 16.
+- Deployment Candidate configuration has an automated clean-stack proof:
+
+```powershell
+docker compose config --quiet
+docker compose up --build --detach
+```
+
+  Verify `http://127.0.0.1:8010/health` reports `postgresql`, then clean up with
+  `docker compose down --volumes --remove-orphans`.
+
 - Live security workflow smoke test passes against a temporary SQLite database:
 
 ```powershell
@@ -170,8 +182,13 @@ git diff --check
   `scripts/postgresql-runtime-smoke.py`, and the fully grouped
   `microscore_api.postgres_repository` adapter v10
   (`runtime_backend_v1`, 52 implemented methods out of 52, seven completed
-  method groups). SQLite remains the default; a SQLite process still reports a
+  method groups). The same borrower-to-decision HTTP workflow runs against
+  SQLite locally and PostgreSQL in CI. SQLite remains the default; a SQLite process still reports a
   missing `MICROSCORE_DATABASE_URL` without exposing secret values.
+- Deployment Candidate v1 builds non-root API/web images, keeps the database
+  port internal, runs migration and seed as one-shot jobs, health-gates service
+  order, and is rebuilt from a clean Compose stack in CI. It remains synthetic
+  and does not make `production_data_allowed` true.
 - Storage readiness remains explicit: SQLite is the prototype backend,
   while PostgreSQL can be selected for the same repository contract. No release
   should imply managed-production storage readiness until database deployment,

@@ -43,6 +43,12 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("python scripts/postgresql-migration-smoke.py", workflow)
         self.assertIn("MICROSCORE_STORAGE_BACKEND: postgresql", workflow)
         self.assertIn("python scripts/postgresql-runtime-smoke.py", workflow)
+        self.assertIn("python scripts/live-api-workflow-smoke.py", workflow)
+        self.assertIn("Container deployment candidate smoke", workflow)
+        self.assertIn("docker compose config --quiet", workflow)
+        self.assertIn("docker compose up --build --detach", workflow)
+        self.assertIn('health["storage"]["backend"] == "postgresql"', workflow)
+        self.assertIn("docker compose down --volumes --remove-orphans", workflow)
 
     def test_static_demo_smoke_script_exercises_reviewer_flow(self) -> None:
         script = (PROJECT_ROOT / "scripts" / "static-demo-smoke.js").read_text(

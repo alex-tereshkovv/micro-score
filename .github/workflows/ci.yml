@@ -123,3 +123,66 @@ jobs:
         env:
           MICROSCORE_STORAGE_BACKEND: postgresql
         run: python scripts/postgresql-runtime-smoke.py
+
+      - name: Run live FastAPI workflow against PostgreSQL
+        env:
+          MICROSCORE_STORAGE_BACKEND: postgresql
+        run: python scripts/live-api-workflow-smoke.py
+
+  deployment-candidate:
+    name: Container deployment candidate smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Build and start deployment candidate
+        run: docker compose up --build --detach
+
+      - name: Wait for API and web health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8010/health > /tmp/microscore-health.json \
+              && curl --fail --silent http://127.0.0.1:5173/ > /tmp/microscore-index.html; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose ps
+              docker compose logs --no-color
+              exit 1
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path("/tmp/microscore-health.json").read_text())
+          index = Path("/tmp/microscore-index.html").read_text()
+          assert health["status"] == "ok"
+          assert health["storage"]["backend"] == "postgresql"
+          assert "@" not in health["database"]
+          assert "MicroScore" in index
+          print(json.dumps({
+              "mode": "container-deployment-smoke",
+              "api": health["status"],
+              "storage": health["storage"]["backend"],
+              "web": "ready",
+          }, sort_keys=True))
+          PY
+
+      - name: Show deployment state
+        if: always()
+        run: docker compose ps
+
+      - name: Show deployment logs after failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop deployment candidate
+        if: always()
+        run: docker compose down --volumes --remove-orphans

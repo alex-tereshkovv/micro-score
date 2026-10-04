@@ -44,6 +44,16 @@ The seed command creates the main demo accounts and a scored 20-application
 Pavlodar-region application portfolio, so the MFI tab is populated as soon as
 the API starts.
 
+Production-shaped synthetic stack:
+
+```powershell
+docker compose up --build --detach
+```
+
+This starts PostgreSQL, an explicit migration job, an idempotent seed job, the
+FastAPI container, and this web container behind health-gated dependencies. See
+`docs/DEPLOYMENT_CANDIDATE.md` for lifecycle and limitations.
+
 In another terminal, start the web UI:
 
 ```powershell

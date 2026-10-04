@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 
 from microscore_api.database import MicroScoreRepository, create_repository
+from microscore_api.migrate import main as migrate_main
 from microscore_api.postgres_runtime import PostgresRuntimeRepository
 
 
@@ -58,6 +62,36 @@ class PostgresRuntimeTests(unittest.TestCase):
 
         self.assertIs(repository, sentinel)
         factory.assert_called_once_with()
+
+    def test_migration_entrypoint_reports_safe_runtime_evidence(self) -> None:
+        repository = unittest.mock.MagicMock()
+        repository.storage_backend = "postgresql"
+        repository.database_label = "postgresql://db.example/microscore"
+        repository.apply_migrations.return_value = ["0001_initial_schema.sql"]
+        repository.postgresql_migration_readiness.return_value = {
+            "present_table_count": 11,
+            "required_table_count": 11,
+            "production_ready": False,
+        }
+        configured = {
+            "MICROSCORE_STORAGE_BACKEND": "postgresql",
+            "MICROSCORE_DATABASE_URL": "postgresql://secret:password@db.example/microscore",
+        }
+        output = StringIO()
+        with patch.dict(os.environ, configured, clear=True), patch(
+            "microscore_api.migrate.PostgresRuntimeRepository",
+            return_value=repository,
+        ), redirect_stdout(output):
+            result = migrate_main()
+
+        self.assertEqual(result, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["backend"], "postgresql")
+        self.assertFalse(payload["production_ready"])
+        self.assertNotIn("secret", output.getvalue())
+        self.assertNotIn("password", output.getvalue())
+        repository.apply_migrations.assert_called_once_with()
+        repository.initialize.assert_called_once_with()
 
 
 if __name__ == "__main__":

@@ -220,6 +220,28 @@ MATRIX_ROWS = [
             "not a temporal test",
         ],
     },
+    {
+        "area": "Container deployment candidate",
+        "artifacts": [
+            "tests/test_deployment_candidate.py",
+            "tests/test_github_workflows.py",
+            "scripts/live-api-workflow-smoke.py",
+            ".github/workflows/ci.yml",
+            "compose.yaml",
+            "Dockerfile",
+            "docs/DEPLOYMENT_CANDIDATE.md",
+        ],
+        "markers": [
+            "Container deployment candidate smoke",
+            "service_completed_successfully",
+            "service_healthy",
+            "storage_backend",
+            "postgresql",
+            "read_only",
+            "USER microscore",
+            "production_data_allowed=false",
+        ],
+    },
 ]
 
 

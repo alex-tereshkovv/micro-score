@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.pytest_cache
+**/__pycache__
+**/*.py[cod]
+data/app
+output
+reports
+notebooks
+*.sqlite3
+.env
+.env.*
+!.env.compose.example

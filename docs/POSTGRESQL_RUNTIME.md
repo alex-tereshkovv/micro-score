@@ -14,8 +14,9 @@ enabled only by explicit configuration.
 - Health and readiness responses expose only a credential-free database label.
 - Shared repository exceptions keep duplicate-user, duplicate-organization,
   duplicate-model, and lifecycle behavior consistent across both backends.
-- CI applies migration `0001_initial_schema` and then runs an end-to-end
-  repository workflow against disposable PostgreSQL 16.
+- CI applies migration `0001_initial_schema`, runs an end-to-end repository
+  workflow, and then drives the real FastAPI borrower/analyst lifecycle against
+  disposable PostgreSQL 16.
 
 ## Configuration
 
@@ -60,10 +61,13 @@ The `postgresql-migration` GitHub Actions job:
 5. proves session creation and revocation;
 6. proves organization-scoped application reads and analyst decision writes;
 7. proves invite delivery state and JSONB portfolio-simulation round trips;
-8. proves segment and decision analytics; and
-9. reads live schema and readiness evidence through the runtime repository.
+8. proves segment and decision analytics;
+9. reads live schema and readiness evidence through the runtime repository; and
+10. runs registration, intake, scoring, review, approval, terminal guards, and
+    borrower-safe history through live HTTP endpoints backed by PostgreSQL.
 
-The executable proof is `scripts/postgresql-runtime-smoke.py`. Fast unit tests
+The executable proofs are `scripts/postgresql-runtime-smoke.py` and the
+PostgreSQL mode of `scripts/live-api-workflow-smoke.py`. Fast unit tests
 still use injected connection factories to isolate SQL semantics and compare
 the adapter with SQLite behavior.
 
@@ -81,5 +85,7 @@ prove any of the following:
 - legal authority to store real borrower information.
 
 Consequently `production_ready` remains `false`, and the Pre-Pilot Readiness
-Gate continues to block real borrower data. The next storage milestone is an
-operational deployment proof, not another repository method.
+Gate continues to block real borrower data. `compose.yaml` and
+`docs/DEPLOYMENT_CANDIDATE.md` now provide a reproducible deployment candidate;
+the next storage milestone is managed operational evidence, not another
+repository method or another local container.

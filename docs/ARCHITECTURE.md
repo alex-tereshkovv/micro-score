@@ -15,8 +15,10 @@ flowchart LR
     Web -->|"public demo mode"| MockApi["In-browser mock API\napps/web/mock-api.js"]
     Web -->|"local product mode"| FastAPI["FastAPI backend\nmicroscore_api"]
 
-    FastAPI --> SQLite["SQLite demo database\ndata/app"]
-    SQLite --> Registry["Model registry\nactive + candidate versions"]
+    FastAPI --> Repository["Repository contract"]
+    Repository --> SQLite["SQLite demo database\ndata/app"]
+    Repository --> PostgreSQL["PostgreSQL 16\ncontainer / CI runtime"]
+    Repository --> Registry["Model registry\nactive + candidate versions"]
     FastAPI --> Scoring["Scoring service\nmicroscore package"]
     Registry --> Scoring
     FastAPI --> Simulation["Monte Carlo engine\nportfolio uncertainty"]
@@ -124,6 +126,18 @@ Main local components:
 This mode is closer to the future product because the API, database, and audit
 events are real local services instead of browser-only mock data.
 
+### Deployment Candidate
+
+`docker compose up --build --detach` assembles a clean synthetic environment
+with internal PostgreSQL, an explicit one-shot migration, an idempotent seed
+job, the FastAPI service, and a static web service. API and web processes run as
+non-root users with read-only root filesystems. Health-gated dependencies keep
+the web tier from starting before storage, migration, seed, and API readiness.
+
+CI tests this topology separately from unit tests and separately from repository
+parity. It also runs the complete live HTTP application lifecycle directly
+against disposable PostgreSQL. See `docs/DEPLOYMENT_CANDIDATE.md`.
+
 ### Research Pipeline
 
 The research CLI runs experiments and produces artifacts:
@@ -190,14 +204,15 @@ while the research is still pre-pilot.
 | --- | --- | --- |
 | GitHub Pages | Public demo and technical review | Synthetic browser data only |
 | Local FastAPI | Product development | Seeded SQLite by default; optional PostgreSQL Runtime v1 |
+| Docker Compose candidate | Reproducible full-stack systems proof | Synthetic PostgreSQL data only |
 | Research CLI | Model experiments | Synthetic and public benchmark datasets |
 | Future cloud API | Pilot candidate | Requires privacy, security, and legal review |
 
 ## Known Architecture Gaps
 
 - No production authentication provider yet.
-- PostgreSQL Runtime v1 and repository-level disposable PostgreSQL parity CI are
-  implemented for all 52 methods. Managed database deployment is not: production
+- PostgreSQL Runtime v1, live FastAPI/PostgreSQL workflow CI, and a health-gated
+  container deployment candidate are implemented. Managed deployment is not: production
   migration orchestration, encrypted backup/restore drills, retention,
   least-privilege roles, monitoring, high availability, and secret rotation
   remain required before real pilot data.

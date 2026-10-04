@@ -11,7 +11,7 @@ product demo for reviewing risk, explanations, and policy trade-offs.
 | --- | --- |
 | What is it? | A credit-risk decision-support prototype for underserved borrowers. |
 | Who is it for? | Borrowers with limited formal credit history and regional MFIs. |
-| Current product | Public static demo plus FastAPI with SQLite default and PostgreSQL Runtime v1. |
+| Current product | Public static demo plus a containerized FastAPI/PostgreSQL deployment candidate. |
 | Current research | Synthetic Pavlodar experiment plus public UCI benchmark. |
 | Main finding | The synthetic model depends too strongly on `late_payment_count`. |
 | Key limitation | It is not validated on real Kazakhstan MFI borrower data. |
@@ -43,6 +43,8 @@ borrower names, identity numbers, phone numbers, bank records, or addresses.
 - A local FastAPI API with seeded users, tenant scoping, lifecycle controls,
   model provenance, SQLite persistence by default, and an optional 52-method
   PostgreSQL runtime exercised against disposable PostgreSQL 16 in CI.
+- A health-gated Docker Compose environment with explicit migration and seed
+  jobs, non-root API/web images, and end-to-end HTTP-to-PostgreSQL CI proof.
 - A research pipeline with leakage checks, ablation, calibration, error and
   segment analysis, threshold policies, and a public benchmark.
 - A static GitHub Pages demo that exercises the main workflows without a local
