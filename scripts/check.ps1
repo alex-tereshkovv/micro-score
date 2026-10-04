@@ -159,6 +159,11 @@ try {
         Assert-LastExitCode "PostgreSQL migration smoke dry run"
     }
 
+    Invoke-Step "Validate PostgreSQL recovery smoke contract" {
+        & $python scripts\postgresql-backup-restore-smoke.py --dry-run
+        Assert-LastExitCode "PostgreSQL recovery smoke dry run"
+    }
+
     Invoke-Step "Run live API workflow smoke test" {
         & $python scripts\live-api-workflow-smoke.py
         Assert-LastExitCode "Live API workflow smoke test"

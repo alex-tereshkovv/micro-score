@@ -893,6 +893,11 @@ class ApiIntegrationTests(unittest.TestCase):
                 "postgresql_disposable_repository_ci_present"
             ]
         )
+        self.assertTrue(
+            checks["storage_backend"]["evidence"][
+                "postgresql_disposable_restore_ci_present"
+            ]
+        )
         self.assertEqual(
             checks["storage_backend"]["evidence"][
                 "postgresql_repository_adapter_contract_status"
@@ -982,6 +987,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertTrue(payload["versioned_migration_contract_present"])
         self.assertTrue(payload["disposable_migration_ci_present"])
         self.assertTrue(payload["disposable_repository_ci_present"])
+        self.assertTrue(payload["disposable_restore_ci_present"])
         self.assertEqual(payload["repository_adapter_contract_status"], "implemented")
         self.assertTrue(payload["repository_adapter_contract_present"])
         self.assertEqual(

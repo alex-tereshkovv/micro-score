@@ -2300,6 +2300,9 @@ def _pre_pilot_readiness_response(repository: MicroScoreRepository) -> dict[str,
                 "postgresql_disposable_repository_ci_present": postgresql_readiness[
                     "disposable_repository_ci_present"
                 ],
+                "postgresql_disposable_restore_ci_present": postgresql_readiness[
+                    "disposable_restore_ci_present"
+                ],
                 "postgresql_repository_adapter_contract_status": postgresql_readiness[
                     "repository_adapter_contract_status"
                 ],

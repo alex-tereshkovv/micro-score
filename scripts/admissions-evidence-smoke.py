@@ -55,12 +55,12 @@ def main() -> None:
     missing_sections = sorted(expected_sections - parser.ids)
     if missing_sections:
         raise AssertionError(f"Missing evidence sections: {missing_sections}")
-    if parser.milestones != 11:
-        raise AssertionError(f"Expected 11 milestones, found {parser.milestones}")
+    if parser.milestones != 12:
+        raise AssertionError(f"Expected 12 milestones, found {parser.milestones}")
     if parser.decisions != 5:
         raise AssertionError(f"Expected 5 engineering decisions, found {parser.decisions}")
 
-    for claim in ["0.501", "0.775", "139", "52 / 52", "90+"]:
+    for claim in ["0.501", "0.775", "142", "52 / 52", "90+"]:
         if claim not in html:
             raise AssertionError(f"Missing evidence claim: {claim}")
 
@@ -81,7 +81,7 @@ def main() -> None:
     smoke_workflows = sum(
         1 for line in release_gate.splitlines() if 'Invoke-Step "' in line and "smoke" in line.lower()
     )
-    if smoke_workflows != 10 or "10 local smoke workflows" not in html:
+    if smoke_workflows != 11 or "11 local smoke workflows" not in html:
         raise AssertionError(
             f"Evidence page and release gate disagree on smoke workflows: {smoke_workflows}"
         )
@@ -95,7 +95,7 @@ def main() -> None:
                 "proof_links": len(github_links),
                 "local_links_checked": sum(local_target(href) is not None for href in parser.hrefs),
                 "smoke_workflows": smoke_workflows,
-                "claims": ["0.501", "0.775", "139", "52 / 52", "90+"],
+                "claims": ["0.501", "0.775", "142", "52 / 52", "90+"],
             },
             sort_keys=True,
         )

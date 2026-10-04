@@ -242,6 +242,40 @@ MATRIX_ROWS = [
             "production_data_allowed=false",
         ],
     },
+    {
+        "area": "PostgreSQL recovery integrity",
+        "artifacts": [
+            "tests/test_postgresql_recovery_smoke.py",
+            "scripts/postgresql-backup-restore-smoke.py",
+            ".github/workflows/ci.yml",
+            "docs/POSTGRESQL_RECOVERY.md",
+        ],
+        "markers": [
+            "pg_dump",
+            "pg_restore",
+            "row-count-and-full-row-fingerprint",
+            "fingerprints_match",
+            "restore_database_dropped",
+            "production_ready",
+        ],
+    },
+    {
+        "area": "Dependency supply chain",
+        "artifacts": [
+            "tests/test_github_workflows.py",
+            ".github/workflows/ci.yml",
+            ".github/dependabot.yml",
+            "docs/SUPPLY_CHAIN.md",
+        ],
+        "markers": [
+            "pip_audit",
+            "--exclude-editable",
+            "--strict",
+            "package-ecosystem",
+            "github-actions",
+            "weekly",
+        ],
+    },
 ]
 
 
@@ -332,6 +366,7 @@ SECURITY_MATRIX_ROWS = [
             "postgresql_disposable_migration_ci",
             "disposable_migration_ci_present",
             "disposable_repository_ci_present",
+            "disposable_restore_ci_present",
             "postgresql_repository_adapter_contract",
             "postgresql-repository-adapter-v10",
             "implemented",
@@ -456,6 +491,7 @@ class ReleaseGateMatrixTests(unittest.TestCase):
             "scripts\\static-demo-smoke.js",
             "scripts\\frontend-workflow-smoke.js",
             "scripts\\postgresql-migration-smoke.py",
+            "scripts\\postgresql-backup-restore-smoke.py",
             "scripts\\live-api-workflow-smoke.py",
             "scripts\\live-security-workflow-smoke.py",
         ]
@@ -466,6 +502,7 @@ class ReleaseGateMatrixTests(unittest.TestCase):
 
         for marker in [
             "PostgreSQL migration smoke dry run",
+            "PostgreSQL recovery smoke dry run",
             "Live API workflow smoke test",
             "Live security workflow smoke test",
             "Security Readiness Gate Matrix v1",

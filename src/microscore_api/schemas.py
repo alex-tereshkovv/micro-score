@@ -180,6 +180,7 @@ class PostgresMigrationReadinessResponse(BaseModel):
     versioned_migration_contract_present: bool = False
     disposable_migration_ci_present: bool = False
     disposable_repository_ci_present: bool = False
+    disposable_restore_ci_present: bool = False
     repository_adapter_contract_status: Literal[
         "missing",
         "contract_only",

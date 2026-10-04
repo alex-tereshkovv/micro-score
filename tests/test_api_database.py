@@ -180,6 +180,7 @@ class ApiDatabaseTests(unittest.TestCase):
         self.assertTrue(readiness["versioned_migration_contract_present"])
         self.assertTrue(readiness["disposable_migration_ci_present"])
         self.assertTrue(readiness["disposable_repository_ci_present"])
+        self.assertTrue(readiness["disposable_restore_ci_present"])
         self.assertEqual(
             readiness["repository_adapter_contract_status"],
             "implemented",
@@ -433,6 +434,7 @@ class ApiDatabaseTests(unittest.TestCase):
     def test_postgresql_disposable_migration_ci_is_tracked(self) -> None:
         self.assertTrue(self.repository.postgresql_disposable_migration_ci_present())
         self.assertTrue(self.repository.postgresql_disposable_repository_ci_present())
+        self.assertTrue(self.repository.postgresql_disposable_restore_ci_present())
 
     def test_unsupported_storage_backend_is_reported_before_sqlite_startup(self) -> None:
         configured = os.environ.copy()

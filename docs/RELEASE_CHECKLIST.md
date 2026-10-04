@@ -60,6 +60,12 @@ node scripts\frontend-workflow-smoke.js
 .venv\Scripts\python scripts\postgresql-migration-smoke.py --dry-run
 ```
 
+- PostgreSQL recovery smoke dry run passes locally:
+
+```powershell
+.venv\Scripts\python scripts\postgresql-backup-restore-smoke.py --dry-run
+```
+
 - Live API workflow smoke test passes against a temporary SQLite database:
 
 ```powershell
@@ -68,6 +74,11 @@ node scripts\frontend-workflow-smoke.js
 
 - CI runs that same live HTTP workflow with
   `MICROSCORE_STORAGE_BACKEND=postgresql` against disposable PostgreSQL 16.
+- CI then dumps the populated database, restores it into a clean database,
+  compares all 12 table fingerprints and the active-model invariant, and
+  confirms restore-target cleanup.
+- CI audits the installed Python dependency graph with `pip-audit`; Dependabot
+  checks pip, Docker, and GitHub Actions inputs weekly.
 - Deployment Candidate configuration has an automated clean-stack proof:
 
 ```powershell
@@ -189,11 +200,18 @@ git diff --check
   port internal, runs migration and seed as one-shot jobs, health-gates service
   order, and is rebuilt from a clean Compose stack in CI. It remains synthetic
   and does not make `production_data_allowed` true.
+- PostgreSQL Recovery Gate v1 proves a credential-safe custom-format
+  dump/restore cycle against disposable PostgreSQL, exact source/restore table
+  fingerprints, migration/model invariants, and cleanup. It does not claim
+  managed backups, retention, point-in-time recovery, or measured RPO/RTO.
+- Supply-Chain Gate v1 runs a strict installed-environment vulnerability audit
+  and weekly dependency update discovery. Lockfiles with hashes, retained SBOM,
+  signing/provenance, and deployment digest pinning remain future controls.
 - Storage readiness remains explicit: SQLite is the prototype backend,
   while PostgreSQL can be selected for the same repository contract. No release
   should imply managed-production storage readiness until database deployment,
-  backup/restore, retention, monitoring, least-privilege roles, secret rotation,
-  and operational recovery have been validated.
+  managed backup/restore, retention, monitoring, least-privilege roles, secret
+  rotation, and measured operational recovery have been validated.
 - Staff/User Lifecycle v1 disables MFI analyst accounts without deletion,
   revokes active sessions, rejects future login, and records
   `staff_user_disabled`.

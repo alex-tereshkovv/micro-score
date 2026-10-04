@@ -17,7 +17,10 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn('python-version: "3.12"', workflow)
         self.assertIn("actions/setup-node@v6", workflow)
         self.assertIn("node-version: 24", workflow)
-        self.assertIn("python -m pip install -r requirements.txt", workflow)
+        self.assertIn(
+            "python -m pip install --upgrade --upgrade-strategy eager -r requirements.txt",
+            workflow,
+        )
         self.assertIn("python -m unittest discover -s tests", workflow)
         self.assertIn("python -m compileall", workflow)
         self.assertIn("python src/train_model.py", workflow)
@@ -37,13 +40,19 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("pg_isready", workflow)
         self.assertIn("MICROSCORE_DATABASE_URL", workflow)
         self.assertIn("postgresql-client", workflow)
-        self.assertIn("python -m pip install -r requirements.txt", workflow)
+        self.assertIn("python -m pip install --upgrade pip setuptools wheel", workflow)
         self.assertIn("psql --version", workflow)
         self.assertIn("python scripts/postgresql-migration-smoke.py --dry-run", workflow)
         self.assertIn("python scripts/postgresql-migration-smoke.py", workflow)
         self.assertIn("MICROSCORE_STORAGE_BACKEND: postgresql", workflow)
         self.assertIn("python scripts/postgresql-runtime-smoke.py", workflow)
         self.assertIn("python scripts/live-api-workflow-smoke.py", workflow)
+        self.assertIn("python scripts/postgresql-backup-restore-smoke.py", workflow)
+        self.assertIn("python -m pip freeze --exclude-editable", workflow)
+        self.assertIn(
+            "python -m pip_audit --requirement /tmp/microscore-installed.txt --strict",
+            workflow,
+        )
         self.assertIn("Container deployment candidate smoke", workflow)
         self.assertIn("docker compose config --quiet", workflow)
         self.assertIn("docker compose up --build --detach", workflow)
@@ -139,6 +148,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("Live security workflow smoke test", script)
         self.assertIn("scripts\\postgresql-migration-smoke.py --dry-run", script)
         self.assertIn("PostgreSQL migration smoke dry run", script)
+        self.assertIn("scripts\\postgresql-backup-restore-smoke.py --dry-run", script)
+        self.assertIn("PostgreSQL recovery smoke dry run", script)
         self.assertIn("apps\\web\\risk-detail.js", script)
         self.assertIn("git diff --check", script)
         self.assertIn("Assert-LastExitCode", script)

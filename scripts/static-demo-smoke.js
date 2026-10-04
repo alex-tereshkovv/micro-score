@@ -471,6 +471,7 @@ async function main() {
     || !postgresqlReadinessInitial.versioned_migration_contract_present
     || !postgresqlReadinessInitial.disposable_migration_ci_present
     || !postgresqlReadinessInitial.disposable_repository_ci_present
+    || !postgresqlReadinessInitial.disposable_restore_ci_present
     || postgresqlReadinessInitial.repository_adapter_contract_status !== "implemented"
     || postgresqlReadinessInitial.repository_adapter_contract_method_count !== 52
     || postgresqlReadinessInitial.repository_adapter_implemented_method_count !== 52
@@ -1554,6 +1555,7 @@ async function main() {
       postgresql_latest_migration: postgresqlReadinessInitial.latest_migration_version,
       postgresql_disposable_migration_ci: postgresqlReadinessInitial.disposable_migration_ci_present,
       postgresql_disposable_repository_ci: postgresqlReadinessInitial.disposable_repository_ci_present,
+      postgresql_disposable_restore_ci: postgresqlReadinessInitial.disposable_restore_ci_present,
       postgresql_repository_adapter_contract: postgresqlReadinessInitial.repository_adapter_contract_status,
       postgresql_repository_adapter_methods: postgresqlReadinessInitial.repository_adapter_contract_method_count,
       postgresql_repository_adapter_implemented_methods: postgresqlReadinessInitial.repository_adapter_implemented_method_count,

@@ -1311,6 +1311,10 @@ This admin-only endpoint returns `PostgresMigrationReadinessResponse` with:
   `scripts/postgresql-runtime-smoke.py` through the actual runtime factory,
   sessions, tenant-scoped applications, decisions, invite delivery state,
   JSONB simulation persistence, analytics, and readiness inspection;
+- `disposable_restore_ci_present`: whether CI creates a credential-safe
+  custom-format dump, restores it into a clean disposable PostgreSQL database,
+  compares row counts plus full-row fingerprints for all 12 tables, and
+  confirms cleanup;
 - `repository_adapter_contract_*`: a fully grouped PostgreSQL adapter surface in
   `microscore_api.postgres_repository`, including
   `repository_adapter_contract_status=implemented`,

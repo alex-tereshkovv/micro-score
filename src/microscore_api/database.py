@@ -60,6 +60,11 @@ POSTGRESQL_DISPOSABLE_REPOSITORY_CI_MARKERS = (
     "MICROSCORE_STORAGE_BACKEND: postgresql",
     "scripts/postgresql-runtime-smoke.py",
 )
+POSTGRESQL_DISPOSABLE_RESTORE_CI_MARKERS = (
+    "postgres:16",
+    "scripts/postgresql-backup-restore-smoke.py",
+    "Run PostgreSQL backup and disposable restore drill",
+)
 REQUIRED_SCHEMA_TABLES = (
     "mfi_organizations",
     "users",
@@ -971,6 +976,16 @@ class MicroScoreRepository:
             for marker in POSTGRESQL_DISPOSABLE_REPOSITORY_CI_MARKERS
         )
 
+    def postgresql_disposable_restore_ci_present(self) -> bool:
+        """Return whether CI proves a dump can restore into a clean PostgreSQL database."""
+
+        if not POSTGRESQL_CI_WORKFLOW_PATH.exists():
+            return False
+        workflow = POSTGRESQL_CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        return all(
+            marker in workflow for marker in POSTGRESQL_DISPOSABLE_RESTORE_CI_MARKERS
+        )
+
     def postgresql_repository_adapter_contract(self) -> dict[str, Any]:
         """Return the contract-only PostgreSQL repository adapter summary."""
 
@@ -987,6 +1002,7 @@ class MicroScoreRepository:
         disposable_repository_ci_present = (
             self.postgresql_disposable_repository_ci_present()
         )
+        disposable_restore_ci_present = self.postgresql_disposable_restore_ci_present()
         repository_adapter_contract = self.postgresql_repository_adapter_contract()
         repository_adapter_contract_present = bool(
             repository_adapter_contract.get("present")
@@ -1449,6 +1465,25 @@ class MicroScoreRepository:
                     else "Add disposable PostgreSQL repository runtime tests before enabling the backend."
                 ),
             },
+            {
+                "key": "postgresql_disposable_restore_ci",
+                "status": "pass" if disposable_restore_ci_present else "blocker",
+                "sqlite_evidence": (
+                    "CI creates a credential-safe custom-format dump, restores it into "
+                    "a clean disposable database, and compares all table fingerprints."
+                    if disposable_restore_ci_present
+                    else "CI does not yet prove that a PostgreSQL dump can be restored."
+                ),
+                "postgres_requirement": (
+                    "Backup artifacts must be restorable, content-equivalent, and cleaned "
+                    "up after an isolated recovery drill."
+                ),
+                "action": (
+                    "Keep scripts/postgresql-backup-restore-smoke.py in the required PostgreSQL CI job."
+                    if disposable_restore_ci_present
+                    else "Add an isolated PostgreSQL dump-and-restore drill to CI."
+                ),
+            },
         ]
 
         blockers: list[dict[str, str]] = []
@@ -1459,6 +1494,18 @@ class MicroScoreRepository:
                     "severity": "blocker",
                     "summary": "CI does not run repository parity against PostgreSQL yet.",
                     "action": "Run scripts/postgresql-runtime-smoke.py against disposable PostgreSQL.",
+                }
+            )
+        if not disposable_restore_ci_present:
+            blockers.append(
+                {
+                    "key": "postgresql_disposable_restore_ci_missing",
+                    "severity": "blocker",
+                    "summary": "CI does not verify PostgreSQL backup restoration yet.",
+                    "action": (
+                        "Run scripts/postgresql-backup-restore-smoke.py after the live "
+                        "PostgreSQL workflow."
+                    ),
                 }
             )
         if not versioned_migration_contract_present:
@@ -1537,6 +1584,7 @@ class MicroScoreRepository:
                 versioned_migration_contract_present
                 and disposable_migration_ci_present
                 and disposable_repository_ci_present
+                and disposable_restore_ci_present
                 and repository_adapter_contract_present
                 and not missing_tables
             ),
@@ -1556,6 +1604,7 @@ class MicroScoreRepository:
             "versioned_migration_contract_present": versioned_migration_contract_present,
             "disposable_migration_ci_present": disposable_migration_ci_present,
             "disposable_repository_ci_present": disposable_repository_ci_present,
+            "disposable_restore_ci_present": disposable_restore_ci_present,
             "repository_adapter_contract_status": repository_adapter_contract.get(
                 "status"
             ),

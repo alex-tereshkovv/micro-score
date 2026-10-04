@@ -17,6 +17,9 @@ enabled only by explicit configuration.
 - CI applies migration `0001_initial_schema`, runs an end-to-end repository
   workflow, and then drives the real FastAPI borrower/analyst lifecycle against
   disposable PostgreSQL 16.
+- CI then dumps that state, restores it into an isolated database, compares all
+  table fingerprints, verifies migration/model invariants, and removes the
+  restore target.
 
 ## Configuration
 
@@ -64,10 +67,14 @@ The `postgresql-migration` GitHub Actions job:
 8. proves segment and decision analytics;
 9. reads live schema and readiness evidence through the runtime repository; and
 10. runs registration, intake, scoring, review, approval, terminal guards, and
-    borrower-safe history through live HTTP endpoints backed by PostgreSQL.
+    borrower-safe history through live HTTP endpoints backed by PostgreSQL;
+11. creates and restores a custom-format backup into a clean database; and
+12. compares row counts and full-row fingerprints for all 12 tables before
+    confirming cleanup.
 
-The executable proofs are `scripts/postgresql-runtime-smoke.py` and the
-PostgreSQL mode of `scripts/live-api-workflow-smoke.py`. Fast unit tests
+The executable proofs are `scripts/postgresql-runtime-smoke.py`, the PostgreSQL
+mode of `scripts/live-api-workflow-smoke.py`, and
+`scripts/postgresql-backup-restore-smoke.py`. Fast unit tests
 still use injected connection factories to isolate SQL semantics and compare
 the adapter with SQLite behavior.
 
@@ -77,7 +84,7 @@ Disposable CI proves code compatibility and repository behavior. It does not
 prove any of the following:
 
 - managed database availability or regional deployment;
-- encrypted backup retention and successful restore drills;
+- encrypted managed-backup retention, point-in-time recovery, or measured RPO/RTO;
 - connection pooling and capacity under load;
 - least-privilege database roles or row-level security;
 - secret rotation and incident response;
@@ -86,6 +93,7 @@ prove any of the following:
 
 Consequently `production_ready` remains `false`, and the Pre-Pilot Readiness
 Gate continues to block real borrower data. `compose.yaml` and
-`docs/DEPLOYMENT_CANDIDATE.md` now provide a reproducible deployment candidate;
-the next storage milestone is managed operational evidence, not another
-repository method or another local container.
+`docs/DEPLOYMENT_CANDIDATE.md` now provide a reproducible deployment candidate.
+The disposable recovery drill is specified in `docs/POSTGRESQL_RECOVERY.md`;
+the next storage milestone is a recorded managed-service recovery exercise, not
+another repository method or another local container.

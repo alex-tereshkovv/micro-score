@@ -33,8 +33,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install --upgrade pip setuptools wheel pip-audit
+          python -m pip install --upgrade --upgrade-strategy eager -r requirements.txt
+
+      - name: Audit installed Python dependencies
+        run: |
+          python -m pip freeze --exclude-editable > /tmp/microscore-installed.txt
+          python -m pip_audit --requirement /tmp/microscore-installed.txt --strict
 
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests
@@ -108,8 +113,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade --upgrade-strategy eager -r requirements.txt
 
       - name: Validate PostgreSQL migration smoke contract
         run: |
@@ -128,6 +133,9 @@ jobs:
         env:
           MICROSCORE_STORAGE_BACKEND: postgresql
         run: python scripts/live-api-workflow-smoke.py
+
+      - name: Run PostgreSQL backup and disposable restore drill
+        run: python scripts/postgresql-backup-restore-smoke.py
 
   deployment-candidate:
     name: Container deployment candidate smoke

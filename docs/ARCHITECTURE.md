@@ -136,7 +136,9 @@ the web tier from starting before storage, migration, seed, and API readiness.
 
 CI tests this topology separately from unit tests and separately from repository
 parity. It also runs the complete live HTTP application lifecycle directly
-against disposable PostgreSQL. See `docs/DEPLOYMENT_CANDIDATE.md`.
+against disposable PostgreSQL, then performs a complete dump/restore integrity
+drill in a second isolated database. See `docs/DEPLOYMENT_CANDIDATE.md` and
+`docs/POSTGRESQL_RECOVERY.md`.
 
 ### Research Pipeline
 
@@ -212,8 +214,9 @@ while the research is still pre-pilot.
 
 - No production authentication provider yet.
 - PostgreSQL Runtime v1, live FastAPI/PostgreSQL workflow CI, and a health-gated
-  container deployment candidate are implemented. Managed deployment is not: production
-  migration orchestration, encrypted backup/restore drills, retention,
+  container deployment candidate are implemented. A disposable dump/restore
+  fingerprint drill is also implemented. Managed deployment is not: production
+  migration orchestration, encrypted managed-backup drills, measured RPO/RTO, retention,
   least-privilege roles, monitoring, high availability, and secret rotation
   remain required before real pilot data.
 - No real MFI borrower data yet.

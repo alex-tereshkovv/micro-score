@@ -341,6 +341,7 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         and postgresql_readiness["versioned_migration_contract_present"]
         and postgresql_readiness["disposable_migration_ci_present"]
         and postgresql_readiness["disposable_repository_ci_present"]
+        and postgresql_readiness["disposable_restore_ci_present"]
         and postgresql_readiness["repository_adapter_contract_status"] == "implemented"
         and postgresql_readiness["repository_adapter_contract_method_count"] == 52
         and postgresql_readiness["repository_adapter_implemented_method_count"] == 52
@@ -775,6 +776,12 @@ def run_workflow(client: ApiClient) -> dict[str, Any]:
         ],
         "postgresql_disposable_migration_ci": postgresql_readiness[
             "disposable_migration_ci_present"
+        ],
+        "postgresql_disposable_repository_ci": postgresql_readiness[
+            "disposable_repository_ci_present"
+        ],
+        "postgresql_disposable_restore_ci": postgresql_readiness[
+            "disposable_restore_ci_present"
         ],
         "postgresql_repository_adapter_contract": postgresql_readiness[
             "repository_adapter_contract_status"

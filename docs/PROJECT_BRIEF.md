@@ -45,6 +45,10 @@ borrower names, identity numbers, phone numbers, bank records, or addresses.
   PostgreSQL runtime exercised against disposable PostgreSQL 16 in CI.
 - A health-gated Docker Compose environment with explicit migration and seed
   jobs, non-root API/web images, and end-to-end HTTP-to-PostgreSQL CI proof.
+- A disposable PostgreSQL recovery drill that verifies a custom-format dump,
+  clean restore, 12 table fingerprints, migration/model invariants, and cleanup.
+- A supply-chain gate with CI vulnerability auditing and weekly update discovery
+  for Python, Docker, and GitHub Actions dependencies.
 - A research pipeline with leakage checks, ablation, calibration, error and
   segment analysis, threshold policies, and a public benchmark.
 - A static GitHub Pages demo that exercises the main workflows without a local

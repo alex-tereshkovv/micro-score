@@ -255,9 +255,11 @@ SQLite is appropriate as the default local backend because it is simple and
 fully reproducible. PostgreSQL Runtime v1 now executes the same 52-method
 repository contract and is tested through the live FastAPI workflow against
 disposable PostgreSQL 16. Docker Compose also assembles the migration, seed,
-API, web, and database health gates from clean images. That closes the local
-code/runtime/deployment assembly gap, but it does not prove managed backups, restore
-drills, retention, monitoring, high availability, or secret rotation.
+API, web, and database health gates from clean images. Recovery Gate v1 then
+dumps the populated database, restores it into a clean database, and compares
+all 12 table fingerprints. That closes the disposable recovery-integrity gap,
+but it does not prove encrypted managed backups, point-in-time recovery,
+measured RPO/RTO, retention, monitoring, high availability, or secret rotation.
 
 ### Show the evidence
 
@@ -269,6 +271,7 @@ drills, retention, monitoring, high availability, or secret rotation.
 - PostgreSQL runtime: `src/microscore_api/postgres_runtime.py`
 - Disposable runtime proof: `scripts/postgresql-runtime-smoke.py`
 - Live HTTP/PostgreSQL proof: `scripts/live-api-workflow-smoke.py`
+- Recovery proof: `scripts/postgresql-backup-restore-smoke.py`, `docs/POSTGRESQL_RECOVERY.md`
 - Deployment topology: `compose.yaml`, `docs/DEPLOYMENT_CANDIDATE.md`
 
 ## 9. Why Human-In-The-Loop?

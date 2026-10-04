@@ -30,7 +30,7 @@ lending service and does not collect real borrower data.
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 139 automated tests plus research, HTTP, database, container, and browser smoke checks |
+| Quality gate | 142 automated tests plus research, HTTP, database, recovery, supply-chain, container, and browser smoke checks |
 
 ## Why This Matters
 
@@ -79,10 +79,12 @@ registry, audit events, and application lifecycle rules. SQLite remains the
 zero-configuration local default. PostgreSQL Runtime v1 can execute the same
 52-method repository contract and is exercised through both repository and live
 FastAPI workflows against disposable PostgreSQL 16 in CI. Deployment Candidate
-v1 also builds and health-checks the complete container stack. This proof is not
-presented as managed-production readiness:
-backups, restore drills, retention, secret rotation, monitoring, and deployment
-controls still remain outside the prototype boundary.
+v1 also builds and health-checks the complete container stack. Recovery Gate v1
+creates a custom-format dump, restores it into an isolated database, and checks
+all 12 table fingerprints in CI. This proof is not presented as
+managed-production readiness: encrypted managed backups, measured RPO/RTO,
+retention, secret rotation, monitoring, and deployment controls remain outside
+the prototype boundary.
 
 ## Run Locally
 
@@ -91,6 +93,9 @@ Install dependencies:
 ```powershell
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
+
+The release environment intentionally excludes Jupyter. For notebook work,
+install the optional `.[notebook]` development extra separately.
 
 Run the complete Windows demo:
 
@@ -133,6 +138,8 @@ Manual API and web-server commands are documented in
 - [Architecture](docs/ARCHITECTURE.md) — runtimes, data flow, boundaries, and gaps
 - [PostgreSQL Runtime v1](docs/POSTGRESQL_RUNTIME.md) — backend selection, CI parity, and operational limits
 - [Deployment Candidate v1](docs/DEPLOYMENT_CANDIDATE.md) — containers, health gates, and one-command topology
+- [PostgreSQL Recovery Gate v1](docs/POSTGRESQL_RECOVERY.md) — dump/restore integrity proof and managed runbook
+- [Supply-Chain Gate v1](docs/SUPPLY_CHAIN.md) — dependency audit and update discovery
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight
 - [Monte Carlo methodology](docs/MONTE_CARLO_METHODOLOGY.md) — assumptions and statistical boundaries
 - [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress

@@ -192,6 +192,17 @@ class PostgresRuntimeRepository(PostgresRepositoryAdapter):
             and "MICROSCORE_STORAGE_BACKEND: postgresql" in workflow
         )
 
+    def _restore_ci_present(self) -> bool:
+        workflow_path = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+        if not workflow_path.exists():
+            return False
+        workflow = workflow_path.read_text(encoding="utf-8")
+        return (
+            "postgres:16" in workflow
+            and "scripts/postgresql-backup-restore-smoke.py" in workflow
+            and "Run PostgreSQL backup and disposable restore drill" in workflow
+        )
+
     def _live_schema_inventory(self) -> list[dict[str, Any]]:
         column_rows = self._fetchall(
             """
@@ -298,6 +309,7 @@ class PostgresRuntimeRepository(PostgresRepositoryAdapter):
         inventory = self._live_schema_inventory()
         artifacts = MicroScoreRepository.postgresql_migration_artifacts(self)
         runtime_ci_present = self._runtime_ci_present()
+        restore_ci_present = self._restore_ci_present()
         contract = repository_contract_summary()
         live_tables = sum(bool(row.get("present_in_runtime")) for row in inventory)
         migration_artifacts = [item for item in artifacts if item["present"]]
@@ -331,14 +343,25 @@ class PostgresRuntimeRepository(PostgresRepositoryAdapter):
                 "postgres_requirement": "Repository writes, reads, tenant scope, JSONB, and lifecycle behavior must run against disposable PostgreSQL.",
                 "action": "Keep the PostgreSQL runtime smoke in the required CI job.",
             },
+            {
+                "key": "postgresql_disposable_restore_ci",
+                "status": "pass" if restore_ci_present else "blocker",
+                "sqlite_evidence": "CI restores a custom-format dump into an isolated PostgreSQL database and compares full-row fingerprints.",
+                "postgres_requirement": "A backup must restore into a clean database without losing schema or content.",
+                "action": "Keep the backup-and-restore drill after the live PostgreSQL workflow.",
+            },
         ]
         return {
-            "status": "ready" if runtime_ci_present else "blocked",
+            "status": "ready" if runtime_ci_present and restore_ci_present else "blocked",
             "generated_at": self._fetchone("SELECT NOW() AS now")["now"].isoformat(),
             "runtime_backend": "postgresql",
             "target_backend": "postgresql",
             "repository_backend_status": "implemented",
-            "migration_ready": live_tables == len(REQUIRED_SCHEMA_TABLES),
+            "migration_ready": (
+                live_tables == len(REQUIRED_SCHEMA_TABLES)
+                and runtime_ci_present
+                and restore_ci_present
+            ),
             "production_ready": False,
             "live_connection_tested": True,
             "required_environment": list(POSTGRESQL_REQUIRED_ENVIRONMENT),
@@ -353,6 +376,7 @@ class PostgresRuntimeRepository(PostgresRepositoryAdapter):
             "versioned_migration_contract_present": len(migration_artifacts) == len(POSTGRESQL_EXPECTED_MIGRATIONS),
             "disposable_migration_ci_present": runtime_ci_present,
             "disposable_repository_ci_present": runtime_ci_present,
+            "disposable_restore_ci_present": restore_ci_present,
             "repository_adapter_contract_status": contract["status"],
             "repository_adapter_contract_present": True,
             "repository_adapter_contract_version": contract["version"],
@@ -379,13 +403,31 @@ class PostgresRuntimeRepository(PostgresRepositoryAdapter):
             "migration_artifacts": artifacts,
             "schema_inventory": inventory,
             "parity_checks": parity_checks,
-            "blockers": [] if runtime_ci_present else [
-                {
-                    "key": "postgresql_disposable_runtime_ci_missing",
-                    "severity": "blocker",
-                    "summary": "The runtime CI marker is missing.",
-                    "action": "Run scripts/postgresql-runtime-smoke.py in the PostgreSQL CI job.",
-                }
+            "blockers": [
+                *(
+                    []
+                    if runtime_ci_present
+                    else [
+                        {
+                            "key": "postgresql_disposable_runtime_ci_missing",
+                            "severity": "blocker",
+                            "summary": "The runtime CI marker is missing.",
+                            "action": "Run scripts/postgresql-runtime-smoke.py in the PostgreSQL CI job.",
+                        }
+                    ]
+                ),
+                *(
+                    []
+                    if restore_ci_present
+                    else [
+                        {
+                            "key": "postgresql_disposable_restore_ci_missing",
+                            "severity": "blocker",
+                            "summary": "The backup-and-restore CI marker is missing.",
+                            "action": "Run scripts/postgresql-backup-restore-smoke.py in the PostgreSQL CI job.",
+                        }
+                    ]
+                ),
             ],
             "next_required_controls": warnings,
             "limitation": POSTGRESQL_RUNTIME_LIMITATION,
