@@ -303,18 +303,29 @@ def run_performance_smoke(
     p95_ms = _percentile(latencies, 0.95)
     p99_ms = _percentile(latencies, 0.99)
     throughput_rps = request_count / elapsed_seconds if elapsed_seconds else 0.0
+    diagnostics = {
+        "requests": request_count,
+        "concurrency": concurrency,
+        "client_p95_ms": p95_ms,
+        "throughput_rps": round(throughput_rps, 3),
+        "runtime_p95_ms": readiness["latency_ms"]["p95_ms"],
+        "runtime_server_error_rate": readiness["server_error_rate"],
+    }
     if errors:
         raise PerformanceFailure(
-            f"{len(errors)} workload request(s) failed: {errors[:5]}"
+            f"{len(errors)} workload request(s) failed: {errors[:5]}; "
+            f"diagnostics={json.dumps(diagnostics, sort_keys=True)}"
         )
     if p95_ms > p95_budget_ms:
         raise PerformanceFailure(
-            f"Client p95 {p95_ms} ms exceeded budget {p95_budget_ms} ms"
+            f"Client p95 {p95_ms} ms exceeded budget {p95_budget_ms} ms; "
+            f"diagnostics={json.dumps(diagnostics, sort_keys=True)}"
         )
     if throughput_rps < minimum_throughput_rps:
         raise PerformanceFailure(
             f"Throughput {throughput_rps:.3f} rps was below budget "
-            f"{minimum_throughput_rps:.3f} rps"
+            f"{minimum_throughput_rps:.3f} rps; "
+            f"diagnostics={json.dumps(diagnostics, sort_keys=True)}"
         )
     if readiness["server_error_count"] != 0:
         raise PerformanceFailure("Runtime telemetry recorded server errors")

@@ -342,9 +342,10 @@ non-use statements, and blocked pre-pilot readiness.
 has a correlation ID and application timing, while a bounded admin snapshot
 separates 4xx from 5xx responses and reports p50/p95/p99 by route template. A
 separate CI job runs 160 real HTTP requests at concurrency 8 against disposable
-PostgreSQL and fails above a 750 ms p95 regression budget or below 15 requests
-per second. Those numbers are intentionally generous regression guards, not a
-production SLO or capacity claim.
+PostgreSQL and fails above a 1,200 ms p95 regression budget or below 15 requests
+per second; the local SQLite release gate uses 750 ms. The environment-specific
+numbers are intentionally generous regression guards, not a backend benchmark,
+production SLO, or capacity claim.
 
 **Why avoid logging the URL and body?**  Query strings and paths can contain
 borrower identifiers; bodies and authorization headers can contain sensitive

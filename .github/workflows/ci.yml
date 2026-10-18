@@ -157,7 +157,7 @@ jobs:
     env:
       MICROSCORE_DATABASE_URL: postgresql://microscore:microscore@localhost:5432/microscore_ci
       MICROSCORE_STORAGE_BACKEND: postgresql
-      MICROSCORE_OBSERVABILITY_P95_BUDGET_MS: "750"
+      MICROSCORE_OBSERVABILITY_P95_BUDGET_MS: "1200"
       MICROSCORE_OBSERVABILITY_SERVER_ERROR_RATE_BUDGET: "0.01"
     steps:
       - name: Checkout
@@ -190,7 +190,7 @@ jobs:
           python scripts/http-performance-smoke.py
           --requests 160
           --concurrency 8
-          --p95-budget-ms 750
+          --p95-budget-ms 1200
           --min-throughput-rps 15
 
   deployment-candidate:

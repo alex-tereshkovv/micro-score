@@ -105,8 +105,10 @@ docker compose up --build --detach
   Confirm `X-Request-ID` propagation, `Server-Timing`, zero 5xx responses,
   client p95 within 750 ms, and throughput of at least 15 requests/second.
   CI repeats the same bounded workload in the separate
-  `observability-performance` job against disposable PostgreSQL 16. These are
-  regression budgets, not a production SLO or production capacity claim.
+  `observability-performance` job against disposable PostgreSQL 16 with a
+  1,200 ms p95 budget for shared-runner and database-network variability.
+  These environment-specific thresholds are regression budgets, not a backend
+  comparison, production SLO, or production capacity claim.
 
 - Git diff has no whitespace errors:
 

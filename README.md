@@ -89,9 +89,10 @@ the prototype boundary.
 Observability & Performance Gate v1 adds privacy-safe request correlation,
 `Server-Timing`, bounded route-template latency/error metrics, and an admin-only
 runtime snapshot. A separate CI job drives 160 requests at concurrency 8 through
-the real FastAPI/PostgreSQL path and enforces a generous 750 ms p95 regression
-budget. This catches engineering regressions; it is not a production SLO or a
-capacity claim.
+the real FastAPI/PostgreSQL path and enforces a generous 1,200 ms p95 regression
+budget; the disposable local SQLite gate remains 750 ms. These environment-
+specific thresholds catch severe engineering regressions; they are not a
+backend benchmark, production SLO, or capacity claim.
 
 ## Run Locally
 

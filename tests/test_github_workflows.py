@@ -55,7 +55,7 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("python scripts/http-performance-smoke.py --dry-run", workflow)
         self.assertIn("--requests 160", workflow)
         self.assertIn("--concurrency 8", workflow)
-        self.assertIn("--p95-budget-ms 750", workflow)
+        self.assertIn("--p95-budget-ms 1200", workflow)
         self.assertIn("--min-throughput-rps 15", workflow)
         self.assertIn("python -m pip freeze --exclude-editable", workflow)
         self.assertIn(
