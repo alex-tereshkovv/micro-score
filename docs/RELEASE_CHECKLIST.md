@@ -95,6 +95,19 @@ docker compose up --build --detach
 .venv\Scripts\python scripts\live-security-workflow-smoke.py
 ```
 
+- HTTP observability/performance regression gate passes locally:
+
+```powershell
+.venv\Scripts\python scripts\http-performance-smoke.py --dry-run
+.venv\Scripts\python scripts\http-performance-smoke.py --requests 160 --concurrency 8 --p95-budget-ms 750 --min-throughput-rps 15
+```
+
+  Confirm `X-Request-ID` propagation, `Server-Timing`, zero 5xx responses,
+  client p95 within 750 ms, and throughput of at least 15 requests/second.
+  CI repeats the same bounded workload in the separate
+  `observability-performance` job against disposable PostgreSQL 16. These are
+  regression budgets, not a production SLO or production capacity claim.
+
 - Git diff has no whitespace errors:
 
 ```powershell

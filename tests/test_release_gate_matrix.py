@@ -400,6 +400,24 @@ SECURITY_MATRIX_ROWS = [
         ],
     },
     {
+        "area": "Runtime observability and performance",
+        "artifacts": [
+            "tests/test_observability.py",
+            "scripts/http-performance-smoke.py",
+            ".github/workflows/ci.yml",
+            "src/microscore_api/observability.py",
+            "docs/OBSERVABILITY_AND_PERFORMANCE.md",
+        ],
+        "markers": [
+            "/admin/operations/runtime-readiness",
+            "X-Request-ID",
+            "Server-Timing",
+            "p95_latency_budget",
+            "server_error_rate_budget",
+            "production_capacity_claim",
+        ],
+    },
+    {
         "area": "Live security workflow stays inside the release gate",
         "artifacts": [
             "scripts/check.ps1",

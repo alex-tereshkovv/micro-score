@@ -1154,6 +1154,36 @@ how human decisions compare with model risk, regional context, proxy warnings,
 and model review recommendations. It still does not know whether a loan was
 repaid, so it must not be read as validated credit-performance evidence.
 
+## Runtime Observability
+
+All FastAPI responses include `X-Request-ID` and `Server-Timing`. A valid
+caller-supplied request ID is preserved; otherwise the API generates one.
+Structured request events contain only the correlation ID, HTTP method, route
+template, status code, and duration. They exclude query strings, bodies,
+authorization values, tokens, email addresses, and database credentials.
+
+### `GET /admin/operations/runtime-readiness`
+
+Returns an admin-only, process-local telemetry snapshot. The typed
+`RuntimeReadinessResponse` contains:
+
+- `status`: `warming_up`, `ready`, or `attention`;
+- request, in-flight, client-error, and server-error counts;
+- `server_error_rate` and status-class totals;
+- bounded global and per-route latency summaries with p50, p95, and p99;
+- `budget_checks` for `p95_latency_budget` and
+  `server_error_rate_budget`;
+- `sample_capacity`, `production_ready`, and an explicit `limitation`.
+
+The default budgets are 750 ms p95 application latency and a 1% server-error
+rate. They can be configured with
+`MICROSCORE_OBSERVABILITY_P95_BUDGET_MS` and
+`MICROSCORE_OBSERVABILITY_SERVER_ERROR_RATE_BUDGET`.
+
+This endpoint is diagnostic evidence for one running process. It is not a
+retained metrics system, distributed trace, alerting service, production SLO,
+or production capacity claim. See `docs/OBSERVABILITY_AND_PERFORMANCE.md`.
+
 ## Admin Flow
 
 List registered model versions:

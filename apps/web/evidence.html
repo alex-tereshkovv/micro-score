@@ -51,7 +51,7 @@
           </div>
           <div class="hero-metrics">
             <div><strong>90+</strong><span>traceable engineering increments</span></div>
-            <div><strong>142</strong><span>Python unit and integration tests</span></div>
+            <div><strong>147</strong><span>Python unit and integration tests</span></div>
             <div><strong>52 / 52</strong><span>PostgreSQL repository methods</span></div>
             <div><strong>3 layers</strong><span>research, product, public review</span></div>
           </div>
@@ -70,7 +70,7 @@
             <p class="evidence-eyebrow">01 · Development journey</p>
             <h2>The architecture followed the evidence.</h2>
           </div>
-          <p>Twelve repository milestones show how a notebook-scale experiment became a governed, role-based engineering system.</p>
+          <p>Thirteen repository milestones show how a notebook-scale experiment became a governed, role-based engineering system.</p>
         </div>
 
         <div class="journey-grid">
@@ -192,6 +192,16 @@
               <h3>Prove that state can be recovered, not only created</h3>
               <p>CI now restores the populated PostgreSQL database, compares all 12 table fingerprints, audits installed dependencies, and tracks update proposals.</p>
               <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/POSTGRESQL_RECOVERY.md" target="_blank" rel="noreferrer">Inspect recovery runbook ↗</a>
+            </div>
+          </article>
+          <article data-milestone>
+            <div class="journey-date"><span>October 4</span><em>2026</em></div>
+            <div class="journey-marker">13</div>
+            <div class="journey-copy">
+              <span>Operational evidence</span>
+              <h3>Measure the request path without overstating capacity</h3>
+              <p>Privacy-safe correlation, bounded latency/error telemetry, and a separate PostgreSQL HTTP budget job now turn operational regressions into visible failures.</p>
+              <a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/OBSERVABILITY_AND_PERFORMANCE.md" target="_blank" rel="noreferrer">Inspect observability methodology ↗</a>
             </div>
           </article>
         </div>
@@ -327,9 +337,15 @@
             <div role="cell"><span class="boundary-pill">Managed RPO/RTO unverified</span></div>
           </article>
           <article role="row">
-            <div role="cell"><span class="proof-index">09</span><strong>Release discipline</strong><small>One command proves research, product, storage, recovery, and security</small></div>
+            <div role="cell"><span class="proof-index">09</span><strong>Runtime observability</strong><small>Safe correlation, timing, bounded metrics, and HTTP budgets</small></div>
+            <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/docs/OBSERVABILITY_AND_PERFORMANCE.md" target="_blank" rel="noreferrer">Observability methodology ↗</a></div>
+            <div role="cell"><code>test_observability.py</code><code>http-performance-smoke.py</code></div>
+            <div role="cell"><span class="boundary-pill">Not a production SLO</span></div>
+          </article>
+          <article role="row">
+            <div role="cell"><span class="proof-index">10</span><strong>Release discipline</strong><small>One command proves research, product, storage, recovery, observability, and security</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/scripts/check.ps1" target="_blank" rel="noreferrer">Release gate ↗</a></div>
-            <div role="cell"><code>142 Python tests</code><code>11 local smoke workflows</code></div>
+            <div role="cell"><code>147 Python tests</code><code>12 local smoke workflows</code></div>
             <div role="cell"><span class="boundary-pill">Evidence can still evolve</span></div>
           </article>
         </div>

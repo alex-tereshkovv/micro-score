@@ -174,6 +174,13 @@ try {
         Assert-LastExitCode "Live security workflow smoke test"
     }
 
+    Invoke-Step "Run HTTP performance smoke gate" {
+        & $python scripts\http-performance-smoke.py --dry-run
+        Assert-LastExitCode "HTTP performance smoke contract"
+        & $python scripts\http-performance-smoke.py --requests 160 --concurrency 8 --p95-budget-ms 750 --min-throughput-rps 15
+        Assert-LastExitCode "HTTP performance smoke test"
+    }
+
     Invoke-Step "Check whitespace in git diff" {
         & git diff --check
         Assert-LastExitCode "Git whitespace check"

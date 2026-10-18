@@ -750,6 +750,7 @@ class ApiIntegrationTests(unittest.TestCase):
         self.assertIn("/admin/security/readiness", paths)
         self.assertIn("/admin/governance/pre-pilot-readiness", paths)
         self.assertIn("/admin/storage/postgresql-readiness", paths)
+        self.assertIn("/admin/operations/runtime-readiness", paths)
         self.assertIn("/admin/security/identity-readiness", paths)
         self.assertIn("/admin/security/mfa-readiness", paths)
         self.assertIn("/admin/users/{email}/mfa/attest", paths)

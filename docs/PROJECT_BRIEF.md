@@ -49,6 +49,9 @@ borrower names, identity numbers, phone numbers, bank records, or addresses.
   clean restore, 12 table fingerprints, migration/model invariants, and cleanup.
 - A supply-chain gate with CI vulnerability auditing and weekly update discovery
   for Python, Docker, and GitHub Actions dependencies.
+- A bounded observability and performance gate with request correlation,
+  privacy-safe structured events, route-template latency/error metrics, and a
+  real HTTP workload repeated against disposable PostgreSQL 16 in CI.
 - A research pipeline with leakage checks, ablation, calibration, error and
   segment analysis, threshold policies, and a public benchmark.
 - A static GitHub Pages demo that exercises the main workflows without a local
@@ -99,8 +102,8 @@ and human oversight could support regional lending decisions.
 1. Validate data definitions and workflow assumptions with local experts.
 2. Obtain consented, privacy-reviewed pilot data or a stronger public proxy.
 3. Test temporal stability, calibration, and segment performance out of sample.
-4. Complete production identity, managed database operations, deployment, and
-   monitoring controls.
+4. Complete production identity, managed database operations, deployment,
+   retained observability, alerting, and monitoring controls.
 5. Re-estimate policy economics and Monte Carlo stresses from observed outcomes.
 
 ## Project Takeaway

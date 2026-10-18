@@ -30,7 +30,7 @@ lending service and does not collect real borrower data.
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 142 automated tests plus research, HTTP, database, recovery, supply-chain, container, and browser smoke checks |
+| Quality gate | 147 automated tests plus research, HTTP, database, observability, performance, recovery, supply-chain, container, and browser smoke checks |
 
 ## Why This Matters
 
@@ -83,8 +83,15 @@ v1 also builds and health-checks the complete container stack. Recovery Gate v1
 creates a custom-format dump, restores it into an isolated database, and checks
 all 12 table fingerprints in CI. This proof is not presented as
 managed-production readiness: encrypted managed backups, measured RPO/RTO,
-retention, secret rotation, monitoring, and deployment controls remain outside
+retention, secret rotation, retained monitoring, and deployment controls remain outside
 the prototype boundary.
+
+Observability & Performance Gate v1 adds privacy-safe request correlation,
+`Server-Timing`, bounded route-template latency/error metrics, and an admin-only
+runtime snapshot. A separate CI job drives 160 requests at concurrency 8 through
+the real FastAPI/PostgreSQL path and enforces a generous 750 ms p95 regression
+budget. This catches engineering regressions; it is not a production SLO or a
+capacity claim.
 
 ## Run Locally
 
@@ -140,6 +147,7 @@ Manual API and web-server commands are documented in
 - [Deployment Candidate v1](docs/DEPLOYMENT_CANDIDATE.md) — containers, health gates, and one-command topology
 - [PostgreSQL Recovery Gate v1](docs/POSTGRESQL_RECOVERY.md) — dump/restore integrity proof and managed runbook
 - [Supply-Chain Gate v1](docs/SUPPLY_CHAIN.md) — dependency audit and update discovery
+- [Observability & Performance Gate v1](docs/OBSERVABILITY_AND_PERFORMANCE.md) — safe telemetry and bounded HTTP regression budgets
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight
 - [Monte Carlo methodology](docs/MONTE_CARLO_METHODOLOGY.md) — assumptions and statistical boundaries
 - [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress

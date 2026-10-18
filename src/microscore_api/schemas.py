@@ -226,6 +226,54 @@ class HealthResponse(BaseModel):
     storage: StorageReadinessResponse
 
 
+class RuntimeLatencySummaryResponse(BaseModel):
+    sample_count: int = Field(ge=0)
+    min_ms: float = Field(ge=0.0)
+    average_ms: float = Field(ge=0.0)
+    p50_ms: float = Field(ge=0.0)
+    p95_ms: float = Field(ge=0.0)
+    p99_ms: float = Field(ge=0.0)
+    max_ms: float = Field(ge=0.0)
+
+
+class RuntimeRouteMetricResponse(BaseModel):
+    method: str
+    route: str
+    request_count: int = Field(ge=0)
+    client_error_count: int = Field(ge=0)
+    server_error_count: int = Field(ge=0)
+    server_error_rate: float = Field(ge=0.0, le=1.0)
+    latency_ms: RuntimeLatencySummaryResponse
+
+
+class RuntimeBudgetCheckResponse(BaseModel):
+    key: str
+    status: Literal["pass", "fail"]
+    observed: float = Field(ge=0.0)
+    threshold: float = Field(ge=0.0)
+    unit: Literal["ms", "ratio"]
+
+
+class RuntimeReadinessResponse(BaseModel):
+    status: Literal["warming_up", "ready", "attention"]
+    generated_at: str
+    process_started_at: str
+    uptime_seconds: float = Field(ge=0.0)
+    request_count: int = Field(ge=0)
+    in_flight_requests: int = Field(ge=0)
+    client_error_count: int = Field(ge=0)
+    server_error_count: int = Field(ge=0)
+    server_error_rate: float = Field(ge=0.0, le=1.0)
+    status_classes: dict[str, int] = Field(default_factory=dict)
+    latency_ms: RuntimeLatencySummaryResponse
+    top_routes: list[RuntimeRouteMetricResponse] = Field(default_factory=list)
+    budgets: dict[str, float] = Field(default_factory=dict)
+    budget_checks: list[RuntimeBudgetCheckResponse] = Field(default_factory=list)
+    sample_capacity: int = Field(ge=1)
+    production_ready: bool = False
+    limitation: str
+
+
 class UserPublic(BaseModel):
     email: str
     role: Role

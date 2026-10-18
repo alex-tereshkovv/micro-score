@@ -338,6 +338,20 @@ borrowers at a Kazakhstan MFI.
 data supports. The project controls that risk through explicit evidence classes,
 non-use statements, and blocked pre-pilot readiness.
 
+**How do you know the API has not become operationally slower?**  Every response
+has a correlation ID and application timing, while a bounded admin snapshot
+separates 4xx from 5xx responses and reports p50/p95/p99 by route template. A
+separate CI job runs 160 real HTTP requests at concurrency 8 against disposable
+PostgreSQL and fails above a 750 ms p95 regression budget or below 15 requests
+per second. Those numbers are intentionally generous regression guards, not a
+production SLO or capacity claim.
+
+**Why avoid logging the URL and body?**  Query strings and paths can contain
+borrower identifiers; bodies and authorization headers can contain sensitive
+or secret material. The event therefore keeps only request ID, method, route
+template, status, and duration. Requests without a route template collapse to
+one `/unmatched` label instead of exposing values or creating high cardinality.
+
 **What is your most important negative result?**  Removing
 `late_payment_count` collapses ranking performance. That result changed the
 project from a simple accuracy demo into a study of evidence quality and policy.

@@ -137,6 +137,62 @@ jobs:
       - name: Run PostgreSQL backup and disposable restore drill
         run: python scripts/postgresql-backup-restore-smoke.py
 
+  observability-performance:
+    name: PostgreSQL observability and performance smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: microscore_ci
+          POSTGRES_USER: microscore
+          POSTGRES_PASSWORD: microscore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U microscore -d microscore_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MICROSCORE_DATABASE_URL: postgresql://microscore:microscore@localhost:5432/microscore_ci
+      MICROSCORE_STORAGE_BACKEND: postgresql
+      MICROSCORE_OBSERVABILITY_P95_BUDGET_MS: "750"
+      MICROSCORE_OBSERVABILITY_SERVER_ERROR_RATE_BUDGET: "0.01"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade --upgrade-strategy eager -r requirements.txt
+
+      - name: Apply PostgreSQL schema
+        run: python scripts/postgresql-migration-smoke.py
+
+      - name: Validate HTTP performance contract
+        run: python scripts/http-performance-smoke.py --dry-run
+
+      - name: Enforce bounded HTTP performance and telemetry budgets
+        run: >-
+          python scripts/http-performance-smoke.py
+          --requests 160
+          --concurrency 8
+          --p95-budget-ms 750
+          --min-throughput-rps 15
+
   deployment-candidate:
     name: Container deployment candidate smoke
     runs-on: ubuntu-latest

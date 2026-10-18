@@ -18,7 +18,10 @@ from functools import lru_cache
 import hashlib
 import hmac
 from io import StringIO
+import json
+import logging
 import os
+import time
 from typing import Any
 from urllib.parse import quote, urlparse
 from uuid import uuid4
@@ -45,6 +48,13 @@ from .database import (
 from .analytics import policy_analytics as build_policy_analytics
 from .privacy import find_forbidden_signal_paths
 from .rate_limit import LoginRateLimiter
+from .observability import (
+    DEFAULT_P95_LATENCY_BUDGET_MS,
+    DEFAULT_SERVER_ERROR_RATE_BUDGET,
+    runtime_metrics,
+    safe_request_id,
+    safe_route_label,
+)
 from .schemas import (
     ApplicationDecisionCreate,
     ApplicationCreate,
@@ -77,6 +87,7 @@ from .schemas import (
     PortfolioSimulationResponse,
     PortfolioSimulationSummary,
     RegisterRequest,
+    RuntimeReadinessResponse,
     SegmentAnalyticsRow,
     SecurityReadinessResponse,
     StaffInviteAccept,
@@ -590,8 +601,101 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_cors_origins(),
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID", "Server-Timing"],
 )
+request_logger = logging.getLogger("microscore.request")
+request_logger.setLevel(logging.INFO)
+
+
+def _configured_positive_float(name: str, default: float) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def configured_runtime_budgets() -> tuple[float, float]:
+    latency = _configured_positive_float(
+        "MICROSCORE_OBSERVABILITY_P95_BUDGET_MS",
+        DEFAULT_P95_LATENCY_BUDGET_MS,
+    )
+    error_rate = _configured_positive_float(
+        "MICROSCORE_OBSERVABILITY_SERVER_ERROR_RATE_BUDGET",
+        DEFAULT_SERVER_ERROR_RATE_BUDGET,
+    )
+    return latency, min(1.0, error_rate)
+
+
+@app.middleware("http")
+async def observe_http_request(request: Request, call_next):
+    request_id = safe_request_id(request.headers.get("X-Request-ID"))
+    request.state.request_id = request_id
+    started_at = time.perf_counter()
+    runtime_metrics.begin_request()
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    try:
+        response = await call_next(request)
+        status_code = int(response.status_code)
+    except Exception:
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        route_object = request.scope.get("route")
+        route = safe_route_label(
+            request.url.path,
+            getattr(route_object, "path", None),
+        )
+        runtime_metrics.complete_request(
+            method=request.method,
+            route=route,
+            status_code=status_code,
+            duration_ms=duration_ms,
+        )
+        request_logger.error(
+            json.dumps(
+                {
+                    "event": "http_request_failed",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "route": route,
+                    "status_code": status_code,
+                    "duration_ms": round(duration_ms, 3),
+                },
+                sort_keys=True,
+            ),
+            exc_info=False,
+        )
+        raise
+
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    route_object = request.scope.get("route")
+    route = safe_route_label(
+        request.url.path,
+        getattr(route_object, "path", None),
+    )
+    runtime_metrics.complete_request(
+        method=request.method,
+        route=route,
+        status_code=status_code,
+        duration_ms=duration_ms,
+    )
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Server-Timing"] = f"app;dur={duration_ms:.3f}"
+    request_logger.info(
+        json.dumps(
+            {
+                "event": "http_request_completed",
+                "request_id": request_id,
+                "method": request.method,
+                "route": route,
+                "status_code": status_code,
+                "duration_ms": round(duration_ms, 3),
+            },
+            sort_keys=True,
+        )
+    )
+    return response
+
 security = HTTPBearer()
 
 
@@ -3111,6 +3215,20 @@ def health(repository: MicroScoreRepository = Depends(get_repository)) -> Health
         "database": str(getattr(repository, "database_label", repository.db_path)),
         "storage": repository.storage_readiness(),
     }
+
+
+@app.get(
+    "/admin/operations/runtime-readiness",
+    response_model=RuntimeReadinessResponse,
+)
+def runtime_readiness(
+    _user: dict[str, Any] = Depends(require_admin_user),
+) -> dict[str, Any]:
+    p95_budget_ms, error_rate_budget = configured_runtime_budgets()
+    return runtime_metrics.snapshot(
+        p95_latency_budget_ms=p95_budget_ms,
+        server_error_rate_budget=error_rate_budget,
+    )
 
 
 @app.get("/governance/pilot-readiness", response_model=PilotReadinessResponse)

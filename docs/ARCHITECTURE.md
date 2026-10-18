@@ -22,6 +22,7 @@ flowchart LR
     FastAPI --> Scoring["Scoring service\nmicroscore package"]
     Registry --> Scoring
     FastAPI --> Simulation["Monte Carlo engine\nportfolio uncertainty"]
+    FastAPI --> Telemetry["Bounded runtime telemetry\nrequest ID + timing + budgets"]
     Scoring --> Simulation
     Scoring --> Reports["Research reports\nreports/research-artifacts"]
 
@@ -113,6 +114,10 @@ Main local components:
 - tenant-scoped, seeded Monte Carlo simulation for baseline/adverse/severe
   portfolio outcomes with audited assumptions, snapshot fingerprints, numerical
   precision diagnostics, and an immutable run registry;
+- credential-safe structured request events, correlation IDs, `Server-Timing`,
+  bounded process-local latency/error metrics, and an admin-only runtime
+  readiness endpoint; a separate CI job enforces generous HTTP regression
+  budgets against disposable PostgreSQL without claiming production capacity;
 - SQLite demo database generated under `data/app/` by default, with explicit storage
   readiness metadata exposed through `/health`, plus
   `/admin/storage/postgresql-readiness` for PostgreSQL schema inventory,
@@ -189,6 +194,9 @@ It supports:
     storage, model, Monte Carlo, privacy, review-flow, and tenant-isolation
     evidence into `/admin/governance/pre-pilot-readiness`; it separates public
     demo readiness from permission to handle real borrower data.
+13. Request middleware adds a safe correlation ID, application timing, and a
+    route-template metric; administrators can inspect the bounded process-local
+    snapshot while CI independently exercises the real HTTP path.
 
 ## Privacy Boundary
 
@@ -221,6 +229,9 @@ while the research is still pre-pilot.
   remain required before real pilot data.
 - No real MFI borrower data yet.
 - No signed external model-artifact store or production drift monitoring yet.
+- Runtime telemetry is process-local and bounded. Retained metrics, distributed
+  tracing, cross-instance aggregation, alert delivery, production SLOs, and
+  managed-environment capacity/soak testing remain future work.
 - Monte Carlo stress shifts and financial assumptions are transparent defaults,
   not estimates calibrated from real MFI outcomes.
 - The pilot-data schema is defined, but it has not been validated with a real
