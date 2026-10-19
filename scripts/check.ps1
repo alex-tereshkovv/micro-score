@@ -181,6 +181,11 @@ try {
         Assert-LastExitCode "HTTP performance smoke test"
     }
 
+    Invoke-Step "Validate release candidate submission smoke" {
+        & $python scripts\build-submission-manifest.py --check
+        Assert-LastExitCode "Release candidate submission manifest"
+    }
+
     Invoke-Step "Check whitespace in git diff" {
         & git diff --check
         Assert-LastExitCode "Git whitespace check"

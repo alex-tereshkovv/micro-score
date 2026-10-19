@@ -9,7 +9,7 @@ research-backed product prototype, not a deployed lending system.
 - Use `showcase.html?autoplay=1` for the polished two-minute narrative. Use
   `showcase.html?mode=technical&guide=1` to rehearse the five-minute technical
   defense. Close Presenter Guide before recording a clean autoplay pass.
-- Close unrelated browser tabs before recording. Admissions reviewers do not
+- Close unrelated browser tabs before recording. Reviewers do not
   need to meet your entire tab ecosystem.
 - Record at 1920×1080 or 1440×900. The presentation is deterministic, uses no
   private data, and pauses automatically if the browser tab loses visibility.
@@ -85,7 +85,7 @@ is privacy-safe validation with local experts or an MFI partner.
 
 ### 1:42 - 1:59 — Evidence and close
 
-End on the evidence: 147 Python tests, a reproducible ten-page engineering
+End on the evidence: 152 Python tests, a reproducible ten-page engineering
 report, a public synthetic-data demo, and the inspected source repository.
 
 Closing line: “MicroScore is not a claim that a model should decide who receives

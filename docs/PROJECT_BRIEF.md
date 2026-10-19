@@ -26,6 +26,7 @@ product demo for reviewing risk, explanations, and policy trade-offs.
 5. Research paper: [PDF](../output/pdf/MicroScore_Research_Paper.pdf) · [source](RESEARCH_PAPER.md)
 6. Model governance: [MODEL_CARD.md](MODEL_CARD.md)
 7. Technical interview preparation: [TECHNICAL_INTERVIEW_GUIDE.md](TECHNICAL_INTERVIEW_GUIDE.md)
+8. Release-candidate boundary and evidence manifest: [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)
 
 Demo accounts are `borrower@test.com`, `analyst@test.com`, and
 `admin@test.com`. The password is `password123`; the staff/admin MFA code is
@@ -52,6 +53,9 @@ borrower names, identity numbers, phone numbers, bank records, or addresses.
 - A bounded observability and performance gate with request correlation,
   privacy-safe structured events, route-template latency/error metrics, and a
   real HTTP workload repeated against disposable PostgreSQL 16 in CI.
+- A deterministic submission manifest that hashes the critical evidence set,
+  rejects stale reviewer claims, and keeps the release explicitly
+  reviewer-ready rather than production-ready.
 - A research pipeline with leakage checks, ablation, calibration, error and
   segment analysis, threshold policies, and a public benchmark.
 - A static GitHub Pages demo that exercises the main workflows without a local

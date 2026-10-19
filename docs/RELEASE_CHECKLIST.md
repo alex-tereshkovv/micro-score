@@ -120,6 +120,8 @@ git diff --check
 
 - `docs/ENGINEERING_QUALITY.md` includes the Release Gate Matrix v1.
 - `docs/ENGINEERING_QUALITY.md` includes the Security Readiness Gate Matrix v1.
+- `docs/RELEASE_CANDIDATE.md` defines the reviewer-ready freeze boundary and
+  the claims that remain blocked.
 - Every product, security, and research promise in the matrix points to a real
   test or smoke script plus key markers that must stay covered.
 - Matrix drift is checked by:
@@ -127,6 +129,30 @@ git diff --check
 ```powershell
 .venv\Scripts\python -m unittest tests.test_release_gate_matrix
 ```
+
+## Submission Integrity
+
+- `reports/submission/manifest.json` is generated only after the public pages,
+  documentation, research artifacts, PDFs, tests, and release scripts are
+  final.
+- The manifest records synchronized quality counts, explicit limitations, and
+  SHA-256 hashes for the critical reviewer-facing evidence set.
+- The deterministic manifest check passes without rewriting any artifact:
+
+```powershell
+.venv\Scripts\python scripts\build-submission-manifest.py --check
+```
+
+- Submission-readiness checks pass:
+
+```powershell
+.venv\Scripts\python -m unittest tests.test_submission_readiness
+```
+
+- Both PDFs have been rendered and visually reviewed after their final build.
+- The release remains `review_ready_not_production_ready`; a clean manifest is
+  a consistency control, not production validation or a cryptographic release
+  signature.
 
 ## Demo Safety
 

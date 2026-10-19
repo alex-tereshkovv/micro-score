@@ -278,7 +278,7 @@ def page_header_footer(canvas, doc) -> None:
         canvas.drawString(doc.leftMargin, height - 19.5 * mm, "MICROSCORE ENGINEERING CASE STUDY")
         canvas.setFont(FONT, 7)
         canvas.setFillColor(MUTED)
-        canvas.drawRightString(width - doc.rightMargin, height - 19.5 * mm, "ADMISSIONS EVIDENCE PACKAGE")
+        canvas.drawRightString(width - doc.rightMargin, height - 19.5 * mm, "ENGINEERING EVIDENCE PACKAGE")
     canvas.setStrokeColor(LINE)
     canvas.setLineWidth(0.5)
     canvas.line(doc.leftMargin, 18 * mm, width - doc.rightMargin, 18 * mm)
@@ -432,7 +432,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     story.extend(
         [
             Spacer(1, 8 * mm),
-            paragraph("COMPUTER ENGINEERING ADMISSIONS CASE STUDY", styles["eyebrow"]),
+            paragraph("ENGINEERING CASE STUDY", styles["eyebrow"]),
             paragraph("Engineering a responsible credit-risk system for thin-file borrowers", styles["title"]),
             paragraph(
                 "MicroScore combines interpretable machine learning, a role-based FastAPI product, "
@@ -444,7 +444,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             metric_cards(
                 [
                     (metric(benchmark_rf["test_roc_auc"]), "UCI benchmark RF ROC-AUC"),
-                    ("126", "automated release-gate tests"),
+                    ("152", "automated release-gate tests"),
                     ("52 / 52", "PostgreSQL adapter methods"),
                     ("3", "connected engineering layers"),
                 ],
@@ -606,7 +606,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
                     ["Product API", "FastAPI, typed schemas, repository boundary", "Role access, tenant scoping, immutable score provenance, audit events"],
                     ["Persistence", "SQLite prototype + PostgreSQL adapter", "52/52 adapter methods and reviewed migration contract"],
                     ["Public demo", "Static HTML/CSS/JavaScript", "Browser-local synthetic API and GitHub Pages deployment"],
-                    ["Verification", "unittest + Node smoke workflows", "126 tests plus live API, security, research, and frontend gates"],
+                    ["Verification", "unittest + Node smoke workflows", "152 tests plus live API, security, research, and frontend gates"],
                 ],
                 [27 * mm, 52 * mm, 85 * mm],
                 styles,
@@ -937,8 +937,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             Spacer(1, 4 * mm),
             metric_cards(
                 [
-                    ("126", "Python unit and integration tests"),
-                    ("7", "major smoke and syntax gates"),
+                    ("152", "Python unit and integration tests"),
+                    ("13", "local smoke workflows"),
                     ("52 / 52", "PostgreSQL adapter methods"),
                     ("1", "repeatable release command"),
                 ],
@@ -962,7 +962,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             Spacer(1, 7 * mm),
             card(
                 "Verified release snapshot",
-                "The admissions review release passed all 126 tests plus research, frontend, static-demo, PostgreSQL migration, live API, and live security smoke checks before publication.",
+                "The release candidate passed all 152 tests plus research, frontend, static-demo, PostgreSQL migration, live API, security, recovery, observability, and performance smoke checks before publication.",
                 styles,
                 tone="teal",
             ),
@@ -1047,7 +1047,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
                 qr_drawing(LIVE_REVIEW_URL, 30 * mm),
                 [
                     paragraph("EXPLORE THE PROJECT", styles["eyebrow"]),
-                    paragraph("Live admissions review", styles["card_title"]),
+                    paragraph("Live engineering review", styles["card_title"]),
                     paragraph(LIVE_REVIEW_URL, styles["small"]),
                     Spacer(1, 5),
                     paragraph("Source and reproducibility", styles["card_title"]),
@@ -1095,7 +1095,7 @@ def build_pdf(output_path: Path) -> Path:
         bottomMargin=23 * mm,
         title="MicroScore Engineering Case Study",
         author="Alexandr",
-        subject="Computer Engineering admissions evidence package",
+        subject="MicroScore engineering evidence package",
         creator="MicroScore reproducible report builder",
     )
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="main", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
@@ -1105,7 +1105,7 @@ def build_pdf(output_path: Path) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build the MicroScore admissions engineering case study PDF.")
+    parser = argparse.ArgumentParser(description="Build the MicroScore engineering case study PDF.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     output = build_pdf(args.output.resolve())

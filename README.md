@@ -30,7 +30,7 @@ lending service and does not collect real borrower data.
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 147 automated tests plus research, HTTP, database, observability, performance, recovery, supply-chain, container, and browser smoke checks |
+| Quality gate | 152 automated tests plus research, HTTP, database, observability, performance, recovery, supply-chain, container, submission-manifest, and browser smoke checks |
 
 ## Why This Matters
 
@@ -149,6 +149,7 @@ Manual API and web-server commands are documented in
 - [PostgreSQL Recovery Gate v1](docs/POSTGRESQL_RECOVERY.md) — dump/restore integrity proof and managed runbook
 - [Supply-Chain Gate v1](docs/SUPPLY_CHAIN.md) — dependency audit and update discovery
 - [Observability & Performance Gate v1](docs/OBSERVABILITY_AND_PERFORMANCE.md) — safe telemetry and bounded HTTP regression budgets
+- [Release Candidate Freeze v1](docs/RELEASE_CANDIDATE.md) — synchronized claims and hashed submission evidence
 - [Model card](docs/MODEL_CARD.md) — intended use, metrics, risks, and oversight
 - [Monte Carlo methodology](docs/MONTE_CARLO_METHODOLOGY.md) — assumptions and statistical boundaries
 - [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress

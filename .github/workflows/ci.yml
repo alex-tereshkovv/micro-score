@@ -44,6 +44,9 @@ jobs:
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests
 
+      - name: Validate release candidate submission manifest
+        run: python scripts/build-submission-manifest.py --check
+
       - name: Check Python syntax
         run: python -m compileall src/microscore src/microscore_api src/train_model.py tests
 

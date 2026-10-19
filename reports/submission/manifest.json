@@ -1,0 +1,168 @@
+{
+  "artifacts": [
+    {
+      "bytes": 8113,
+      "path": ".github/workflows/ci.yml",
+      "sha256": "fc75fc87d8670de0a180fc2162747885746336de98110d31e1dada0aaae9228f"
+    },
+    {
+      "bytes": 9002,
+      "path": "README.md",
+      "sha256": "f4da0650d6e4a093c795094923df7bde74a983cafaa0b4803a0837312394b404"
+    },
+    {
+      "bytes": 27003,
+      "path": "apps/web/evidence.html",
+      "sha256": "4ba4c9e6dda31c468aff730e27596916861db058a741c0cb3e7311325f792a1b"
+    },
+    {
+      "bytes": 51813,
+      "path": "apps/web/index.html",
+      "sha256": "1e4fe41f422bbfcef216d293d6c8c0bd5644c6738094297c1abaa554826b9cc8"
+    },
+    {
+      "bytes": 24078,
+      "path": "apps/web/showcase.html",
+      "sha256": "5e086cccd82192d782788ee985679073d829d6c20eb3a6abd8fe546549658a5f"
+    },
+    {
+      "bytes": 7799,
+      "path": "docs/DATA_STATEMENT.md",
+      "sha256": "2bb4092fb433651e77749cad5e3ecc3c5ef03eeed7f292c5c7719d334816ba4c"
+    },
+    {
+      "bytes": 16628,
+      "path": "docs/ENGINEERING_QUALITY.md",
+      "sha256": "106510ac5b4341dc01fae88d8bb1991a05ebacfea5f20ad8e1ae1697808dc1c8"
+    },
+    {
+      "bytes": 9680,
+      "path": "docs/MODEL_CARD.md",
+      "sha256": "68aa2e54252a4bddb8df4a3e7dcb2040262162dc0dc6a0e91f500cfb3eb21c83"
+    },
+    {
+      "bytes": 4863,
+      "path": "docs/OBSERVABILITY_AND_PERFORMANCE.md",
+      "sha256": "e08f3a05e9022048c10672bb81c453a879ca3595286bfa84e32e0495a3a81057"
+    },
+    {
+      "bytes": 6238,
+      "path": "docs/PROJECT_BRIEF.md",
+      "sha256": "70d59b49c863640699cef71d2f8b55df03297a008f9e065dccc13d4293cca120"
+    },
+    {
+      "bytes": 3441,
+      "path": "docs/RELEASE_CANDIDATE.md",
+      "sha256": "33eda6f741542b962206bf100b09ed11bc8327bb6a6ed973992ece9d44df5ca8"
+    },
+    {
+      "bytes": 14648,
+      "path": "docs/RELEASE_CHECKLIST.md",
+      "sha256": "90120b109f5f0c8c38adeeea480a31d4a1648288a431bc81c033ace76ce970cf"
+    },
+    {
+      "bytes": 23604,
+      "path": "docs/RESEARCH_PAPER.md",
+      "sha256": "8b337c9225be30d1f76a1d27f7a6747ed7e8e07ccdf0a8d3940803f6b47c0951"
+    },
+    {
+      "bytes": 1057347,
+      "path": "output/pdf/MicroScore_Engineering_Case_Study.pdf",
+      "sha256": "67ccf5cfb4a24a7e720d77524268b7d0b491da999b49667cc9432a5dd060721c"
+    },
+    {
+      "bytes": 443714,
+      "path": "output/pdf/MicroScore_Research_Paper.pdf",
+      "sha256": "da66a57c2f26067935fabeca904c78a9d88b8d0d349345543b065b5d21dff7fe"
+    },
+    {
+      "bytes": 493,
+      "path": "reports/benchmark-artifacts/uci-default-credit-card-clients/model_metrics.csv",
+      "sha256": "f29f07b61ccad67838ab57c48bb75ed28ade7f956cf6bd0cb53127c5bbe98926"
+    },
+    {
+      "bytes": 1678,
+      "path": "reports/research-artifacts/manifest.json",
+      "sha256": "a75c1e0ecb431da6011dd9a3763c45c570d872e88385846b2ca36b53f8f885e7"
+    },
+    {
+      "bytes": 522,
+      "path": "reports/research-artifacts/robustness_summary.csv",
+      "sha256": "f9541a510da74cecdabbacaa45edc25a1dc0d7871301d6824982366b5e84e4ce"
+    },
+    {
+      "bytes": 6399,
+      "path": "scripts/build-submission-manifest.py",
+      "sha256": "9482b01dbbdfd56875b89e81cd1926afb6b1c4a1e08bf7293dee46b5fbfd59e6"
+    },
+    {
+      "bytes": 6828,
+      "path": "scripts/check.ps1",
+      "sha256": "7f865561fde47bd334854e6ce371babc993b67f3d87cf536fbb028c8aa1ab68e"
+    },
+    {
+      "bytes": 4262,
+      "path": "tests/test_submission_readiness.py",
+      "sha256": "87ced965c912461c8219674e72e36bf848c939b24c568edb4049ae1009f9fa60"
+    }
+  ],
+  "headline_claims": [
+    {
+      "evidence_class": "synthetic_experiment",
+      "key": "synthetic_logistic_regression_roc_auc",
+      "value": 0.806
+    },
+    {
+      "evidence_class": "synthetic_experiment",
+      "key": "synthetic_random_forest_roc_auc",
+      "value": 0.83
+    },
+    {
+      "evidence_class": "synthetic_ablation",
+      "key": "random_forest_without_late_payment_count_roc_auc",
+      "value": 0.492
+    },
+    {
+      "evidence_class": "synthetic_robustness",
+      "key": "ten_split_random_forest_without_late_payment_count_mean_roc_auc",
+      "value": 0.501
+    },
+    {
+      "evidence_class": "public_benchmark_not_local_validation",
+      "key": "uci_random_forest_roc_auc",
+      "value": 0.775
+    }
+  ],
+  "public_entry_points": [
+    "https://alex-tereshkovv.github.io/micro-score/#/review",
+    "https://alex-tereshkovv.github.io/micro-score/showcase.html",
+    "https://alex-tereshkovv.github.io/micro-score/evidence.html"
+  ],
+  "quality_gate": {
+    "ci_jobs": [
+      "test",
+      "postgresql-migration",
+      "observability-performance",
+      "deployment-candidate"
+    ],
+    "local_smoke_workflows": 13,
+    "postgresql_repository_methods": 52,
+    "python_tests": 152
+  },
+  "release_date": "2026-10-19",
+  "release_label": "release-candidate-v1",
+  "reproduction_commands": [
+    ".venv\\Scripts\\python -m microscore --reports",
+    ".venv\\Scripts\\python scripts\\build_research_paper.py",
+    ".venv\\Scripts\\python scripts\\build_admissions_case_study.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\check.ps1"
+  ],
+  "required_limitations": [
+    "No validation on real Kazakhstan MFI borrower data.",
+    "Human decision support, not automatic lending.",
+    "Synthetic and public-benchmark evidence do not establish production readiness.",
+    "Runtime budgets are regression guards, not a production SLO or capacity claim."
+  ],
+  "schema_version": "microscore-submission-manifest-v1",
+  "status": "review_ready_not_production_ready"
+}

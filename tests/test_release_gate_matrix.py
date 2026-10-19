@@ -276,6 +276,23 @@ MATRIX_ROWS = [
             "weekly",
         ],
     },
+    {
+        "area": "Release candidate submission integrity",
+        "artifacts": [
+            "scripts/build-submission-manifest.py",
+            "tests/test_submission_readiness.py",
+            "reports/submission/manifest.json",
+            "docs/RELEASE_CANDIDATE.md",
+            ".github/workflows/ci.yml",
+        ],
+        "markers": [
+            "microscore-submission-manifest-v1",
+            "review_ready_not_production_ready",
+            "build-submission-manifest.py --check",
+            "SHA-256",
+            "Release Candidate Freeze v1",
+        ],
+    },
 ]
 
 

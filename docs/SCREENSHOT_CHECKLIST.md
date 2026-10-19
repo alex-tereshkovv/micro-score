@@ -102,7 +102,7 @@ Why it matters: auditability is critical for any responsible credit-risk system.
   financial records are visible.
 - Prefer full-width desktop screenshots for README assets.
 - Retake screenshots if text overlaps, loading states are stuck, or the logo is
-  cropped. Tiny visual bugs have a talent for looking much larger in admissions
+  cropped. Tiny visual bugs have a talent for looking much larger in portfolio
   screenshots.
 
 ## README Placement
