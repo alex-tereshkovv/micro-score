@@ -40,6 +40,7 @@ class SubmissionReadinessTests(unittest.TestCase):
         self.assertEqual(payload["quality_gate"]["python_tests"], 152)
         self.assertEqual(payload["quality_gate"]["local_smoke_workflows"], 13)
         for item in payload["artifacts"]:
+            self.assertIn(item["hash_mode"], {"utf8_lf", "binary"})
             self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
             self.assertGreater(item["bytes"], 0)
 

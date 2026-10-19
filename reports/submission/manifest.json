@@ -2,108 +2,129 @@
   "artifacts": [
     {
       "bytes": 8113,
+      "hash_mode": "utf8_lf",
       "path": ".github/workflows/ci.yml",
       "sha256": "fc75fc87d8670de0a180fc2162747885746336de98110d31e1dada0aaae9228f"
     },
     {
       "bytes": 9002,
+      "hash_mode": "utf8_lf",
       "path": "README.md",
       "sha256": "f4da0650d6e4a093c795094923df7bde74a983cafaa0b4803a0837312394b404"
     },
     {
       "bytes": 27003,
+      "hash_mode": "utf8_lf",
       "path": "apps/web/evidence.html",
       "sha256": "4ba4c9e6dda31c468aff730e27596916861db058a741c0cb3e7311325f792a1b"
     },
     {
       "bytes": 51813,
+      "hash_mode": "utf8_lf",
       "path": "apps/web/index.html",
       "sha256": "1e4fe41f422bbfcef216d293d6c8c0bd5644c6738094297c1abaa554826b9cc8"
     },
     {
       "bytes": 24078,
+      "hash_mode": "utf8_lf",
       "path": "apps/web/showcase.html",
       "sha256": "5e086cccd82192d782788ee985679073d829d6c20eb3a6abd8fe546549658a5f"
     },
     {
       "bytes": 7799,
+      "hash_mode": "utf8_lf",
       "path": "docs/DATA_STATEMENT.md",
       "sha256": "2bb4092fb433651e77749cad5e3ecc3c5ef03eeed7f292c5c7719d334816ba4c"
     },
     {
       "bytes": 16628,
+      "hash_mode": "utf8_lf",
       "path": "docs/ENGINEERING_QUALITY.md",
       "sha256": "106510ac5b4341dc01fae88d8bb1991a05ebacfea5f20ad8e1ae1697808dc1c8"
     },
     {
       "bytes": 9680,
+      "hash_mode": "utf8_lf",
       "path": "docs/MODEL_CARD.md",
       "sha256": "68aa2e54252a4bddb8df4a3e7dcb2040262162dc0dc6a0e91f500cfb3eb21c83"
     },
     {
       "bytes": 4863,
+      "hash_mode": "utf8_lf",
       "path": "docs/OBSERVABILITY_AND_PERFORMANCE.md",
       "sha256": "e08f3a05e9022048c10672bb81c453a879ca3595286bfa84e32e0495a3a81057"
     },
     {
       "bytes": 6238,
+      "hash_mode": "utf8_lf",
       "path": "docs/PROJECT_BRIEF.md",
       "sha256": "70d59b49c863640699cef71d2f8b55df03297a008f9e065dccc13d4293cca120"
     },
     {
-      "bytes": 3441,
+      "bytes": 3594,
+      "hash_mode": "utf8_lf",
       "path": "docs/RELEASE_CANDIDATE.md",
-      "sha256": "33eda6f741542b962206bf100b09ed11bc8327bb6a6ed973992ece9d44df5ca8"
+      "sha256": "5e323c4a5123d96c13f33d989a4c40a426dfade040f83c0d08ac319d74809cf9"
     },
     {
       "bytes": 14648,
+      "hash_mode": "utf8_lf",
       "path": "docs/RELEASE_CHECKLIST.md",
       "sha256": "90120b109f5f0c8c38adeeea480a31d4a1648288a431bc81c033ace76ce970cf"
     },
     {
       "bytes": 23604,
+      "hash_mode": "utf8_lf",
       "path": "docs/RESEARCH_PAPER.md",
       "sha256": "8b337c9225be30d1f76a1d27f7a6747ed7e8e07ccdf0a8d3940803f6b47c0951"
     },
     {
       "bytes": 1057347,
+      "hash_mode": "binary",
       "path": "output/pdf/MicroScore_Engineering_Case_Study.pdf",
       "sha256": "67ccf5cfb4a24a7e720d77524268b7d0b491da999b49667cc9432a5dd060721c"
     },
     {
       "bytes": 443714,
+      "hash_mode": "binary",
       "path": "output/pdf/MicroScore_Research_Paper.pdf",
       "sha256": "da66a57c2f26067935fabeca904c78a9d88b8d0d349345543b065b5d21dff7fe"
     },
     {
-      "bytes": 493,
+      "bytes": 490,
+      "hash_mode": "utf8_lf",
       "path": "reports/benchmark-artifacts/uci-default-credit-card-clients/model_metrics.csv",
-      "sha256": "f29f07b61ccad67838ab57c48bb75ed28ade7f956cf6bd0cb53127c5bbe98926"
+      "sha256": "42056dbfcafc87f05c61b90cfbc98a9bca836bc591c29be8ec5ff3e7588afe65"
     },
     {
-      "bytes": 1678,
+      "bytes": 1622,
+      "hash_mode": "utf8_lf",
       "path": "reports/research-artifacts/manifest.json",
-      "sha256": "a75c1e0ecb431da6011dd9a3763c45c570d872e88385846b2ca36b53f8f885e7"
+      "sha256": "9b6279d643943c0688b0171592c788e54111a3bbc5b178b13b3f1396a25b0cd3"
     },
     {
-      "bytes": 522,
+      "bytes": 517,
+      "hash_mode": "utf8_lf",
       "path": "reports/research-artifacts/robustness_summary.csv",
-      "sha256": "f9541a510da74cecdabbacaa45edc25a1dc0d7871301d6824982366b5e84e4ce"
+      "sha256": "a060431d41ea04907aed6453301905f56a5a3c21c8a1b7f17e7938349739db30"
     },
     {
-      "bytes": 6399,
+      "bytes": 6597,
+      "hash_mode": "utf8_lf",
       "path": "scripts/build-submission-manifest.py",
-      "sha256": "9482b01dbbdfd56875b89e81cd1926afb6b1c4a1e08bf7293dee46b5fbfd59e6"
+      "sha256": "0699e4a61d0f3641dac443fc501ff374e8394b25a94fe77c258cce9e3b512269"
     },
     {
       "bytes": 6828,
+      "hash_mode": "utf8_lf",
       "path": "scripts/check.ps1",
       "sha256": "7f865561fde47bd334854e6ce371babc993b67f3d87cf536fbb028c8aa1ab68e"
     },
     {
-      "bytes": 4262,
+      "bytes": 4330,
+      "hash_mode": "utf8_lf",
       "path": "tests/test_submission_readiness.py",
-      "sha256": "87ced965c912461c8219674e72e36bf848c939b24c568edb4049ae1009f9fa60"
+      "sha256": "b850d59c2c69e6b8b0674c1582bbb43e4fc90b188b213f36c6adc117edf87c8b"
     }
   ],
   "headline_claims": [

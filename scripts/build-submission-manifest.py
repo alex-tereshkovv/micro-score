@@ -40,22 +40,26 @@ CRITICAL_ARTIFACTS = (
 )
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def canonical_artifact_bytes(path: Path) -> tuple[bytes, str]:
+    content = path.read_bytes()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content, "binary"
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+    return normalized, "utf8_lf"
 
 
 def artifact_record(relative_path: str) -> dict[str, Any]:
     path = PROJECT_ROOT / relative_path
     if not path.is_file():
         raise FileNotFoundError(f"Required submission artifact is missing: {relative_path}")
+    content, hash_mode = canonical_artifact_bytes(path)
     return {
         "path": relative_path,
-        "bytes": path.stat().st_size,
-        "sha256": sha256(path),
+        "bytes": len(content),
+        "hash_mode": hash_mode,
+        "sha256": hashlib.sha256(content).hexdigest(),
     }
 
 

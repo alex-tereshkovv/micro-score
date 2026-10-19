@@ -29,6 +29,8 @@ results establish production readiness.
 records the release label, synchronized quality counts, headline metrics,
 required limitations, reproduction commands, and SHA-256 hashes for critical
 documents, PDFs, public pages, research artifacts, tests, and release scripts.
+UTF-8 text is normalized to LF before hashing so the manifest is identical on
+Windows and Linux; binary artifacts such as PDFs are hashed byte-for-byte.
 
 Build it only after release artifacts are final:
 
