@@ -28,7 +28,7 @@
       "bytes": 24078,
       "hash_mode": "utf8_lf",
       "path": "apps/web/showcase.html",
-      "sha256": "5e086cccd82192d782788ee985679073d829d6c20eb3a6abd8fe546549658a5f"
+      "sha256": "694708d997d2c2853d9acef233112aa582e6f345680e47cf7ceb711f9b5cf451"
     },
     {
       "bytes": 7799,
@@ -121,10 +121,10 @@
       "sha256": "7f865561fde47bd334854e6ce371babc993b67f3d87cf536fbb028c8aa1ab68e"
     },
     {
-      "bytes": 4330,
+      "bytes": 4324,
       "hash_mode": "utf8_lf",
       "path": "tests/test_submission_readiness.py",
-      "sha256": "b850d59c2c69e6b8b0674c1582bbb43e4fc90b188b213f36c6adc117edf87c8b"
+      "sha256": "074efc4f116183e94af162d56268d6eaedc2cfbf5c6e0bc604a7e9f84e157bc5"
     }
   ],
   "headline_claims": [

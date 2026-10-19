@@ -76,7 +76,7 @@ class SubmissionReadinessTests(unittest.TestCase):
         )
         self.assertGreaterEqual(case_pages, 10)
         self.assertLessEqual(case_pages, 11)
-        self.assertGreaterEqual(paper_pages, 8)
+        self.assertEqual(paper_pages, 11)
         self.assertIn("152", case_text)
         self.assertIn("0.830", case_text)
         self.assertIn("0.492", case_text)
