@@ -1,0 +1,328 @@
+{
+  "automated_gate_scope": "This check proves question coverage, evidence-path existence, metric consistency, and deterministic serialization. It cannot prove oral understanding.",
+  "headline_claims": [
+    {
+      "evidence_class": "synthetic_experiment",
+      "key": "synthetic_logistic_regression_roc_auc",
+      "source": "reports/research-artifacts/model_metrics.csv",
+      "value": 0.806
+    },
+    {
+      "evidence_class": "synthetic_experiment",
+      "key": "synthetic_random_forest_roc_auc",
+      "source": "reports/research-artifacts/model_metrics.csv",
+      "value": 0.83
+    },
+    {
+      "evidence_class": "synthetic_ablation",
+      "key": "random_forest_without_late_payment_count_roc_auc",
+      "source": "reports/research-artifacts/ablation_study.csv",
+      "value": 0.492
+    },
+    {
+      "evidence_class": "synthetic_robustness",
+      "key": "ten_split_random_forest_without_late_payment_count_mean_roc_auc",
+      "source": "reports/research-artifacts/robustness_summary.csv",
+      "value": 0.501
+    },
+    {
+      "evidence_class": "public_benchmark_not_local_validation",
+      "key": "uci_random_forest_roc_auc",
+      "source": "reports/benchmark-artifacts/uci-default-credit-card-clients/model_metrics.csv",
+      "value": 0.775
+    }
+  ],
+  "manual_pass_rule": "Answer every core question in your own words, state at least one limitation, open one cited artifact, and survive the follow-up without a prohibited claim.",
+  "questions": [
+    {
+      "category": "modeling",
+      "do_not_claim": "That Logistic Regression is inherently fair or causal.",
+      "evidence": [
+        "src/microscore/modeling.py",
+        "src/microscore_api/scoring.py",
+        "docs/MODEL_CARD.md"
+      ],
+      "follow_up": "What assumption makes a Logistic Regression coefficient unsafe to read causally?",
+      "id": "model-choice",
+      "must_cover": [
+        "binary probability output",
+        "preprocessing pipeline and balanced classes",
+        "interpretability is conditional, not causal"
+      ],
+      "question": "Why use Logistic Regression when Random Forest scores higher?",
+      "short_answer": "Logistic Regression is an interpretable probability baseline for a binary outcome. Random Forest is a nonlinear comparison, but a small ROC-AUC gain does not outweigh evidence quality, calibration, and explanation cost.",
+      "target_seconds": 60
+    },
+    {
+      "category": "evaluation",
+      "do_not_claim": "That ROC-AUC alone proves a model is useful for lending.",
+      "evidence": [
+        "src/microscore/modeling.py",
+        "src/microscore/error_analysis.py",
+        "reports/research-artifacts/model_metrics.csv"
+      ],
+      "follow_up": "Why can a useful ROC-AUC coexist with unsafe probabilities?",
+      "id": "roc-auc",
+      "must_cover": [
+        "0.5 is chance ranking",
+        "ranking is different from calibration",
+        "policy and error costs require separate analysis"
+      ],
+      "question": "What does ROC-AUC measure, and what does it miss?",
+      "short_answer": "ROC-AUC measures ranking: how often a positive case receives a higher score than a negative case. It does not select a threshold, prove calibration, price errors, or establish fairness or external validity.",
+      "target_seconds": 60
+    },
+    {
+      "category": "data-quality",
+      "do_not_claim": "That the feature is always illegal, causal, or unusable in every context.",
+      "evidence": [
+        "src/microscore/audit.py",
+        "src/microscore/ablation.py",
+        "docs/PROXY_FEATURE_MONITORING.md",
+        "reports/research-artifacts/ablation_study.csv"
+      ],
+      "follow_up": "Why not simply delete the feature and report the full-model score?",
+      "id": "proxy-risk",
+      "must_cover": [
+        "repayment history is not genuinely new alternative data",
+        "the feature may proxy access to prior formal credit",
+        "report and monitor the dependence instead of hiding it"
+      ],
+      "question": "Why is late_payment_count the central problem?",
+      "short_answer": "The feature nearly carries the synthetic result by itself. Removing it drops Random Forest ROC-AUC from about 0.830 to 0.492, so the remaining signals do not support the intended thin-file claim.",
+      "target_seconds": 75
+    },
+    {
+      "category": "evaluation",
+      "do_not_claim": "That one ablation establishes universal feature uselessness.",
+      "evidence": [
+        "src/microscore/ablation.py",
+        "src/microscore/reporting.py",
+        "reports/research-artifacts/ablation_study.csv"
+      ],
+      "follow_up": "How did repeated splits change your confidence in this result?",
+      "id": "ablation",
+      "must_cover": [
+        "retrain rather than only mask an input",
+        "compare held-out metrics against the leakage-safe baseline",
+        "interpret a negative result without generalizing beyond the dataset"
+      ],
+      "question": "What does the ablation study prove and not prove?",
+      "short_answer": "Retraining without a feature or group measures dependence on that information. Here it exposes near-chance thin-file performance; it does not prove the remaining variables have no value in every real dataset.",
+      "target_seconds": 75
+    },
+    {
+      "category": "evaluation",
+      "do_not_claim": "That synthetic resampling replaces temporal or external validation.",
+      "evidence": [
+        "src/microscore/robustness.py",
+        "docs/ROBUSTNESS_AND_UNCERTAINTY.md",
+        "reports/research-artifacts/robustness_summary.csv"
+      ],
+      "follow_up": "What validation gap still remains after bootstrap and shift tests?",
+      "id": "robustness",
+      "must_cover": [
+        "repeated-split stability",
+        "bootstrap uncertainty",
+        "stress tests are not temporal or external validation"
+      ],
+      "question": "How do you know the negative ablation is not one lucky split?",
+      "short_answer": "Ten stratified splits, a 1,000-resample bootstrap on the held-out sample, and deterministic shift tests preserve the core result. The ten-split no-late-payment Random Forest mean ROC-AUC is about 0.501.",
+      "target_seconds": 75
+    },
+    {
+      "category": "decision-policy",
+      "do_not_claim": "That the demo thresholds are optimal for a real MFI.",
+      "evidence": [
+        "src/microscore/policy.py",
+        "src/microscore/decision.py",
+        "reports/research-artifacts/policy_analysis.csv"
+      ],
+      "follow_up": "Who should own the threshold choice in a real pilot?",
+      "id": "threshold-policy",
+      "must_cover": [
+        "probability, risk band, and policy action are different",
+        "review workload is a real operational cost",
+        "thresholds require validated costs and probabilities"
+      ],
+      "question": "Why use two thresholds and a review band?",
+      "short_answer": "A probability is not a decision. Two thresholds create approve, review, and decline zones so policy owners can expose the trade-off between access, risk, and analyst capacity instead of hiding it in one cutoff.",
+      "target_seconds": 60
+    },
+    {
+      "category": "uncertainty",
+      "do_not_claim": "That synthetic assumptions produce calibrated KZT forecasts.",
+      "evidence": [
+        "src/microscore_api/simulation.py",
+        "docs/MONTE_CARLO_METHODOLOGY.md",
+        "tests/test_api_simulation.py"
+      ],
+      "follow_up": "Why are the outputs scenario ranges rather than forecasts or regulatory VaR?",
+      "id": "monte-carlo",
+      "must_cover": [
+        "portfolio scenarios do not rescore an individual borrower",
+        "correlated macro shock and residual application shock",
+        "seed, assumptions, model version, and fingerprint are recorded"
+      ],
+      "question": "What does Monte Carlo add to the deterministic policy table?",
+      "short_answer": "It propagates shared macro and application-level calibration uncertainty into a distribution of portfolio outcomes. Paired scenarios use common random numbers, making scenario differences more stable and reproducible.",
+      "target_seconds": 75
+    },
+    {
+      "category": "architecture",
+      "do_not_claim": "That GitHub Pages is connected to production borrower data.",
+      "evidence": [
+        "apps/web/app.js",
+        "src/microscore_api/schemas.py",
+        "src/microscore_api/main.py",
+        "src/microscore_api/database.py",
+        "docs/ARCHITECTURE.md"
+      ],
+      "follow_up": "What does the public browser demo prove, and what does it not prove?",
+      "id": "system-path",
+      "must_cover": [
+        "browser demo mode is separate from the real FastAPI runtime",
+        "Pydantic validation and route authorization",
+        "repository persistence, scoring provenance, and audit trail"
+      ],
+      "question": "Trace one application from the browser through the API and database.",
+      "short_answer": "The frontend submits a typed payload; FastAPI validates identity, role, tenant, and lifecycle rules; the repository persists the application; scoring records probability, explanation, model provenance, and audit events.",
+      "target_seconds": 90
+    },
+    {
+      "category": "architecture",
+      "do_not_claim": "That disposable PostgreSQL CI proves production operations or availability.",
+      "evidence": [
+        "src/microscore_api/postgres_repository.py",
+        "scripts/postgresql-runtime-smoke.py",
+        "scripts/postgresql-backup-restore-smoke.py",
+        "docs/POSTGRESQL_RECOVERY.md"
+      ],
+      "follow_up": "What production database claims are still blocked?",
+      "id": "postgres-boundary",
+      "must_cover": [
+        "local convenience versus deployment candidate",
+        "repository contract parity",
+        "managed operations and high availability remain incomplete"
+      ],
+      "question": "Why keep SQLite, and what exactly is proven about PostgreSQL?",
+      "short_answer": "SQLite keeps local review reproducible. PostgreSQL implements the same 52-method repository contract and is exercised by disposable migration, live HTTP, container, and backup/restore fingerprint gates.",
+      "target_seconds": 75
+    },
+    {
+      "category": "governance",
+      "do_not_claim": "That a human in the loop automatically makes the system fair or safe.",
+      "evidence": [
+        "docs/MODEL_CARD.md",
+        "src/microscore_api/analytics.py",
+        "tests/test_api_integration.py"
+      ],
+      "follow_up": "What evidence would justify narrowing the human review band?",
+      "id": "human-review",
+      "must_cover": [
+        "decision support rather than automatic lending",
+        "human bias and automation bias",
+        "decision history, provenance, and lifecycle locks"
+      ],
+      "question": "Why is human review necessary, and why is it not sufficient?",
+      "short_answer": "Synthetic evidence and uncertain policy choices make automated lending unjustified. Human review adds accountable judgment, but reviewers can still introduce bias or rubber-stamp, so decisions and overrides are audited.",
+      "target_seconds": 60
+    },
+    {
+      "category": "research-boundary",
+      "do_not_claim": "That public benchmark performance validates Pavlodar borrowers.",
+      "evidence": [
+        "docs/DATA_STATEMENT.md",
+        "docs/RELEASE_CANDIDATE.md",
+        "reports/benchmark-artifacts/uci-default-credit-card-clients/SUMMARY.md"
+      ],
+      "follow_up": "Why does the UCI benchmark strengthen engineering confidence but not local validity?",
+      "id": "external-validity",
+      "must_cover": [
+        "synthetic experiment versus public benchmark",
+        "UCI transfer checks the pipeline, not Kazakhstan validity",
+        "real borrower data and production lending stay blocked"
+      ],
+      "question": "What is the strongest claim the project can honestly make?",
+      "short_answer": "It is a reproducible research and decision-support prototype that exposes a dominant synthetic proxy, connects evidence to review workflows, and makes pre-pilot blockers visible. It is not validated for real lending.",
+      "target_seconds": 60
+    },
+    {
+      "category": "research-boundary",
+      "do_not_claim": "That the existing model can be deployed before local validation.",
+      "evidence": [
+        "docs/DATA_STATEMENT.md",
+        "docs/MODEL_CARD.md",
+        "docs/PILOT_DATA_SCHEMA.md",
+        "docs/RELEASE_CHECKLIST.md"
+      ],
+      "follow_up": "Which result would make you stop rather than deploy?",
+      "id": "pilot-plan",
+      "must_cover": [
+        "target definition before modeling",
+        "consent, minimization, and temporal validation",
+        "monitoring, appeals, overrides, and security review"
+      ],
+      "question": "What would you do first with real pilot data?",
+      "short_answer": "Define the target and observation window with the MFI, minimize and separate identifiers, use temporal and geographic validation, repeat proxy and calibration analysis, then set policy only from observed costs and outcomes.",
+      "target_seconds": 75
+    }
+  ],
+  "schema_version": "microscore-technical-defense-v1",
+  "scorecard": {
+    "dimensions": [
+      "plain-language correctness",
+      "evidence navigation",
+      "limitations and uncertainty",
+      "follow-up reasoning"
+    ],
+    "pass": "At least 7/8 per question, with no zero and no prohibited claim.",
+    "scale": {
+      "0": "unsupported",
+      "1": "partial",
+      "2": "defensible"
+    }
+  },
+  "status": "owner_rehearsal_required",
+  "timed_routes": [
+    {
+      "name": "60-second overview",
+      "question_ids": [
+        "external-validity",
+        "proxy-risk",
+        "system-path"
+      ],
+      "seconds": 60
+    },
+    {
+      "name": "5-minute technical defense",
+      "question_ids": [
+        "model-choice",
+        "roc-auc",
+        "proxy-risk",
+        "ablation",
+        "threshold-policy",
+        "system-path"
+      ],
+      "seconds": 300
+    },
+    {
+      "name": "15-minute deep defense",
+      "question_ids": [
+        "model-choice",
+        "roc-auc",
+        "proxy-risk",
+        "ablation",
+        "robustness",
+        "threshold-policy",
+        "monte-carlo",
+        "system-path",
+        "postgres-boundary",
+        "human-review",
+        "external-validity",
+        "pilot-plan"
+      ],
+      "seconds": 900
+    }
+  ]
+}

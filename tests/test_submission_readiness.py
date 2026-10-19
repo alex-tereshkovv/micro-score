@@ -16,6 +16,14 @@ SPEC = importlib.util.spec_from_file_location("build_submission_manifest", MODUL
 assert SPEC and SPEC.loader
 submission_manifest = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(submission_manifest)
+DEFENSE_PATH = PROJECT_ROOT / "reports" / "submission" / "technical-defense.json"
+DEFENSE_MODULE_PATH = PROJECT_ROOT / "scripts" / "build-technical-defense-packet.py"
+DEFENSE_SPEC = importlib.util.spec_from_file_location(
+    "build_technical_defense_packet", DEFENSE_MODULE_PATH
+)
+assert DEFENSE_SPEC and DEFENSE_SPEC.loader
+technical_defense = importlib.util.module_from_spec(DEFENSE_SPEC)
+DEFENSE_SPEC.loader.exec_module(technical_defense)
 
 
 def pdf_text(path: Path) -> tuple[int, str]:
@@ -30,6 +38,10 @@ class SubmissionReadinessTests(unittest.TestCase):
         expected = submission_manifest.serialized_manifest()
         actual = MANIFEST_PATH.read_text(encoding="utf-8")
         self.assertEqual(actual, expected)
+        self.assertEqual(
+            DEFENSE_PATH.read_text(encoding="utf-8"),
+            technical_defense.serialized_packet(),
+        )
 
     def test_manifest_has_unique_hashed_artifacts_and_blocked_production_claim(self) -> None:
         payload = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -39,10 +51,26 @@ class SubmissionReadinessTests(unittest.TestCase):
         self.assertEqual(payload["status"], "review_ready_not_production_ready")
         self.assertEqual(payload["quality_gate"]["python_tests"], 152)
         self.assertEqual(payload["quality_gate"]["local_smoke_workflows"], 13)
+        self.assertIn("reports/submission/technical-defense.json", paths)
         for item in payload["artifacts"]:
             self.assertIn(item["hash_mode"], {"utf8_lf", "binary"})
             self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
             self.assertGreater(item["bytes"], 0)
+
+        defense = json.loads(DEFENSE_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(defense["schema_version"], "microscore-technical-defense-v1")
+        self.assertEqual(defense["status"], "owner_rehearsal_required")
+        self.assertEqual(len(defense["questions"]), 12)
+        self.assertIn("oral understanding", defense["automated_gate_scope"])
+        manifest_claims = {
+            item["key"]: (item["value"], item["evidence_class"])
+            for item in payload["headline_claims"]
+        }
+        defense_claims = {
+            item["key"]: (item["value"], item["evidence_class"])
+            for item in defense["headline_claims"]
+        }
+        self.assertEqual(defense_claims, manifest_claims)
 
     def test_public_counts_and_research_findings_are_synchronized(self) -> None:
         sources = [

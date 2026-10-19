@@ -1,10 +1,10 @@
 {
   "artifacts": [
     {
-      "bytes": 8113,
+      "bytes": 8232,
       "hash_mode": "utf8_lf",
       "path": ".github/workflows/ci.yml",
-      "sha256": "fc75fc87d8670de0a180fc2162747885746336de98110d31e1dada0aaae9228f"
+      "sha256": "3c33cccec410edb323c414ea1e09e2592e25cd12a1cada642ebbcace37e284ee"
     },
     {
       "bytes": 9002,
@@ -37,10 +37,10 @@
       "sha256": "2bb4092fb433651e77749cad5e3ecc3c5ef03eeed7f292c5c7719d334816ba4c"
     },
     {
-      "bytes": 16628,
+      "bytes": 17023,
       "hash_mode": "utf8_lf",
       "path": "docs/ENGINEERING_QUALITY.md",
-      "sha256": "106510ac5b4341dc01fae88d8bb1991a05ebacfea5f20ad8e1ae1697808dc1c8"
+      "sha256": "f6ac02c9a3a625c7a1b95167f157437cfe1279fcce41f37b8f84fec438718914"
     },
     {
       "bytes": 9680,
@@ -61,22 +61,28 @@
       "sha256": "70d59b49c863640699cef71d2f8b55df03297a008f9e065dccc13d4293cca120"
     },
     {
-      "bytes": 3594,
+      "bytes": 3940,
       "hash_mode": "utf8_lf",
       "path": "docs/RELEASE_CANDIDATE.md",
-      "sha256": "5e323c4a5123d96c13f33d989a4c40a426dfade040f83c0d08ac319d74809cf9"
+      "sha256": "d641fb3734920bd5fdde2cdbbdc2bc3f6f1c3a9ccb2e0aede5690ca923333041"
     },
     {
-      "bytes": 14648,
+      "bytes": 15499,
       "hash_mode": "utf8_lf",
       "path": "docs/RELEASE_CHECKLIST.md",
-      "sha256": "90120b109f5f0c8c38adeeea480a31d4a1648288a431bc81c033ace76ce970cf"
+      "sha256": "4df7507c09d06141d5db19ebc07b6b707c6175003155e7238e90ba0b823d770d"
     },
     {
       "bytes": 23604,
       "hash_mode": "utf8_lf",
       "path": "docs/RESEARCH_PAPER.md",
       "sha256": "8b337c9225be30d1f76a1d27f7a6747ed7e8e07ccdf0a8d3940803f6b47c0951"
+    },
+    {
+      "bytes": 18340,
+      "hash_mode": "utf8_lf",
+      "path": "docs/TECHNICAL_INTERVIEW_GUIDE.md",
+      "sha256": "4a9471c109bb5ec153bd20879c2333c754daace36f6ab48df2832e79753c0276"
     },
     {
       "bytes": 1057347,
@@ -109,22 +115,40 @@
       "sha256": "a060431d41ea04907aed6453301905f56a5a3c21c8a1b7f17e7938349739db30"
     },
     {
-      "bytes": 6597,
+      "bytes": 14399,
+      "hash_mode": "utf8_lf",
+      "path": "reports/submission/technical-defense.json",
+      "sha256": "1489e639894a4f0c5252a8f6b6cbb71609962cf0ed34b0cbf6b251f3e1ce296a"
+    },
+    {
+      "bytes": 6866,
       "hash_mode": "utf8_lf",
       "path": "scripts/build-submission-manifest.py",
-      "sha256": "0699e4a61d0f3641dac443fc501ff374e8394b25a94fe77c258cce9e3b512269"
+      "sha256": "b5c1ffdf59dd5b724ca7fac05b532fa22f7c63ab029c11f13693928504988028"
     },
     {
-      "bytes": 6828,
+      "bytes": 21353,
+      "hash_mode": "utf8_lf",
+      "path": "scripts/build-technical-defense-packet.py",
+      "sha256": "4931b8af0b7eff1f5ecad2b555f8fc346eb80f920e282b4932111e1acd401164"
+    },
+    {
+      "bytes": 7012,
       "hash_mode": "utf8_lf",
       "path": "scripts/check.ps1",
-      "sha256": "7f865561fde47bd334854e6ce371babc993b67f3d87cf536fbb028c8aa1ab68e"
+      "sha256": "e8d6e5ce7f9866e8d60ae93a2638c3c509f5946addf3fafd1cec6b1a41264b0c"
     },
     {
-      "bytes": 4324,
+      "bytes": 21482,
+      "hash_mode": "utf8_lf",
+      "path": "tests/test_release_gate_matrix.py",
+      "sha256": "e9a850ee04f012e1bcf81d002024df2521ffc42b351367224a8d563c80b3f1e6"
+    },
+    {
+      "bytes": 5711,
       "hash_mode": "utf8_lf",
       "path": "tests/test_submission_readiness.py",
-      "sha256": "074efc4f116183e94af162d56268d6eaedc2cfbf5c6e0bc604a7e9f84e157bc5"
+      "sha256": "9d467db83eeceb756d1a7a22c6705edd02a77547a4c4d7f94c2a33bdbefb7d13"
     }
   ],
   "headline_claims": [
@@ -176,6 +200,7 @@
     ".venv\\Scripts\\python -m microscore --reports",
     ".venv\\Scripts\\python scripts\\build_research_paper.py",
     ".venv\\Scripts\\python scripts\\build_admissions_case_study.py",
+    ".venv\\Scripts\\python scripts\\build-technical-defense-packet.py --check",
     "powershell -ExecutionPolicy Bypass -File scripts\\check.ps1"
   ],
   "required_limitations": [

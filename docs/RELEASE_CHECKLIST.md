@@ -149,6 +149,25 @@ git diff --check
 .venv\Scripts\python -m unittest tests.test_submission_readiness
 ```
 
+## Technical Defense Gate
+
+- `docs/TECHNICAL_INTERVIEW_GUIDE.md` covers the central modeling, evaluation,
+  policy, Monte Carlo, architecture, governance, and pilot-boundary questions.
+- `reports/submission/technical-defense.json` contains 12 evidence-backed
+  questions, three timed rehearsal routes, follow-ups, prohibited claims, and a
+  manual scorecard.
+- Its five headline metrics are recomputed from the committed research and
+  benchmark CSV files instead of being trusted as free-form prose.
+- The deterministic defense check passes before the submission manifest check:
+
+```powershell
+.venv\Scripts\python scripts\build-technical-defense-packet.py --check
+```
+
+- Automation must keep `oral_understanding_verified` false and the packet status
+  `owner_rehearsal_required`; only an unscripted rehearsal can close that human
+  ownership step.
+
 - Both PDFs have been rendered and visually reviewed after their final build.
 - The release remains `review_ready_not_production_ready`; a clean manifest is
   a consistency control, not production validation or a cryptographic release

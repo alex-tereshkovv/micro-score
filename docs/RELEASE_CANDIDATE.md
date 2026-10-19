@@ -22,6 +22,7 @@ results establish production readiness.
 4. Short project overview: `docs/PROJECT_BRIEF.md`
 5. Research paper: `output/pdf/MicroScore_Research_Paper.pdf`
 6. Engineering case study: `output/pdf/MicroScore_Engineering_Case_Study.pdf`
+7. Technical defense guide: `docs/TECHNICAL_INTERVIEW_GUIDE.md`
 
 ## Submission Manifest
 
@@ -31,6 +32,8 @@ required limitations, reproduction commands, and SHA-256 hashes for critical
 documents, PDFs, public pages, research artifacts, tests, and release scripts.
 UTF-8 text is normalized to LF before hashing so the manifest is identical on
 Windows and Linux; binary artifacts such as PDFs are hashed byte-for-byte.
+The hashed set also includes the deterministic technical-defense packet, whose
+five headline claims are checked directly against generated CSV evidence.
 
 Build it only after release artifacts are final:
 
@@ -55,6 +58,8 @@ A release candidate is blocked when any of these conditions is true:
 - the research paper's numbered findings are duplicated or out of sequence;
 - a reviewer-facing artifact revives the deprecated reviewer-specific filename;
 - a headline metric is missing its synthetic/public-benchmark evidence boundary;
+- the technical-defense packet is stale, loses one of its 12 core questions, or
+  disagrees with the generated research metrics;
 - a critical artifact is missing or its committed hash is stale;
 - either PDF is unreadable, unexpectedly short, or missing its central finding
   and limitation;

@@ -373,3 +373,21 @@ Before presenting the project, make sure you can:
 If you cannot explain a central path yet, narrow the claim and practice by
 opening the relevant implementation. Credibility comes from understanding the
 trade-offs and limits, not from reciting every feature.
+
+## Technical Defense Gate v1
+
+The deterministic defense packet turns the central questions above into three
+timed rehearsal routes, evidence links, follow-up questions, prohibited claims,
+and a manual scorecard. Build it after research evidence changes and verify it
+before a release:
+
+```powershell
+.venv\Scripts\python scripts\build-technical-defense-packet.py --write
+.venv\Scripts\python scripts\build-technical-defense-packet.py --check
+```
+
+The generated packet is `reports/submission/technical-defense.json`. Its status
+is intentionally `owner_rehearsal_required`, and its machine result keeps
+`oral_understanding_verified` false. Passing automation proves that the central
+questions, evidence paths, and headline numbers agree; only a real rehearsal
+can show that the owner understands and can defend them without a script.

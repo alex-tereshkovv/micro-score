@@ -181,6 +181,11 @@ try {
         Assert-LastExitCode "HTTP performance smoke test"
     }
 
+    Invoke-Step "Validate technical defense packet" {
+        & $python scripts\build-technical-defense-packet.py --check
+        Assert-LastExitCode "Technical defense packet"
+    }
+
     Invoke-Step "Validate release candidate submission smoke" {
         & $python scripts\build-submission-manifest.py --check
         Assert-LastExitCode "Release candidate submission manifest"

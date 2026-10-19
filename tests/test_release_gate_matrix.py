@@ -277,6 +277,23 @@ MATRIX_ROWS = [
         ],
     },
     {
+        "area": "Technical defense ownership",
+        "artifacts": [
+            "scripts/build-technical-defense-packet.py",
+            "reports/submission/technical-defense.json",
+            "docs/TECHNICAL_INTERVIEW_GUIDE.md",
+            "tests/test_submission_readiness.py",
+            ".github/workflows/ci.yml",
+        ],
+        "markers": [
+            "microscore-technical-defense-v1",
+            "owner_rehearsal_required",
+            "oral_understanding_verified",
+            "build-technical-defense-packet.py --check",
+            "Technical Defense Gate v1",
+        ],
+    },
+    {
         "area": "Release candidate submission integrity",
         "artifacts": [
             "scripts/build-submission-manifest.py",

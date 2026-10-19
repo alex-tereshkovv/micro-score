@@ -22,6 +22,7 @@ class GithubWorkflowTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("python -m unittest discover -s tests", workflow)
+        self.assertIn("python scripts/build-technical-defense-packet.py --check", workflow)
         self.assertIn("python scripts/build-submission-manifest.py --check", workflow)
         self.assertIn("python -m compileall", workflow)
         self.assertIn("python src/train_model.py", workflow)
@@ -162,6 +163,8 @@ class GithubWorkflowTests(unittest.TestCase):
         self.assertIn("PostgreSQL recovery smoke dry run", script)
         self.assertIn("scripts\\http-performance-smoke.py --dry-run", script)
         self.assertIn("HTTP performance smoke gate", script)
+        self.assertIn("scripts\\build-technical-defense-packet.py --check", script)
+        self.assertIn("Validate technical defense packet", script)
         self.assertIn("scripts\\build-submission-manifest.py --check", script)
         self.assertIn("Validate release candidate submission smoke", script)
         self.assertIn("--requests 160 --concurrency 8 --p95-budget-ms 750", script)
