@@ -11,16 +11,18 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "reports" / "submission" / "manifest.json"
 RELEASE_LABEL = "release-candidate-v1"
-RELEASE_DATE = "2026-10-19"
+RELEASE_DATE = "2026-10-25"
 EXPECTED_TEST_COUNT = 152
 EXPECTED_SMOKE_WORKFLOWS = 13
 
 CRITICAL_ARTIFACTS = (
     ".github/workflows/ci.yml",
+    ".github/workflows/pages.yml",
     "README.md",
     "apps/web/evidence.html",
     "apps/web/index.html",
     "apps/web/showcase.html",
+    "apps/web/styles.css",
     "docs/DATA_STATEMENT.md",
     "docs/ENGINEERING_QUALITY.md",
     "docs/MODEL_CARD.md",
@@ -36,11 +38,15 @@ CRITICAL_ARTIFACTS = (
     "reports/research-artifacts/manifest.json",
     "reports/research-artifacts/robustness_summary.csv",
     "reports/submission/technical-defense.json",
+    "scripts/build_engineering_case_study.py",
+    "scripts/reviewer-experience-smoke.py",
     "scripts/build-submission-manifest.py",
     "scripts/build-technical-defense-packet.py",
     "scripts/check.ps1",
     "tests/test_release_gate_matrix.py",
+    "tests/test_engineering_case_study.py",
     "tests/test_submission_readiness.py",
+    "tests/test_web_static.py",
 )
 
 
@@ -125,7 +131,8 @@ def build_manifest() -> dict[str, Any]:
         "reproduction_commands": [
             ".venv\\Scripts\\python -m microscore --reports",
             ".venv\\Scripts\\python scripts\\build_research_paper.py",
-            ".venv\\Scripts\\python scripts\\build_admissions_case_study.py",
+            ".venv\\Scripts\\python scripts\\build_engineering_case_study.py",
+            ".venv\\Scripts\\python scripts\\reviewer-experience-smoke.py",
             ".venv\\Scripts\\python scripts\\build-technical-defense-packet.py --check",
             "powershell -ExecutionPolicy Bypass -File scripts\\check.ps1",
         ],

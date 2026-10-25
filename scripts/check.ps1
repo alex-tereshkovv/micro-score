@@ -139,9 +139,9 @@ try {
         Assert-LastExitCode "Portfolio dashboard smoke test"
     }
 
-    Invoke-Step "Run admissions evidence smoke test" {
-        & $python scripts\admissions-evidence-smoke.py
-        Assert-LastExitCode "Admissions evidence smoke test"
+    Invoke-Step "Run public reviewer experience smoke test" {
+        & $python scripts\reviewer-experience-smoke.py
+        Assert-LastExitCode "Public reviewer experience smoke test"
     }
 
     Invoke-Step "Run static demo smoke test" {

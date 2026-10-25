@@ -149,6 +149,24 @@ git diff --check
 .venv\Scripts\python -m unittest tests.test_submission_readiness
 ```
 
+## Public Reviewer Experience
+
+- The three public entry points load only repository-local assets and keep every
+  local link valid; README and Project Brief links also resolve.
+- The reviewer home shows the main negative result, public benchmark, quality
+  evidence, and non-production boundary before asking for a deep technical read.
+- Public markup and cache versions use neutral engineering-review language,
+  without admissions-specific positioning.
+- The desktop architecture flow does not produce page-level horizontal scroll;
+  responsive layouts collapse at the existing 1080 px and 680 px breakpoints.
+- Tracked files exclude databases, private keys, `.env`, virtual environments,
+  caches, and notebook checkpoints.
+- CI and the local release gate run:
+
+```powershell
+.venv\Scripts\python scripts\reviewer-experience-smoke.py
+```
+
 ## Technical Defense Gate
 
 - `docs/TECHNICAL_INTERVIEW_GUIDE.md` covers the central modeling, evaluation,

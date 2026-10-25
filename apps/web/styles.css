@@ -558,7 +558,7 @@ button:disabled {
 
 .reviewer-architecture {
   display: grid;
-  grid-template-columns: repeat(3, minmax(18px, auto) minmax(0, 1fr)) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr) minmax(18px, auto)) minmax(0, 1fr);
   align-items: stretch;
 }
 

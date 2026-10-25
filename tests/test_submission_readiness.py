@@ -117,11 +117,14 @@ class SubmissionReadinessTests(unittest.TestCase):
             PROJECT_ROOT / "README.md",
             PROJECT_ROOT / "docs" / "PROJECT_BRIEF.md",
             PROJECT_ROOT / "docs" / "RELEASE_CANDIDATE.md",
+            PROJECT_ROOT / "apps" / "web" / "index.html",
+            PROJECT_ROOT / "apps" / "web" / "showcase.html",
             PROJECT_ROOT / "apps" / "web" / "evidence.html",
         ]
         combined = "\n".join(path.read_text(encoding="utf-8") for path in paths)
         self.assertNotIn("Admissions Reviewer Brief", combined)
         self.assertNotIn("ADMISSIONS_REVIEWER_BRIEF.md", combined)
+        self.assertNotIn("admissions-evidence", combined.lower())
         self.assertNotRegex(combined, r"\b(?:126|142|147)\s+(?:automated|Python) tests\b")
 
 

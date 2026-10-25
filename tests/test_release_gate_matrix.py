@@ -277,6 +277,23 @@ MATRIX_ROWS = [
         ],
     },
     {
+        "area": "Public reviewer experience",
+        "artifacts": [
+            "scripts/reviewer-experience-smoke.py",
+            "tests/test_web_static.py",
+            "apps/web/index.html",
+            "apps/web/styles.css",
+            ".github/workflows/ci.yml",
+        ],
+        "markers": [
+            "reviewer-experience-smoke",
+            "reviewer-release-v1",
+            "grid-template-columns: repeat(3, minmax(0, 1fr) minmax(18px, auto))",
+            "Broken local reviewer links",
+            "Validate public reviewer experience",
+        ],
+    },
+    {
         "area": "Technical defense ownership",
         "artifacts": [
             "scripts/build-technical-defense-packet.py",

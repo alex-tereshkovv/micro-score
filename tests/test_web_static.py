@@ -20,7 +20,7 @@ class WebStaticTests(unittest.TestCase):
         self.assertTrue((WEB_ROOT / "showcase.js").exists())
         self.assertTrue((WEB_ROOT / "evidence.html").exists())
         self.assertTrue((WEB_ROOT / "evidence.css").exists())
-        self.assertTrue((PROJECT_ROOT / "scripts" / "admissions-evidence-smoke.py").exists())
+        self.assertTrue((PROJECT_ROOT / "scripts" / "reviewer-experience-smoke.py").exists())
         self.assertTrue((WEB_ROOT / "styles.css").exists())
         self.assertTrue((WEB_ROOT / "app.js").exists())
         self.assertTrue((WEB_ROOT / "mock-api.js").exists())
@@ -43,7 +43,7 @@ class WebStaticTests(unittest.TestCase):
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
 
-        self.assertIn('href="./styles.css?v=20260921-admissions-evidence-v1"', html)
+        self.assertIn('href="./styles.css?v=20261025-reviewer-release-v1"', html)
         self.assertIn('href="./assets/favicon.svg"', html)
         self.assertIn('href="./assets/favicon-32.png"', html)
         self.assertIn('href="./assets/apple-touch-icon.png"', html)
@@ -52,9 +52,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn('src="./assets/microscore-mark.svg"', html)
         self.assertIn('src="./application-intake.js?v=20260623-dashboard"', html)
         self.assertIn('src="./risk-detail.js?v=20260717-pilot-readiness-v1"', html)
-        self.assertIn('src="./mock-api.js?v=20260921-admissions-evidence-v1"', html)
+        self.assertIn('src="./mock-api.js?v=20261025-reviewer-release-v1"', html)
         self.assertIn('src="./portfolio-dashboard.js?v=20260623-dashboard"', html)
-        self.assertIn('src="./app.js?v=20260921-admissions-evidence-v1"', html)
+        self.assertIn('src="./app.js?v=20261025-reviewer-release-v1"', html)
         self.assertIn("window.history.replaceState", html)
         self.assertIn("synthetic demo data only", html)
         self.assertIn('class="workspace-hero"', html)
@@ -968,7 +968,7 @@ class WebStaticTests(unittest.TestCase):
 
         evidence_html = (WEB_ROOT / "evidence.html").read_text(encoding="utf-8")
         evidence_css = (WEB_ROOT / "evidence.css").read_text(encoding="utf-8")
-        evidence_smoke = (PROJECT_ROOT / "scripts" / "admissions-evidence-smoke.py").read_text(
+        reviewer_smoke = (PROJECT_ROOT / "scripts" / "reviewer-experience-smoke.py").read_text(
             encoding="utf-8",
         )
         self.assertEqual(evidence_html.count("data-milestone"), 13)
@@ -987,8 +987,9 @@ class WebStaticTests(unittest.TestCase):
         self.assertIn("Read the research paper", evidence_html)
         self.assertIn(".proof-map", evidence_css)
         self.assertIn(".journey-grid", evidence_css)
-        self.assertIn("admissions-evidence-smoke", evidence_smoke)
-        self.assertIn("Broken local evidence links", evidence_smoke)
+        self.assertIn("reviewer-experience-smoke", reviewer_smoke)
+        self.assertIn("Broken local reviewer links", reviewer_smoke)
+        self.assertIn("horizontal_overflow_regression", reviewer_smoke)
 
     def test_one_click_launcher_is_documented(self) -> None:
         root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
