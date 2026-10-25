@@ -451,8 +451,8 @@ main,
 
 .decision-section {
   position: relative;
-  width: calc(100% + 80px);
-  margin-left: -40px;
+  width: min(calc(100% + 80px), calc(100vw - 32px));
+  margin-left: max(-40px, calc((100% - (100vw - 32px)) / 2));
   border-radius: 32px;
   background:
     radial-gradient(circle at 7% 2%, rgba(7, 152, 143, 0.14), transparent 25%),

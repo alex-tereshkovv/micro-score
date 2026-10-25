@@ -170,7 +170,7 @@ def main() -> None:
         raise AssertionError("Public release still contains admissions-specific positioning")
     if "Engineering portfolio" not in showcase_html:
         raise AssertionError("Technical walkthrough is missing neutral portfolio positioning")
-    if "20261025-reviewer-accessibility-v1" not in index_html:
+    if "20261025-reviewer-accessibility-v2" not in index_html:
         raise AssertionError("Reviewer home cache version is stale")
 
     accessibility_contracts = {
@@ -228,6 +228,15 @@ def main() -> None:
             accessibility_checks += 1
             if marker not in stylesheet:
                 raise AssertionError(f"Public stylesheet is missing accessibility marker: {marker}")
+
+    evidence_styles = (WEB_ROOT / "evidence.css").read_text(encoding="utf-8")
+    for marker in [
+        "width: min(calc(100% + 80px), calc(100vw - 32px));",
+        "margin-left: max(-40px, calc((100% - (100vw - 32px)) / 2));",
+    ]:
+        accessibility_checks += 1
+        if marker not in evidence_styles:
+            raise AssertionError(f"Evidence full-bleed section can overflow the viewport: {marker}")
 
     expected_grid = (
         "grid-template-columns: repeat(3, minmax(0, 1fr) minmax(18px, auto)) "
