@@ -11,9 +11,10 @@
     <title>MicroScore | Technical Walkthrough</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
-    <link rel="stylesheet" href="./showcase.css?v=20260927-technical-defense-v2" />
+    <link rel="stylesheet" href="./showcase.css?v=20261025-reviewer-accessibility-v1" />
   </head>
   <body>
+    <a class="skip-link" href="#showcase-main">Skip to walkthrough</a>
     <div class="showcase-shell">
       <header class="showcase-header">
         <a class="showcase-brand" href="./#/review" aria-label="Return to the MicroScore engineering case study">
@@ -47,8 +48,8 @@
         </div>
       </header>
 
-      <main class="showcase-stage" aria-live="polite">
-        <article class="showcase-slide scene-opening is-active" data-slide data-duration="17000" aria-hidden="false">
+      <main id="showcase-main" class="showcase-stage" tabindex="-1" aria-live="polite">
+        <article id="showcase-scene-1" class="showcase-slide scene-opening is-active" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-1" aria-hidden="false">
           <div class="scene-copy">
             <p class="scene-eyebrow">01 · The problem</p>
             <h1>Credit-risk engineering for people with limited formal history.</h1>
@@ -71,7 +72,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-research" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-2" class="showcase-slide scene-research" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-2" aria-hidden="true" hidden>
           <div class="scene-heading">
             <div>
               <p class="scene-eyebrow">02 · Research changed the product</p>
@@ -112,7 +113,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-workflow" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-3" class="showcase-slide scene-workflow" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-3" aria-hidden="true" hidden>
           <div class="scene-heading compact-heading">
             <div>
               <p class="scene-eyebrow">03 · Product workflow</p>
@@ -164,7 +165,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-uncertainty" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-4" class="showcase-slide scene-uncertainty" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-4" aria-hidden="true" hidden>
           <div class="scene-heading compact-heading">
             <div>
               <p class="scene-eyebrow">04 · Monte Carlo layer</p>
@@ -203,7 +204,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-engineering" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-5" class="showcase-slide scene-engineering" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-5" aria-hidden="true" hidden>
           <div class="scene-heading compact-heading">
             <div>
               <p class="scene-eyebrow">05 · Systems engineering</p>
@@ -230,7 +231,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-boundaries" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-6" class="showcase-slide scene-boundaries" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-6" aria-hidden="true" hidden>
           <div class="boundary-statement">
             <p class="scene-eyebrow">06 · Responsible-use boundary</p>
             <h2>A prototype can be ambitious and still be honest.</h2>
@@ -250,7 +251,7 @@
           </div>
         </article>
 
-        <article class="showcase-slide scene-finale" data-slide data-duration="17000" aria-hidden="true">
+        <article id="showcase-scene-7" class="showcase-slide scene-finale" data-slide data-duration="17000" role="tabpanel" aria-labelledby="showcase-tab-7" aria-hidden="true" hidden>
           <div class="finale-copy">
             <p class="scene-eyebrow">07 · Inspect the evidence</p>
             <h2>Built as a system.<br />Tested as a system.</h2>
@@ -274,7 +275,7 @@
         </article>
       </main>
 
-      <aside id="presenter-guide" class="presenter-guide" data-guide-panel aria-hidden="true">
+      <aside id="presenter-guide" class="presenter-guide" data-guide-panel aria-hidden="true" inert>
         <header class="presenter-guide-header">
           <div>
             <span>Presenter guide</span>
@@ -369,13 +370,13 @@
             <span><b data-mode-duration>2 min</b> · <b data-scene-current>1</b> / <span data-scene-total>7</span></span>
           </div>
           <div class="showcase-track" role="tablist" aria-label="Walkthrough scenes">
-            <button type="button" class="is-active" data-scene-target="0" role="tab" aria-selected="true" aria-label="Scene 1: The problem"><i></i></button>
-            <button type="button" data-scene-target="1" role="tab" aria-selected="false" aria-label="Scene 2: Research evidence"><i></i></button>
-            <button type="button" data-scene-target="2" role="tab" aria-selected="false" aria-label="Scene 3: Product workflow"><i></i></button>
-            <button type="button" data-scene-target="3" role="tab" aria-selected="false" aria-label="Scene 4: Monte Carlo"><i></i></button>
-            <button type="button" data-scene-target="4" role="tab" aria-selected="false" aria-label="Scene 5: Systems engineering"><i></i></button>
-            <button type="button" data-scene-target="5" role="tab" aria-selected="false" aria-label="Scene 6: Responsible-use boundary"><i></i></button>
-            <button type="button" data-scene-target="6" role="tab" aria-selected="false" aria-label="Scene 7: Evidence and next steps"><i></i></button>
+            <button id="showcase-tab-1" type="button" class="is-active" data-scene-target="0" role="tab" aria-controls="showcase-scene-1" aria-selected="true" aria-label="Scene 1: The problem" tabindex="0"><i></i></button>
+            <button id="showcase-tab-2" type="button" data-scene-target="1" role="tab" aria-controls="showcase-scene-2" aria-selected="false" aria-label="Scene 2: Research evidence" tabindex="-1"><i></i></button>
+            <button id="showcase-tab-3" type="button" data-scene-target="2" role="tab" aria-controls="showcase-scene-3" aria-selected="false" aria-label="Scene 3: Product workflow" tabindex="-1"><i></i></button>
+            <button id="showcase-tab-4" type="button" data-scene-target="3" role="tab" aria-controls="showcase-scene-4" aria-selected="false" aria-label="Scene 4: Monte Carlo" tabindex="-1"><i></i></button>
+            <button id="showcase-tab-5" type="button" data-scene-target="4" role="tab" aria-controls="showcase-scene-5" aria-selected="false" aria-label="Scene 5: Systems engineering" tabindex="-1"><i></i></button>
+            <button id="showcase-tab-6" type="button" data-scene-target="5" role="tab" aria-controls="showcase-scene-6" aria-selected="false" aria-label="Scene 6: Responsible-use boundary" tabindex="-1"><i></i></button>
+            <button id="showcase-tab-7" type="button" data-scene-target="6" role="tab" aria-controls="showcase-scene-7" aria-selected="false" aria-label="Scene 7: Evidence and next steps" tabindex="-1"><i></i></button>
           </div>
         </div>
         <button class="showcase-nav-button" type="button" data-next aria-label="Next scene">→</button>
@@ -383,6 +384,6 @@
     </div>
 
     <noscript>This walkthrough requires JavaScript for scene navigation. The main MicroScore demo remains available.</noscript>
-    <script src="./showcase.js?v=20260927-technical-defense-v2"></script>
+    <script src="./showcase.js?v=20261025-reviewer-accessibility-v1"></script>
   </body>
 </html>

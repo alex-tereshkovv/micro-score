@@ -58,7 +58,8 @@ A release candidate is blocked when any of these conditions is true:
 - the research paper's numbered findings are duplicated or out of sequence;
 - a reviewer-facing artifact revives the deprecated reviewer-specific filename;
 - a public reviewer page has a broken local asset/link, admissions-specific
-  cache label, repository-hygiene leak, or desktop horizontal overflow regression;
+  cache label, repository-hygiene leak, desktop horizontal overflow regression,
+  broken skip-link/tab semantics, or missing reduced-motion behavior;
 - a headline metric is missing its synthetic/public-benchmark evidence boundary;
 - the technical-defense packet is stale, loses one of its 12 core questions, or
   disagrees with the generated research metrics;

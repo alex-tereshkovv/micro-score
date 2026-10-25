@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
     <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20261025-reviewer-release-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20261025-reviewer-accessibility-v1" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -28,6 +28,7 @@
     <div id="messageArea" class="message-area global-message" aria-live="polite"></div>
 
     <section id="reviewerScreen" class="reviewer-screen" aria-labelledby="reviewer-title" hidden>
+      <a class="skip-link" href="#reviewer-main">Skip to project overview</a>
       <header class="reviewer-nav">
         <a class="reviewer-brand" href="#/review" aria-label="MicroScore engineering review home">
           <img src="./assets/microscore-mark.svg" alt="" />
@@ -39,7 +40,7 @@
         </div>
       </header>
 
-      <main class="reviewer-main">
+      <main id="reviewer-main" class="reviewer-main" tabindex="-1">
         <section class="reviewer-hero">
           <div class="reviewer-hero-copy">
             <p class="reviewer-kicker">Engineering case study · 3-minute review</p>
@@ -1075,8 +1076,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20261025-reviewer-release-v1"></script>
+    <script src="./mock-api.js?v=20261025-reviewer-accessibility-v1"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20261025-reviewer-release-v1"></script>
+    <script src="./app.js?v=20261025-reviewer-accessibility-v1"></script>
   </body>
 </html>

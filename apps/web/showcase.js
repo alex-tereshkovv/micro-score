@@ -17,6 +17,7 @@
   const sceneLabel = document.querySelector("[data-scene-label]");
   const sceneCurrent = document.querySelector("[data-scene-current]");
   const sceneTotal = document.querySelector("[data-scene-total]");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const sceneNames = [
     "01 · The problem",
@@ -124,11 +125,13 @@
       const active = slideIndex === nextIndex;
       slide.classList.toggle("is-active", active);
       slide.setAttribute("aria-hidden", String(!active));
+      slide.hidden = !active;
     });
     sceneButtons.forEach((button, buttonIndex) => {
       const active = buttonIndex === nextIndex;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
     });
     activeIndex = nextIndex;
     sceneLabel.textContent = sceneNames[activeIndex];
@@ -190,8 +193,20 @@
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => setTourMode(button.dataset.tourMode));
   });
-  sceneButtons.forEach((button) => {
+  sceneButtons.forEach((button, buttonIndex) => {
     button.addEventListener("click", () => setScene(Number(button.dataset.sceneTarget)));
+    button.addEventListener("keydown", (event) => {
+      let nextIndex = null;
+      if (event.key === "ArrowRight") nextIndex = (buttonIndex + 1) % sceneButtons.length;
+      else if (event.key === "ArrowLeft") nextIndex = (buttonIndex - 1 + sceneButtons.length) % sceneButtons.length;
+      else if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = sceneButtons.length - 1;
+      if (nextIndex === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setScene(nextIndex);
+      sceneButtons[nextIndex].focus({ preventScroll: true });
+    });
   });
 
   document.addEventListener("keydown", (event) => {
@@ -234,5 +249,10 @@
   setTourMode(tourMode, { updateUrl: false });
   setScene(activeIndex, { updateUrl: false });
   setGuide(new URLSearchParams(window.location.search).get("guide") === "1", { updateUrl: false });
-  if (new URLSearchParams(window.location.search).get("autoplay") === "1") setPlaying(true);
+  if (
+    new URLSearchParams(window.location.search).get("autoplay") === "1"
+    && !reducedMotion.matches
+  ) {
+    setPlaying(true);
+  }
 })();

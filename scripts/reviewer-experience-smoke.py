@@ -170,8 +170,64 @@ def main() -> None:
         raise AssertionError("Public release still contains admissions-specific positioning")
     if "Engineering portfolio" not in showcase_html:
         raise AssertionError("Technical walkthrough is missing neutral portfolio positioning")
-    if "20261025-reviewer-release-v1" not in index_html:
+    if "20261025-reviewer-accessibility-v1" not in index_html:
         raise AssertionError("Reviewer home cache version is stale")
+
+    accessibility_contracts = {
+        "index.html": [
+            'class="skip-link" href="#reviewer-main"',
+            'id="reviewer-main" class="reviewer-main" tabindex="-1"',
+        ],
+        "evidence.html": [
+            'class="skip-link" href="#evidence-main"',
+            '<main id="evidence-main" tabindex="-1">',
+        ],
+        "showcase.html": [
+            'class="skip-link" href="#showcase-main"',
+            'id="showcase-main" class="showcase-stage" tabindex="-1"',
+            'role="tabpanel"',
+            'aria-controls="showcase-scene-1"',
+            'id="showcase-tab-7"',
+            "aria-hidden=\"true\" inert",
+        ],
+    }
+    page_text = {
+        "index.html": index_html,
+        "evidence.html": evidence_html,
+        "showcase.html": showcase_html,
+    }
+    accessibility_checks = 0
+    for page_name, markers in accessibility_contracts.items():
+        for marker in markers:
+            accessibility_checks += 1
+            if marker not in page_text[page_name]:
+                raise AssertionError(f"{page_name} is missing accessibility marker: {marker}")
+
+    if showcase_html.count('role="tabpanel"') != 7:
+        raise AssertionError("Walkthrough must expose seven tab panels")
+    if showcase_html.count('aria-controls="showcase-scene-') != 7:
+        raise AssertionError("Walkthrough tabs must control all seven scenes")
+
+    showcase_script = (WEB_ROOT / "showcase.js").read_text(encoding="utf-8")
+    for marker in [
+        'button.tabIndex = active ? 0 : -1',
+        'slide.hidden = !active',
+        'event.stopPropagation()',
+        'prefers-reduced-motion: reduce',
+    ]:
+        accessibility_checks += 1
+        if marker not in showcase_script:
+            raise AssertionError(f"Walkthrough keyboard contract is missing: {marker}")
+
+    for stylesheet in [
+        styles,
+        (WEB_ROOT / "evidence.css").read_text(encoding="utf-8"),
+        (WEB_ROOT / "showcase.css").read_text(encoding="utf-8"),
+    ]:
+        for marker in [".skip-link", "prefers-reduced-motion: reduce"]:
+            accessibility_checks += 1
+            if marker not in stylesheet:
+                raise AssertionError(f"Public stylesheet is missing accessibility marker: {marker}")
 
     expected_grid = (
         "grid-template-columns: repeat(3, minmax(0, 1fr) minmax(18px, auto)) "
@@ -202,6 +258,7 @@ def main() -> None:
                 "evidence_milestones": evidence_parser.milestones,
                 "engineering_decisions": evidence_parser.decisions,
                 "github_proof_links": len(github_links),
+                "accessibility_checks": accessibility_checks,
                 "smoke_workflows": smoke_workflows,
                 "tracked_hygiene_violations": 0,
                 "horizontal_overflow_regression": False,

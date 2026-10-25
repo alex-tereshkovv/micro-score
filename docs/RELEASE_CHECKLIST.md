@@ -159,6 +159,12 @@ git diff --check
   without admissions-specific positioning.
 - The desktop architecture flow does not produce page-level horizontal scroll;
   responsive layouts collapse at the existing 1080 px and 680 px breakpoints.
+- Reviewer home, evidence hub, and walkthrough expose keyboard-visible skip
+  links to their main content and retain visible focus treatment.
+- The walkthrough implements the ARIA tab/tab-panel relationship, keeps only
+  the active scene in the focus order, and supports roving arrow-key focus.
+- All three public stylesheets respect reduced-motion preferences; an autoplay
+  query does not start automatically when reduced motion is requested.
 - Tracked files exclude databases, private keys, `.env`, virtual environments,
   caches, and notebook checkpoints.
 - CI and the local release gate run:
