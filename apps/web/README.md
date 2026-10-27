@@ -1,6 +1,6 @@
-# MicroScore Web Prototype
+# Senim Risk Web Prototype
 
-Static browser frontend for the MicroScore API prototype. It can run against
+Static browser frontend for the Senim Risk API prototype. It can run against
 the local FastAPI backend or in static demo mode with synthetic in-browser
 data.
 
@@ -10,9 +10,17 @@ Brand assets live at:
 apps/web/assets/favicon.svg
 apps/web/assets/favicon-32.png
 apps/web/assets/apple-touch-icon.png
-apps/web/assets/microscore-mark.svg
-apps/web/assets/micro-score.png
-apps/web/assets/micro-score-lockup.png
+apps/web/assets/senim-risk-mark.svg
+apps/web/assets/senim-risk-mark.png
+apps/web/assets/senim-risk-lockup.svg
+apps/web/assets/senim-risk-lockup.png
+apps/web/assets/senim-risk-social-preview.png
+```
+
+Regenerate the raster assets from the checked-in brand source with:
+
+```powershell
+.venv\Scripts\python.exe scripts\build_brand_assets.py
 ```
 
 ## Run
@@ -20,13 +28,13 @@ apps/web/assets/micro-score-lockup.png
 From the project root, double-click:
 
 ```text
-Start-MicroScore.cmd
+Start-Senim-Risk.cmd
 ```
 
 Or run:
 
 ```powershell
-.\Start-MicroScore.cmd
+.\Start-Senim-Risk.cmd
 ```
 
 The launcher seeds demo data, starts the API, starts the static web UI, and

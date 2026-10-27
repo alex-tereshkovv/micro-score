@@ -4,12 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#10252d" />
-    <title>MicroScore Risk Console</title>
+    <title>Senim Risk | Credit-Risk Console</title>
+    <meta name="application-name" content="Senim Risk" />
+    <meta
+      name="description"
+      content="Senim Risk is an interpretable credit-risk system for thin-file borrowers."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Senim Risk | Credit-Risk Console" />
+    <meta
+      property="og:description"
+      content="An interpretable credit-risk system for thin-file borrowers."
+    />
+    <meta property="og:image" content="https://alex-tereshkovv.github.io/micro-score/assets/senim-risk-social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Senim Risk — an interpretable credit-risk system for thin-file borrowers" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Senim Risk | Credit-Risk Console" />
+    <meta name="twitter:description" content="An interpretable credit-risk system for thin-file borrowers." />
+    <meta name="twitter:image" content="https://alex-tereshkovv.github.io/micro-score/assets/senim-risk-social-preview.png" />
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
-    <link rel="alternate icon" type="image/png" href="./assets/micro-score.png" />
-    <link rel="stylesheet" href="./styles.css?v=20261025-reviewer-accessibility-v2" />
+    <link rel="alternate icon" type="image/svg+xml" href="./assets/senim-risk-mark.svg" />
+    <link rel="stylesheet" href="./styles.css?v=20261027-senim-risk-brand-v2" />
     <script>
       (() => {
         const hasSession = Boolean(localStorage.getItem("microscore.token"));
@@ -30,9 +49,9 @@
     <section id="reviewerScreen" class="reviewer-screen" aria-labelledby="reviewer-title" hidden>
       <a class="skip-link" href="#reviewer-main">Skip to project overview</a>
       <header class="reviewer-nav">
-        <a class="reviewer-brand" href="#/review" aria-label="MicroScore engineering review home">
-          <img src="./assets/microscore-mark.svg" alt="" />
-          <span><strong>Micro</strong>Score</span>
+        <a class="reviewer-brand" href="#/review" aria-label="Senim Risk engineering review home">
+          <img src="./assets/senim-risk-mark.svg" alt="" />
+          <span><strong>Senim</strong> Risk</span>
         </a>
         <div class="reviewer-nav-actions">
           <span>Engineering case study</span>
@@ -46,7 +65,7 @@
             <p class="reviewer-kicker">Engineering case study · 3-minute review</p>
             <h1 id="reviewer-title">Engineering a responsible credit-risk system for thin-file borrowers.</h1>
             <p class="reviewer-lead">
-              MicroScore connects interpretable machine learning, a role-based FastAPI product,
+              Senim Risk connects interpretable machine learning, a role-based FastAPI product,
               and reproducible portfolio stress testing around one local problem in Pavlodar,
               Kazakhstan: access to credit when formal credit history is limited.
             </p>
@@ -60,7 +79,7 @@
               <a class="secondary-button reviewer-link-button" href="https://github.com/alex-tereshkovv/micro-score" target="_blank" rel="noreferrer">
                 Inspect source code
               </a>
-              <a class="secondary-button reviewer-link-button" href="./assets/MicroScore_Engineering_Case_Study.pdf" download>
+              <a class="secondary-button reviewer-link-button" href="./assets/Senim_Risk_Engineering_Case_Study.pdf" download>
                 Download evidence PDF
               </a>
             </div>
@@ -79,7 +98,7 @@
                 <dd>Random Forest ROC-AUC on the public UCI benchmark</dd>
               </div>
               <div>
-                <dt>152</dt>
+                <dt>155</dt>
                 <dd>automated tests in the current release gate</dd>
               </div>
               <div>
@@ -102,7 +121,7 @@
           <p>
             A useful system also needs explainability, tenant isolation, audit evidence,
             lifecycle controls, uncertainty analysis, and a clear boundary between model
-            output and human judgment. MicroScore was built as that complete system.
+            output and human judgment. Senim Risk was built as that complete system.
           </p>
         </section>
 
@@ -114,7 +133,7 @@
             </div>
             <span class="reviewer-section-number">01</span>
           </div>
-          <div class="reviewer-architecture" aria-label="MicroScore system architecture">
+          <div class="reviewer-architecture" aria-label="Senim Risk system architecture">
             <article>
               <span>01</span>
               <strong>Borrower intake</strong>
@@ -194,7 +213,7 @@
               <div class="reviewer-route-meta"><span>Research</span><em>5 minutes</em></div>
               <h3>Audit the evidence</h3>
               <p>Read the methodology, ablation findings, benchmark results, and explicit claim boundaries.</p>
-              <a class="reviewer-text-action" href="./assets/MicroScore_Research_Paper.pdf" target="_blank" rel="noreferrer">Read research paper <span aria-hidden="true">→</span></a>
+              <a class="reviewer-text-action" href="./assets/Senim_Risk_Research_Paper.pdf" target="_blank" rel="noreferrer">Read research paper <span aria-hidden="true">→</span></a>
             </article>
             <article>
               <div class="reviewer-route-meta"><span>Engineering</span><em>5 minutes</em></div>
@@ -231,7 +250,7 @@
       </main>
 
       <footer class="reviewer-footer">
-        <span>MicroScore · Alexandr · Pavlodar, Kazakhstan</span>
+        <span>Senim Risk · Alexandr · Pavlodar, Kazakhstan</span>
         <span>Interpretable systems for financial inclusion</span>
       </footer>
     </section>
@@ -239,9 +258,13 @@
     <section id="authScreen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-card">
         <div class="auth-brand">
-          <h1 id="auth-title" class="sr-only">MicroScore sign in</h1>
-          <div class="auth-logo-lockup">
-            <img class="auth-logo-image" src="./assets/micro-score-lockup.png?v=20260612-full" alt="MicroScore" />
+          <h1 id="auth-title" class="sr-only">Senim Risk sign in</h1>
+          <div class="auth-logo-lockup" aria-hidden="true">
+            <img class="auth-logo-image" src="./assets/senim-risk-mark.svg" alt="" />
+            <div class="auth-logo-copy">
+              <strong><span>Senim</span> Risk</strong>
+              <small>An interpretable credit-risk system for thin-file borrowers.</small>
+            </div>
           </div>
         </div>
 
@@ -251,7 +274,7 @@
             <h2>Choose your workspace</h2>
             <p>
               Sign in as a borrower, MFI analyst, or admin. Each role opens its own
-              MicroScore workspace with synthetic demo data only.
+              Senim Risk workspace with synthetic demo data only.
             </p>
             <button class="reviewer-entry-button" type="button" data-review-route="#/review">
               <span>Project review</span>
@@ -310,10 +333,10 @@
       <aside class="sidebar">
         <div class="brand-block">
           <div class="brand-logo-card" aria-hidden="true">
-            <img src="./assets/microscore-mark.svg" alt="" />
+            <img src="./assets/senim-risk-mark.svg" alt="" />
           </div>
           <div class="brand-copy">
-            <h1><span>Micro</span><strong>Score</strong></h1>
+            <h1><span>Senim</span><strong>Risk</strong></h1>
             <p id="workspaceRoleLabel">Personal workspace</p>
           </div>
         </div>
@@ -370,7 +393,7 @@
             <p class="eyebrow">Pre-pilot operating picture</p>
             <h3>One flow from consented application to human review and portfolio stress testing.</h3>
             <p>
-              MicroScore is still synthetic and decision-support only, but the demo now
+              Senim Risk is still synthetic and decision-support only, but the demo now
               connects borrower status, analyst review, admin evidence, PostgreSQL readiness,
               and Monte Carlo planning in one workspace.
             </p>
@@ -1076,8 +1099,8 @@ Human review is required.</textarea>
 
     <script src="./application-intake.js?v=20260623-dashboard"></script>
     <script src="./risk-detail.js?v=20260717-pilot-readiness-v1"></script>
-    <script src="./mock-api.js?v=20261025-reviewer-accessibility-v2"></script>
+    <script src="./mock-api.js?v=20261027-senim-risk-brand-v2"></script>
     <script src="./portfolio-dashboard.js?v=20260623-dashboard"></script>
-    <script src="./app.js?v=20261025-reviewer-accessibility-v2"></script>
+    <script src="./app.js?v=20261027-senim-risk-brand-v2"></script>
   </body>
 </html>

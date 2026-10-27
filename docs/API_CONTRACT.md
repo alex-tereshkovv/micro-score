@@ -1,6 +1,6 @@
-# MicroScore API Contract
+# Senim Risk API Contract
 
-This document describes the current backend contract for the MicroScore product
+This document describes the current backend contract for the Senim Risk product
 prototype. It is intended to guide the future borrower frontend and MFI analyst
 dashboard.
 
@@ -66,7 +66,7 @@ supervised Pavlodar pilot. It returns:
 - first-pilot success criteria.
 
 The endpoint does not expose borrower data. It exists so the API contract makes
-MicroScore's privacy boundary explicit.
+Senim Risk's privacy boundary explicit.
 
 Admin pre-pilot release gate:
 
@@ -216,7 +216,7 @@ POST /auth/logout
 ```
 
 The browser API accepts CORS requests only from the local frontend and the
-MicroScore GitHub Pages origin by default. Additional deployed frontend origins
+Senim Risk GitHub Pages origin by default. Additional deployed frontend origins
 can be supplied as a comma-separated list:
 
 ```powershell
@@ -331,7 +331,7 @@ rows with `key`, `status`, `severity`, `summary`, and `action`. It summarizes:
 - tenant isolation posture;
 - production blockers and next required controls.
 
-The endpoint is intentionally blocked for production while MicroScore uses local
+The endpoint is intentionally blocked for production while Senim Risk uses local
 password auth, prototype shared-code MFA, in-memory rate limiting, local invite
 delivery, and SQLite storage. It does not return raw passwords, raw invite
 tokens, bearer tokens, session ids, MFA codes, or borrower-private review data.
@@ -451,7 +451,7 @@ environment variable names, configured/missing environment variable names,
 
 The endpoint is intentionally `blocked` in the prototype. Even when
 transactional email configuration is present, external sending remains blocked
-by `external_send_adapter_disabled` because MicroScore has not implemented a
+by `external_send_adapter_disabled` because Senim Risk has not implemented a
 signed provider adapter with timeout, retry, idempotency, secret isolation, and
 delivery webhook reconciliation. It also reports
 `invite_secret_material_not_available`: queued worker attempts persist only

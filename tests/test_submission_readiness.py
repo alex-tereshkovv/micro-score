@@ -49,7 +49,7 @@ class SubmissionReadinessTests(unittest.TestCase):
         self.assertEqual(len(paths), len(set(paths)))
         self.assertGreaterEqual(len(paths), 20)
         self.assertEqual(payload["status"], "review_ready_not_production_ready")
-        self.assertEqual(payload["quality_gate"]["python_tests"], 152)
+        self.assertEqual(payload["quality_gate"]["python_tests"], 155)
         self.assertEqual(payload["quality_gate"]["local_smoke_workflows"], 13)
         self.assertIn("reports/submission/technical-defense.json", paths)
         for item in payload["artifacts"]:
@@ -81,7 +81,7 @@ class SubmissionReadinessTests(unittest.TestCase):
             PROJECT_ROOT / "docs" / "DEMO_VIDEO_SCRIPT.md",
         ]
         for source in sources:
-            self.assertIn("152", source.read_text(encoding="utf-8"), source.name)
+            self.assertIn("155", source.read_text(encoding="utf-8"), source.name)
         evidence = sources[3].read_text(encoding="utf-8")
         self.assertIn("13 local smoke workflows", evidence)
         paper = (PROJECT_ROOT / "docs" / "RESEARCH_PAPER.md").read_text(
@@ -97,15 +97,15 @@ class SubmissionReadinessTests(unittest.TestCase):
 
     def test_pdfs_contain_current_quality_evidence_and_limits(self) -> None:
         case_pages, case_text = pdf_text(
-            PROJECT_ROOT / "output" / "pdf" / "MicroScore_Engineering_Case_Study.pdf"
+            PROJECT_ROOT / "output" / "pdf" / "Senim_Risk_Engineering_Case_Study.pdf"
         )
         paper_pages, paper_text = pdf_text(
-            PROJECT_ROOT / "output" / "pdf" / "MicroScore_Research_Paper.pdf"
+            PROJECT_ROOT / "output" / "pdf" / "Senim_Risk_Research_Paper.pdf"
         )
         self.assertGreaterEqual(case_pages, 10)
         self.assertLessEqual(case_pages, 11)
         self.assertEqual(paper_pages, 11)
-        self.assertIn("152", case_text)
+        self.assertIn("155", case_text)
         self.assertIn("0.830", case_text)
         self.assertIn("0.492", case_text)
         self.assertIn("production readiness stays blocked", case_text.lower())

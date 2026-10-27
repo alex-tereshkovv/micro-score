@@ -82,7 +82,7 @@ Run the same policy across baseline, adverse, and severe scenarios. Capture the
 scenario cards with median result, 5-95% range, loss probability, defaults,
 exposure, seed, and assumptions visible.
 
-Why it matters: this shows that MicroScore treats portfolio outcomes as ranges
+Why it matters: this shows that Senim Risk treats portfolio outcomes as ranges
 under explicit assumptions rather than pretending one expected value is certain.
 
 ### 8. Admin Audit Trail

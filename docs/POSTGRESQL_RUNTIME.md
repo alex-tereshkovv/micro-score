@@ -1,6 +1,6 @@
 # PostgreSQL Runtime v1
 
-PostgreSQL Runtime v1 closes the gap between MicroScore's versioned PostgreSQL
+PostgreSQL Runtime v1 closes the gap between Senim Risk's versioned PostgreSQL
 schema, its 52-method repository adapter, and the FastAPI process that consumes
 that repository. SQLite remains the zero-configuration default. PostgreSQL is
 enabled only by explicit configuration.

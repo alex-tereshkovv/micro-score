@@ -1,4 +1,4 @@
-"""Request and response schemas for the MicroScore API prototype."""
+"""Request and response schemas for the Senim Risk API prototype."""
 
 from __future__ import annotations
 

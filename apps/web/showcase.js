@@ -138,7 +138,7 @@
     sceneCurrent.textContent = String(activeIndex + 1);
     previousButton.disabled = activeIndex === 0;
     nextButton.disabled = activeIndex === slides.length - 1;
-    document.title = `${sceneNames[activeIndex]} | MicroScore ${tourMode === "technical" ? "Technical Defense" : "Walkthrough"}`;
+    document.title = `${sceneNames[activeIndex]} | Senim Risk ${tourMode === "technical" ? "Technical Defense" : "Walkthrough"}`;
     updateGuide(activeIndex);
     if (updateUrl) updateAddress(activeIndex);
     startProgress();

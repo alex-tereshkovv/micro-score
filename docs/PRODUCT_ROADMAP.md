@@ -1,14 +1,19 @@
-# MicroScore Product Roadmap
+# Senim Risk Product Roadmap
 
-Target: by November 9, 2026, MicroScore should be a working web application
+Target: by November 9, 2026, Senim Risk should be a working web application
 where a real borrower can create an account, submit financial-behavior data, and
 an MFI user can review risk scores, explanations, and portfolio analytics.
 
 This roadmap was refreshed on June 20, 2026.
 
+Coordination note: separate Codex workstream chats should use
+`docs/CURRENT_STATUS.md` as the short current-state handoff and
+`docs/WORKSTREAMS.md` as the operating model for backend, frontend, fullstack,
+QA, and analytics/ML work.
+
 ## Product Vision
 
-MicroScore should become a lightweight decision-support system for regional
+Senim Risk should become a lightweight decision-support system for regional
 microfinance organizations in Kazakhstan.
 
 It should support two user types:

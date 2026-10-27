@@ -415,7 +415,7 @@ function setAppMode(targetView = null) {
 
 function showAppPage() {
   const shouldAnimate = els.appShell.hidden;
-  document.title = "MicroScore Risk Console";
+  document.title = "Senim Risk | Credit-Risk Console";
   document.body.classList.remove("reviewer-mode");
   els.reviewerScreen.hidden = true;
   els.appShell.hidden = false;
@@ -437,7 +437,7 @@ function showAppPage() {
 
 function showAuthPage() {
   const shouldAnimate = !els.appShell.hidden;
-  document.title = "MicroScore Risk Console";
+  document.title = "Senim Risk | Credit-Risk Console";
   document.body.classList.remove("reviewer-mode");
   els.reviewerScreen.hidden = true;
   els.authScreen.hidden = false;
@@ -456,7 +456,7 @@ function showAuthPage() {
 }
 
 function showReviewerPage() {
-  document.title = "MicroScore | Engineering Case Study";
+  document.title = "Senim Risk | Engineering Case Study";
   document.body.classList.add("reviewer-mode");
   els.authScreen.hidden = true;
   els.appShell.hidden = true;
@@ -681,7 +681,7 @@ async function checkApi() {
   if (activateStaticDemo("Static demo mode - API offline")) {
     return true;
   }
-  els.apiStatus.textContent = "Offline - start MicroScore and retry";
+  els.apiStatus.textContent = "Offline - start Senim Risk and retry";
   els.apiStatus.className = "status-line error";
   return false;
 }
@@ -750,7 +750,7 @@ async function enterDemoWorkspace(email, role) {
   fillDemoCredentials(email);
   const online = await checkApiAndOrganizations();
   if (!online) {
-    showMessage("Start MicroScore first, then try demo entry again", "error");
+    showMessage("Start Senim Risk first, then try demo entry again", "error");
     return;
   }
   await authenticate("login");
@@ -2580,7 +2580,7 @@ async function refreshApplications() {
 
 async function exportApplicationsCsv() {
   const blob = await apiBlob("/mfi/applications/export.csv");
-  downloadBlob(blob, "microscore-applications.csv");
+  downloadBlob(blob, "senim-risk-applications.csv");
   showMessage("Portfolio CSV exported", "ok");
 }
 
@@ -3908,7 +3908,7 @@ function committeeBriefSummary() {
   ];
 
   const text = [
-    "MicroScore Monte Carlo committee brief",
+    "Senim Risk Monte Carlo committee brief",
     `Status: ${title}`,
     `Summary: ${body}`,
     `Policy: ${formatPolicyName(selectedPolicy)}`,
@@ -4209,7 +4209,7 @@ function riskAppetiteGateSummary() {
       ];
 
   const text = [
-    "MicroScore Monte Carlo risk appetite gate",
+    "Senim Risk Monte Carlo risk appetite gate",
     `Gate: ${statusLabel} - ${stance}`,
     `Summary: ${body}`,
     `Recommended policy: ${recommendedPolicy}`,
@@ -4506,7 +4506,7 @@ function pilotMonitoringPlanSummary() {
       ];
 
   const text = [
-    "MicroScore Monte Carlo pilot monitoring plan",
+    "Senim Risk Monte Carlo pilot monitoring plan",
     `Plan: ${title}`,
     `Gate: ${gate.statusLabel} - ${gate.stance}`,
     `Summary: ${body}`,
@@ -4732,7 +4732,7 @@ function pilotEvidenceDossierSummary() {
         ];
 
   const text = [
-    "MicroScore Monte Carlo pilot evidence dossier",
+    "Senim Risk Monte Carlo pilot evidence dossier",
     `Status: ${dossierStatusLabel(status)} - ${title}`,
     `Summary: ${body}`,
     `Recommended policy: ${selectedPolicy}`,
@@ -4859,7 +4859,7 @@ function safeFileSlug(value) {
 
 function dossierDownloadFilename(dossier) {
   const date = new Date().toISOString().slice(0, 10);
-  return `microscore-${safeFileSlug(dossier.selectedPolicy)}-${safeFileSlug(dossier.status)}-${date}.md`;
+  return `senim-risk-${safeFileSlug(dossier.selectedPolicy)}-${safeFileSlug(dossier.status)}-${date}.md`;
 }
 
 function loadDossierVaultRecords() {
@@ -5000,7 +5000,7 @@ function downloadDossierVaultRecord(recordId) {
     showMessage("Saved dossier snapshot was not found", "error");
     return;
   }
-  downloadTextFile(record.text, record.filename || "microscore-pilot-evidence-dossier.md");
+  downloadTextFile(record.text, record.filename || "senim-risk-pilot-evidence-dossier.md");
   showMessage("Saved dossier downloaded", "ok");
 }
 

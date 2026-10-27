@@ -1,12 +1,12 @@
-# MicroScore Model Card
+# Senim Risk Model Card
 
 ## Model Name
 
-MicroScore research baseline, version `research-v0.1`.
+Senim Risk research baseline, version `research-v0.1`.
 
 ## Summary
 
-MicroScore is an interpretable alternative credit-risk scoring prototype for
+Senim Risk is an interpretable alternative credit-risk scoring prototype for
 thin-file borrowers in Pavlodar, Kazakhstan. It compares standard behavioral
 credit-risk models with a thin-file scenario that removes the strongest
 repayment-history proxy, `late_payment_count`.
@@ -176,7 +176,7 @@ Planned explanations:
 
 ## Human Oversight
 
-MicroScore should support a loan officer or MFI analyst. It should not replace
+Senim Risk should support a loan officer or MFI analyst. It should not replace
 human judgment. The API explicitly returns decision-support next steps such as
 manual review, affordability review, and proxy-sensitive review.
 

@@ -1,4 +1,4 @@
-"""Live analytics helpers for the MicroScore API prototype."""
+"""Live analytics helpers for the Senim Risk API prototype."""
 
 from __future__ import annotations
 

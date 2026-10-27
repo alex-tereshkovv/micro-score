@@ -1,12 +1,12 @@
 # Release Candidate Freeze v1
 
-MicroScore entered a reviewer-ready release-candidate phase on 2026-10-19.
+Senim Risk entered a reviewer-ready release-candidate phase on 2026-10-19.
 This freeze prioritizes evidence consistency, reproducibility, and explainable
 ownership over additional product features.
 
 ## Frozen Reviewer Story
 
-The release candidate makes one narrow claim: MicroScore is a working research
+The release candidate makes one narrow claim: Senim Risk is a working research
 and decision-support prototype that connects interpretable modeling, human
 review, portfolio uncertainty, auditability, and explicit pre-pilot blockers.
 
@@ -20,8 +20,8 @@ results establish production readiness.
 2. Technical walkthrough: `https://alex-tereshkovv.github.io/micro-score/showcase.html`
 3. Evidence hub: `https://alex-tereshkovv.github.io/micro-score/evidence.html`
 4. Short project overview: `docs/PROJECT_BRIEF.md`
-5. Research paper: `output/pdf/MicroScore_Research_Paper.pdf`
-6. Engineering case study: `output/pdf/MicroScore_Engineering_Case_Study.pdf`
+5. Research paper: `output/pdf/Senim_Risk_Research_Paper.pdf`
+6. Engineering case study: `output/pdf/Senim_Risk_Engineering_Case_Study.pdf`
 7. Technical defense guide: `docs/TECHNICAL_INTERVIEW_GUIDE.md`
 
 ## Submission Manifest
@@ -58,8 +58,9 @@ A release candidate is blocked when any of these conditions is true:
 - the research paper's numbered findings are duplicated or out of sequence;
 - a reviewer-facing artifact revives the deprecated reviewer-specific filename;
 - a public reviewer page has a broken local asset/link, admissions-specific
-  cache label, repository-hygiene leak, desktop horizontal overflow regression,
-  broken skip-link/tab semantics, or missing reduced-motion behavior;
+  cache label, repository-hygiene leak, desktop/tablet/mobile horizontal
+  overflow regression, visibly rendered inactive walkthrough scene, broken
+  skip-link/tab semantics, or missing reduced-motion behavior;
 - a headline metric is missing its synthetic/public-benchmark evidence boundary;
 - the technical-defense packet is stale, loses one of its 12 core questions, or
   disagrees with the generated research metrics;

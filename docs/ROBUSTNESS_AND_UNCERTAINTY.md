@@ -2,7 +2,7 @@
 
 ## Purpose
 
-MicroScore has two separate uncertainty layers:
+Senim Risk has two separate uncertainty layers:
 
 1. **Model robustness** asks whether the score survives resampling, feature
    loss, and controlled input shifts.

@@ -1019,7 +1019,7 @@ def apply_migration_and_verify(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Apply and verify the MicroScore PostgreSQL migration draft.",
+        description="Apply and verify the Senim Risk PostgreSQL migration draft.",
     )
     parser.add_argument(
         "--migration",

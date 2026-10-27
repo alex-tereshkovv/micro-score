@@ -1,6 +1,6 @@
 # Supply-Chain Gate v1
 
-MicroScore treats dependency and build inputs as reviewable engineering state.
+Senim Risk treats dependency and build inputs as reviewable engineering state.
 The gate has two layers.
 
 ## Required CI audit
@@ -14,7 +14,7 @@ python -m pip_audit --requirement /tmp/microscore-installed.txt --strict
 ```
 
 The first command captures exact versions from the installed CI environment
-while excluding the editable MicroScore package itself. Known vulnerabilities
+while excluding the editable Senim Risk package itself. Known vulnerabilities
 make the audit fail. `--strict` also fails when an installed dependency cannot
 be audited.
 

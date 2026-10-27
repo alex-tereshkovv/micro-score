@@ -44,6 +44,9 @@ jobs:
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests
 
+      - name: Audit public branding and compatibility identifiers
+        run: python scripts/brand_audit.py
+
       - name: Validate technical defense packet
         run: python scripts/build-technical-defense-packet.py --check
 
@@ -239,7 +242,7 @@ jobs:
           assert health["status"] == "ok"
           assert health["storage"]["backend"] == "postgresql"
           assert "@" not in health["database"]
-          assert "MicroScore" in index
+          assert "Senim Risk" in index
           print(json.dumps({
               "mode": "container-deployment-smoke",
               "api": health["status"],

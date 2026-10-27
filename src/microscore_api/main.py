@@ -1,4 +1,4 @@
-r"""FastAPI prototype for MicroScore.
+r"""FastAPI prototype for Senim Risk.
 
 Install app dependencies with:
 
@@ -33,7 +33,7 @@ try:
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 except ModuleNotFoundError as exc:  # pragma: no cover - depends on optional extra
     raise ModuleNotFoundError(
-        'MicroScore API dependencies are missing. Install them with: pip install -e ".[app]"'
+        'Senim Risk API dependencies are missing. Install them with: pip install -e ".[app]"'
     ) from exc
 
 from .database import (
@@ -593,9 +593,9 @@ def _staff_invite_delivery_adapter_readiness_response() -> dict[str, Any]:
 
 
 app = FastAPI(
-    title="MicroScore API",
+    title="Senim Risk API",
     version="0.1.0",
-    description="Prototype API for borrower applications, MFI review, and behavioral risk scoring.",
+    description="An interpretable credit-risk system for thin-file borrowers.",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -3237,7 +3237,7 @@ def pilot_readiness() -> PilotReadinessResponse:
         "status": "planning_only",
         "region": "Pavlodar region, Kazakhstan",
         "privacy_note": (
-            "MicroScore is not running a real borrower pilot yet. This contract "
+            "Senim Risk is not running a real borrower pilot yet. This contract "
             "defines a future minimum-data pilot and explicitly excludes direct "
             "identity fields from model inputs."
         ),
@@ -3636,7 +3636,7 @@ def export_mfi_applications(
         content=csv_text,
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": 'attachment; filename="microscore-applications.csv"',
+            "Content-Disposition": 'attachment; filename="senim-risk-applications.csv"',
         },
     )
 

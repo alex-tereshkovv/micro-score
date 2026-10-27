@@ -30,7 +30,8 @@ from reportlab.platypus.tableofcontents import TableOfContents
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = ROOT / "docs" / "RESEARCH_PAPER.md"
-DEFAULT_OUTPUT = ROOT / "output" / "pdf" / "MicroScore_Research_Paper.pdf"
+DEFAULT_OUTPUT = ROOT / "output" / "pdf" / "Senim_Risk_Research_Paper.pdf"
+WEB_ASSETS = ROOT / "apps" / "web" / "assets"
 REPOSITORY_URL = "https://github.com/alex-tereshkovv/micro-score"
 LIVE_URL = "https://alex-tereshkovv.github.io/micro-score/"
 
@@ -53,14 +54,14 @@ def register_fonts() -> tuple[str, str]:
         (
             Path("C:/Windows/Fonts/arial.ttf"),
             Path("C:/Windows/Fonts/arialbd.ttf"),
-            "MicroScoreArial",
-            "MicroScoreArialBold",
+            "SenimRiskArial",
+            "SenimRiskArialBold",
         ),
         (
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-            "MicroScoreSans",
-            "MicroScoreSansBold",
+            "SenimRiskSans",
+            "SenimRiskSansBold",
         ),
     ]
     for regular, bold, regular_name, bold_name in candidates:
@@ -275,7 +276,7 @@ def page_header_footer(canvas, doc) -> None:
     canvas.line(doc.leftMargin, height - 16 * mm, width - doc.rightMargin, height - 16 * mm)
     canvas.setFont(FONT_BOLD, 7)
     canvas.setFillColor(TEAL_DARK)
-    canvas.drawString(doc.leftMargin, height - 12.2 * mm, "MICROSCORE")
+    canvas.drawString(doc.leftMargin, height - 12.2 * mm, "SENIM RISK")
     canvas.setFont(FONT, 7)
     canvas.setFillColor(MUTED)
     canvas.drawRightString(width - doc.rightMargin, height - 12.2 * mm, "RESEARCH PAPER | SEPTEMBER 2026")
@@ -305,6 +306,13 @@ class ResearchDocTemplate(BaseDocTemplate):
 
 
 def cover_story(title: str, author_line: str, styles: dict[str, ParagraphStyle]) -> list:
+    brand: list = []
+    lockup_path = WEB_ASSETS / "senim-risk-lockup.png"
+    if lockup_path.exists():
+        lockup = Image(str(lockup_path), width=78 * mm, height=20 * mm, kind="proportional")
+        lockup.hAlign = "LEFT"
+        brand.extend([lockup, Spacer(1, 8 * mm)])
+
     metrics = Table(
         [
             [
@@ -378,7 +386,8 @@ def cover_story(title: str, author_line: str, styles: dict[str, ParagraphStyle])
     )
 
     return [
-        Spacer(1, 27 * mm),
+        Spacer(1, 7 * mm),
+        *brand,
         Paragraph("REPRODUCIBLE RESEARCH AND ENGINEERING STUDY", styles["cover_eyebrow"]),
         Paragraph(inline_markup(title), styles["cover_title"]),
         Paragraph(inline_markup(author_line), styles["cover_meta"]),
@@ -567,8 +576,8 @@ def build_pdf(output_path: Path = DEFAULT_OUTPUT, source_path: Path = DEFAULT_SO
         bottomMargin=20 * mm,
         title=title,
         author="Alexandr",
-        subject="MicroScore interpretable credit-risk research paper",
-        creator="MicroScore reproducible research-paper builder",
+        subject="Senim Risk interpretable credit-risk research paper",
+        creator="Senim Risk reproducible research-paper builder",
         invariant=1,
     )
     frame = Frame(
@@ -589,7 +598,7 @@ def build_pdf(output_path: Path = DEFAULT_OUTPUT, source_path: Path = DEFAULT_SO
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build the MicroScore research paper PDF.")
+    parser = argparse.ArgumentParser(description="Build the Senim Risk research paper PDF.")
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()

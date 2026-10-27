@@ -1,6 +1,6 @@
-# MicroScore Validation Tracker
+# Senim Risk Validation Tracker
 
-This tracker separates what MicroScore has already demonstrated from what still
+This tracker separates what Senim Risk has already demonstrated from what still
 needs local evidence, expert feedback, or real pilot data.
 
 ## Current Validation Status

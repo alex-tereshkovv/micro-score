@@ -1,4 +1,4 @@
-"""Training and evaluation pipeline for MicroScore."""
+"""Training and evaluation pipeline for Senim Risk."""
 
 from __future__ import annotations
 

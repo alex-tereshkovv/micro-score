@@ -1,4 +1,4 @@
-"""Executable PostgreSQL repository selected by the MicroScore API runtime."""
+"""Executable PostgreSQL repository selected by the Senim Risk API runtime."""
 
 from __future__ import annotations
 

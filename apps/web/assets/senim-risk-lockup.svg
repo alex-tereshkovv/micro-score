@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 144" role="img" aria-labelledby="title description">
+  <title id="title">Senim Risk</title>
+  <desc id="description">An interpretable credit-risk system for thin-file borrowers.</desc>
+  <defs>
+    <linearGradient id="lockup-bg" x1="8" y1="8" x2="136" y2="136" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12313c" />
+      <stop offset="1" stop-color="#0f262b" />
+    </linearGradient>
+    <linearGradient id="lockup-teal" x1="48" y1="90" x2="102" y2="47" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#04968c" />
+      <stop offset="1" stop-color="#23c4af" />
+    </linearGradient>
+    <linearGradient id="lockup-sun" x1="36" y1="53" x2="108" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f1a21a" />
+      <stop offset="1" stop-color="#ffc24a" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="136" height="136" rx="25" fill="url(#lockup-bg)" />
+  <rect x="4.75" y="4.75" width="134.5" height="134.5" rx="24.25" fill="none" stroke="#ffffff" stroke-opacity=".18" />
+  <path d="M36 63a36 36 0 0 1 72 0" fill="none" stroke="url(#lockup-sun)" stroke-width="9" stroke-linecap="round" />
+  <path d="M19 101 45 72l19 29H19Z" fill="#f5faf8" />
+  <path d="M48 86 73 59l38 42" fill="none" stroke="url(#lockup-teal)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="m94 92 19-18 18 27" fill="none" stroke="#f5faf8" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M49 118h46" stroke="#f1a21a" stroke-width="6" stroke-linecap="round" />
+  <text x="170" y="70" fill="#10252d" font-family="Segoe UI, Arial, sans-serif" font-size="52" font-weight="750">Senim</text>
+  <text x="324" y="70" fill="#078f86" font-family="Segoe UI, Arial, sans-serif" font-size="52" font-weight="750">Risk</text>
+  <text x="173" y="105" fill="#29444c" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1.6">INTERPRETABLE CREDIT RISK</text>
+</svg>

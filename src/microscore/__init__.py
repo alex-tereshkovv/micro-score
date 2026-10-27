@@ -1,4 +1,4 @@
-"""MicroScore modeling utilities."""
+"""Senim Risk modeling utilities."""
 
 from .ablation import AblationScenario, ablation_scenarios, run_ablation_study
 from .audit import AuditReport, proxy_monitoring_table, run_audit

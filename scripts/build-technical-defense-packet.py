@@ -495,7 +495,7 @@ def check_packet() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Build or verify the deterministic MicroScore technical defense packet."
+        description="Build or verify the deterministic Senim Risk technical defense packet."
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true")

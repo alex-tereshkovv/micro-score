@@ -624,7 +624,7 @@ def seed_demo_data(
 
 def main() -> int:
     result = seed_demo_data()
-    print("MicroScore demo data")
+    print("Senim Risk demo data")
     print(f"Database: {result['database']}")
     print(f"Password for demo accounts: {result['demo_password']}")
     print(f"MFA code for staff demo accounts: {result['mfa_code']}")

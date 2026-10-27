@@ -1,4 +1,4 @@
-"""SQLite persistence for the MicroScore API prototype."""
+"""SQLite persistence for the Senim Risk API prototype."""
 
 from __future__ import annotations
 

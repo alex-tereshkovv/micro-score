@@ -1,4 +1,4 @@
-"""Credit decision-threshold analysis for MicroScore."""
+"""Credit decision-threshold analysis for Senim Risk."""
 
 from __future__ import annotations
 

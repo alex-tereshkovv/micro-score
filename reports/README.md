@@ -1,7 +1,7 @@
-# MicroScore Reports
+# Senim Risk Reports
 
 This folder is for reproducible research artifacts generated from the current
-MicroScore pipeline.
+Senim Risk pipeline.
 
 Generate the artifacts with:
 

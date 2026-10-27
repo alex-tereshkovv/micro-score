@@ -1,5 +1,5 @@
 {
-  "project": "MicroScore",
+  "project": "Senim Risk",
   "benchmark": "UCI Default of Credit Card Clients",
   "source": "https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients",
   "rows": 30000,

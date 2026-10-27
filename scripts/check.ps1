@@ -72,9 +72,14 @@ try {
     $python = Resolve-Python
     $node = Resolve-Node
 
-    Write-Host "MicroScore release check"
+    Write-Host "Senim Risk release check"
     Write-Host "Python: $python"
     Write-Host "Node:   $node"
+
+    Invoke-Step "Build Senim Risk brand assets" {
+        & $python scripts\build_brand_assets.py
+        Assert-LastExitCode "Brand asset build"
+    }
 
     Invoke-Step "Generate research robustness artifacts" {
         & $python -m microscore --reports
@@ -84,6 +89,21 @@ try {
     Invoke-Step "Build research paper PDF" {
         & $python scripts\build_research_paper.py
         Assert-LastExitCode "Research paper PDF build"
+    }
+
+    Invoke-Step "Build engineering case study PDF" {
+        & $python scripts\build_engineering_case_study.py
+        Assert-LastExitCode "Engineering case study PDF build"
+    }
+
+    Invoke-Step "Sync public PDF downloads" {
+        Copy-Item output\pdf\Senim_Risk_Research_Paper.pdf apps\web\assets\Senim_Risk_Research_Paper.pdf -Force
+        Copy-Item output\pdf\Senim_Risk_Engineering_Case_Study.pdf apps\web\assets\Senim_Risk_Engineering_Case_Study.pdf -Force
+    }
+
+    Invoke-Step "Audit public branding and compatibility identifiers" {
+        & $python scripts\brand_audit.py
+        Assert-LastExitCode "Brand audit"
     }
 
     Invoke-Step "Run Python unit and integration tests" {

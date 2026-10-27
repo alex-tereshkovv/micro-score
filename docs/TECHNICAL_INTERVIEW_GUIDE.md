@@ -1,12 +1,12 @@
-# MicroScore Technical Interview Guide
+# Senim Risk Technical Interview Guide
 
-This guide is for explaining MicroScore in your own words. Do not memorize it
+This guide is for explaining Senim Risk in your own words. Do not memorize it
 as a script. Use it to check that you can move from a simple explanation to the
 technical detail and then show the corresponding code or evidence.
 
 ## The 60-Second Explanation
 
-MicroScore asks whether alternative behavioral data could help a regional MFI
+Senim Risk asks whether alternative behavioral data could help a regional MFI
 review borrowers who have little formal credit history. I built both a research
 pipeline and a working decision-support prototype. The research compares
 Logistic Regression and Random Forest, checks calibration, errors, feature
@@ -70,7 +70,7 @@ negative case. `0.5` is random ranking; `1.0` is perfect ranking.
 - It can look acceptable even when the underlying data contains a dominant
   proxy or does not match the deployment population.
 
-That is why MicroScore reports Brier score and calibration, confusion-matrix
+That is why Senim Risk reports Brier score and calibration, confusion-matrix
 errors, ablation, segment metrics, and policy outcomes alongside ROC-AUC.
 
 ### Show the evidence
@@ -127,7 +127,7 @@ dependence, test both versions, monitor the feature, and require real validation
 Ablation removes one feature or feature group and retrains the model. The change
 in held-out performance tells us how much the result depends on that information.
 
-### MicroScore interpretation
+### Senim Risk interpretation
 
 The raw feature set can produce an unrealistically high diagnostic ceiling when
 leakage-like variables are present. The no-leakage baseline is lower but still
@@ -183,7 +183,7 @@ cases. A wide review band can reduce automatic decisions, but it creates analyst
 workload. No threshold is objectively correct without explicit costs, capacity,
 fairness goals, and validated probabilities.
 
-MicroScore therefore compares named scenarios rather than hiding the choice in
+Senim Risk therefore compares named scenarios rather than hiding the choice in
 one default number. It reports approval, review, decline, bad-borrower approval,
 good-borrower decline, segment outcomes, and illustrative financial results.
 
@@ -282,7 +282,7 @@ The system therefore presents a recommendation and evidence to an analyst. It
 does not claim that a score makes a legal or ethical lending decision.
 
 Human review alone is not a complete safeguard: reviewers can introduce bias or
-rubber-stamp the model. That is why MicroScore also records decision history,
+rubber-stamp the model. That is why Senim Risk also records decision history,
 model provenance, lifecycle events, and segment outcomes.
 
 ## 10. What Are The Strongest Engineering Decisions?

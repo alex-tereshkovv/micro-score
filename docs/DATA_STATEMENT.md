@@ -1,11 +1,11 @@
-# MicroScore Data Statement
+# Senim Risk Data Statement
 
-This statement explains what data MicroScore currently uses, what is simulated,
+This statement explains what data Senim Risk currently uses, what is simulated,
 what is evidence-based, and what must be validated before any real lending use.
 
 ## Current Data Status
 
-MicroScore does not currently use real borrower-level data from a microfinance
+Senim Risk does not currently use real borrower-level data from a microfinance
 organization. The borrower-level credit-risk dataset is synthetic and is used
 for research pipeline development, leakage testing, audit design, and product
 prototyping.
@@ -76,7 +76,7 @@ measured financial-access data.
 ## Why Real Borrower Data Is Not Used Yet
 
 Real credit data is sensitive. It may contain identity, repayment history,
-income, contact, location, and household information. MicroScore should not use
+income, contact, location, and household information. Senim Risk should not use
 real borrower data until there is:
 
 - written permission or a data-use agreement with a partner organization;
@@ -110,7 +110,7 @@ Useful external context:
 
 ## Data That Should Not Be Collected For Scoring
 
-MicroScore should not collect or use the following for scoring without a strong
+Senim Risk should not collect or use the following for scoring without a strong
 legal, ethical, and safety justification:
 
 - raw passwords or authentication secrets;

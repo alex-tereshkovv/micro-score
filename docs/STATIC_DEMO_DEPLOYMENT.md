@@ -1,6 +1,6 @@
 # Static Demo Deployment
 
-MicroScore now includes a static frontend demo that can be hosted without the
+Senim Risk now includes a static frontend demo that can be hosted without the
 FastAPI backend. The hosted demo uses `apps/web/mock-api.js`, synthetic
 in-browser data, and demo personas only.
 

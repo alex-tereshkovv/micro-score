@@ -1,6 +1,6 @@
 # UCI Default of Credit Card Clients Benchmark
 
-This folder is reserved for the public benchmark dataset used in MicroScore
+This folder is reserved for the public benchmark dataset used in Senim Risk
 Experiment B.
 
 Official source:

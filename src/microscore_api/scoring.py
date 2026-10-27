@@ -1,4 +1,4 @@
-"""Scoring service used by the optional MicroScore API prototype."""
+"""Scoring service used by the optional Senim Risk API prototype."""
 
 from __future__ import annotations
 

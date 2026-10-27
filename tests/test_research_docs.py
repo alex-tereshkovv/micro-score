@@ -43,7 +43,7 @@ class ResearchDocsTests(unittest.TestCase):
             self.assertTrue((DOCS_ROOT / filename).exists(), filename)
 
         builder = PROJECT_ROOT / "scripts" / "build_research_paper.py"
-        paper_pdf = PROJECT_ROOT / "output" / "pdf" / "MicroScore_Research_Paper.pdf"
+        paper_pdf = PROJECT_ROOT / "output" / "pdf" / "Senim_Risk_Research_Paper.pdf"
         self.assertTrue(builder.exists())
         self.assertIn("invariant=1", builder.read_text(encoding="utf-8"))
         self.assertTrue(paper_pdf.exists())
@@ -52,7 +52,7 @@ class ResearchDocsTests(unittest.TestCase):
         reader = PdfReader(str(paper_pdf))
         self.assertGreaterEqual(len(reader.pages), 9)
         self.assertLessEqual(len(reader.pages), 12)
-        self.assertIn("MicroScore", str(reader.metadata.title))
+        self.assertIn("Senim Risk", str(reader.metadata.title))
         paper_text = " ".join(
             " ".join(page.extract_text() or "" for page in reader.pages).split()
         )
@@ -72,7 +72,7 @@ class ResearchDocsTests(unittest.TestCase):
         self.assertIn("## Snapshot", readme)
         self.assertIn("## Try The Live Demo", readme)
         self.assertIn("## Run Locally", readme)
-        self.assertIn("Interpretable credit-risk research", readme)
+        self.assertIn("An interpretable credit-risk system for thin-file borrowers.", readme)
         self.assertIn("Role-based product demo", readme)
         self.assertIn("https://alex-tereshkovv.github.io/micro-score/", readme)
         self.assertIn("borrower@test.com", readme)

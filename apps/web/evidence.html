@@ -6,19 +6,35 @@
     <meta name="theme-color" content="#102932" />
     <meta
       name="description"
-      content="Trace the engineering decisions, development history, and reproducible evidence behind MicroScore."
+      content="Trace the engineering decisions, development history, and reproducible evidence behind Senim Risk."
     />
-    <title>MicroScore | Engineering Evidence</title>
+    <meta name="application-name" content="Senim Risk" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Senim Risk | Engineering Evidence" />
+    <meta
+      property="og:description"
+      content="Trace the engineering decisions and reproducible evidence behind an interpretable credit-risk system for thin-file borrowers."
+    />
+    <meta property="og:image" content="https://alex-tereshkovv.github.io/micro-score/assets/senim-risk-social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Senim Risk — an interpretable credit-risk system for thin-file borrowers" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Senim Risk | Engineering Evidence" />
+    <meta name="twitter:description" content="Trace the engineering decisions and reproducible evidence behind Senim Risk." />
+    <meta name="twitter:image" content="https://alex-tereshkovv.github.io/micro-score/assets/senim-risk-social-preview.png" />
+    <title>Senim Risk | Engineering Evidence</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
-    <link rel="stylesheet" href="./evidence.css?v=20261025-reviewer-accessibility-v2" />
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="./evidence.css?v=20261027-senim-risk-brand-v2" />
   </head>
   <body>
     <a class="skip-link" href="#evidence-main">Skip to engineering evidence</a>
     <header class="evidence-nav">
-      <a class="evidence-brand" href="./#/review" aria-label="Return to the MicroScore engineering case study">
-        <img src="./assets/microscore-mark.svg" alt="" />
-        <span><strong>Micro</strong>Score</span>
+      <a class="evidence-brand" href="./#/review" aria-label="Return to the Senim Risk engineering case study">
+        <img src="./assets/senim-risk-mark.svg" alt="" />
+        <span><strong>Senim</strong> Risk</span>
       </a>
       <nav aria-label="Evidence hub navigation">
         <a href="#journey">Journey</a>
@@ -35,13 +51,13 @@
           <p class="evidence-eyebrow">Engineering evidence hub · May–October 2026</p>
           <h1>From a fragile model result to a reviewable system.</h1>
           <p class="hero-lead">
-            MicroScore did not grow by adding features around a fixed idea. Research evidence changed the idea.
+            Senim Risk did not grow by adding features around a fixed idea. Research evidence changed the idea.
             A proxy-sensitive result led to human review, explicit uncertainty, auditability, tenant isolation,
             and release gates becoming part of the product architecture.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="#decisions">Trace the decisions</a>
-            <a class="secondary-action" href="./assets/MicroScore_Engineering_Case_Study.pdf" download>Download evidence report</a>
+            <a class="secondary-action" href="./assets/Senim_Risk_Engineering_Case_Study.pdf" download>Download evidence report</a>
             <a class="text-action" href="https://github.com/alex-tereshkovv/micro-score" target="_blank" rel="noreferrer">Open repository ↗</a>
           </div>
         </div>
@@ -52,7 +68,7 @@
           </div>
           <div class="hero-metrics">
             <div><strong>90+</strong><span>traceable engineering increments</span></div>
-            <div><strong>152</strong><span>Python unit and integration tests</span></div>
+            <div><strong>155</strong><span>Python unit and integration tests</span></div>
             <div><strong>52 / 52</strong><span>PostgreSQL repository methods</span></div>
             <div><strong>3 layers</strong><span>research, product, public review</span></div>
           </div>
@@ -285,13 +301,13 @@
           <p>The public story stays connected to source code, generated artifacts, automated checks, and explicit limitations.</p>
         </div>
 
-        <div class="proof-map" role="table" aria-label="MicroScore claim-to-proof map">
+        <div class="proof-map" role="table" aria-label="Senim Risk claim-to-proof map">
           <div class="proof-map-header" role="row">
             <span role="columnheader">Claim</span><span role="columnheader">Primary artifact</span><span role="columnheader">Automated proof</span><span role="columnheader">Boundary</span>
           </div>
           <article role="row">
             <div role="cell"><span class="proof-index">01</span><strong>Interpretable ML pipeline</strong><small>Calibration, explanations, benchmark evaluation</small></div>
-            <div role="cell"><a href="./assets/MicroScore_Research_Paper.pdf" target="_blank" rel="noreferrer">Research paper PDF ↗</a></div>
+            <div role="cell"><a href="./assets/Senim_Risk_Research_Paper.pdf" target="_blank" rel="noreferrer">Research paper PDF ↗</a></div>
             <div role="cell"><code>test_modeling.py</code><code>test_benchmark.py</code></div>
             <div role="cell"><span class="boundary-pill">Not local validation</span></div>
           </article>
@@ -346,7 +362,7 @@
           <article role="row">
             <div role="cell"><span class="proof-index">10</span><strong>Release discipline</strong><small>One command proves research, product, storage, recovery, observability, and security</small></div>
             <div role="cell"><a href="https://github.com/alex-tereshkovv/micro-score/blob/main/scripts/check.ps1" target="_blank" rel="noreferrer">Release gate ↗</a></div>
-            <div role="cell"><code>152 Python tests</code><code>13 local smoke workflows</code><code>hashed submission manifest</code></div>
+            <div role="cell"><code>155 Python tests</code><code>13 local smoke workflows</code><code>hashed submission manifest</code></div>
             <div role="cell"><span class="boundary-pill">Evidence can still evolve</span></div>
           </article>
         </div>
@@ -390,13 +406,13 @@
         <div class="cta-grid">
           <a href="./showcase.html"><span>2 min</span><strong>Watch the overview</strong><em>→</em></a>
           <a href="./showcase.html?mode=technical&amp;guide=1"><span>5 min</span><strong>Practice the technical defense</strong><em>→</em></a>
-          <a href="./assets/MicroScore_Research_Paper.pdf"><span>Full paper</span><strong>Read the research paper</strong><em>↓</em></a>
+          <a href="./assets/Senim_Risk_Research_Paper.pdf"><span>Full paper</span><strong>Read the research paper</strong><em>↓</em></a>
         </div>
       </section>
     </main>
 
     <footer class="evidence-footer">
-      <span>MicroScore · Alexandr · Pavlodar, Kazakhstan</span>
+      <span>Senim Risk · Alexandr · Pavlodar, Kazakhstan</span>
       <span>Research prototype · synthetic public demo · human decision support</span>
     </footer>
   </body>

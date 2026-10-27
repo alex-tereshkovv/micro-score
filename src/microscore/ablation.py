@@ -1,4 +1,4 @@
-"""Feature-group ablation experiments for MicroScore."""
+"""Feature-group ablation experiments for Senim Risk."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ class AblationScenario:
 
 
 def ablation_scenarios() -> tuple[AblationScenario, ...]:
-    """Return the standard MicroScore ablation study design."""
+    """Return the standard Senim Risk ablation study design."""
 
     behavioral_plus_regional = BEHAVIORAL_SOURCE_COLUMNS + REGIONAL_COLUMNS
 

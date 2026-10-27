@@ -1,12 +1,12 @@
 # Proxy Feature Monitoring v2
 
 This document defines the Analytics/ML guardrail for tracking proxy-feature
-risk in MicroScore research artifacts. It does not change product API behavior,
+risk in Senim Risk research artifacts. It does not change product API behavior,
 scoring thresholds, borrower lifecycle, or analyst decision rules.
 
 ## Purpose
 
-MicroScore currently uses synthetic borrower-level data. The strongest known
+Senim Risk currently uses synthetic borrower-level data. The strongest known
 finding is that `late_payment_count` behaves like a dominant repayment-history
 proxy: it can make model metrics look strong while weakening the thin-file
 claim.
@@ -71,7 +71,7 @@ KZT calibration cannot be separated from proxy monitoring. Monetary values and
 affordability ratios can become socioeconomic proxies when they are unverified,
 uncalibrated, or missing tenor and repayment-schedule context.
 
-Before making KZT-denominated claims, MicroScore needs:
+Before making KZT-denominated claims, Senim Risk needs:
 
 - real KZT principal, income, debt, tenor, fee, and repayment fields;
 - documented margin, LGD, operating cost, and review-conversion assumptions;

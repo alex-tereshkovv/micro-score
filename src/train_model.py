@@ -1,4 +1,4 @@
-"""Backward-compatible command-line entrypoint for the MicroScore experiment."""
+"""Backward-compatible command-line entrypoint for the Senim Risk experiment."""
 
 from __future__ import annotations
 

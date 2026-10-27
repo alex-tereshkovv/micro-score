@@ -1,4 +1,4 @@
-"""Command-line interface for MicroScore experiments."""
+"""Command-line interface for Senim Risk experiments."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from .robustness import run_robustness_suite
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train and evaluate MicroScore models.")
+    parser = argparse.ArgumentParser(description="Train and evaluate Senim Risk models.")
     parser.add_argument(
         "--data",
         type=Path,
@@ -90,7 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         choices=("uci-default",),
-        help="Run a public benchmark experiment instead of the synthetic MicroScore dataset.",
+        help="Run a public benchmark experiment instead of the synthetic Senim Risk dataset.",
     )
     parser.add_argument(
         "--benchmark-data",

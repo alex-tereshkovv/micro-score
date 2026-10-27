@@ -1,6 +1,6 @@
 # Public Demo Plan
 
-MicroScore is currently a local FastAPI + static web prototype with a static
+Senim Risk is currently a local FastAPI + static web prototype with a static
 frontend demo mode. The repository now includes a GitHub Pages workflow for the
 static demo. The next step is to enable GitHub Pages in the repository settings
 and publish the public URL.

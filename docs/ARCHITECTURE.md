@@ -1,6 +1,6 @@
-# MicroScore Architecture
+# Senim Risk Architecture
 
-MicroScore is split into three layers: a research pipeline, a local product
+Senim Risk is split into three layers: a research pipeline, a local product
 prototype, and a public static demo. This keeps the project easy to review now
 while leaving a path toward a real borrower/MFI application later.
 
@@ -77,7 +77,7 @@ What it cannot prove:
 The local mode uses the same web app with a FastAPI backend:
 
 ```powershell
-.\Start-MicroScore.cmd
+.\Start-Senim-Risk.cmd
 ```
 
 Main local components:
@@ -200,7 +200,7 @@ It supports:
 
 ## Privacy Boundary
 
-MicroScore must not collect real personal identifiers in the current prototype.
+Senim Risk must not collect real personal identifiers in the current prototype.
 This includes names, IINs, phone numbers, addresses, real bank statements, or
 private account records.
 

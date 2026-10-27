@@ -1,4 +1,4 @@
-"""Local explanation utilities for MicroScore models."""
+"""Local explanation utilities for Senim Risk models."""
 
 from __future__ import annotations
 

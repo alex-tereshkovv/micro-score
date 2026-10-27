@@ -1,4 +1,4 @@
-"""False-positive and false-negative analysis for MicroScore."""
+"""False-positive and false-negative analysis for Senim Risk."""
 
 from __future__ import annotations
 

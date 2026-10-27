@@ -1,4 +1,4 @@
-"""Robustness and uncertainty diagnostics for MicroScore models.
+"""Robustness and uncertainty diagnostics for Senim Risk models.
 
 This module deliberately separates model uncertainty from the portfolio-level
 Monte Carlo simulator.  It asks whether the fitted score remains stable when

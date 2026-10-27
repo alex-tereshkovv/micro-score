@@ -1,6 +1,6 @@
 # Pilot Evidence Claims Audit v1
 
-This artifact defines what MicroScore may and may not claim during pilot
+This artifact defines what Senim Risk may and may not claim during pilot
 readiness discussions. It is a research guardrail, not a product-behavior
 change.
 
@@ -25,11 +25,11 @@ change.
 | KZT calibration | Assumption scaffold | Monetary outputs are prototype amount units and KZT evidence requirements are documented. | Demo outputs are calibrated KZT, expected KZT profit, validated loss, or pricing guidance. |
 | Monte Carlo Policy Lab | Assumption scaffold | Seeded simulations show scenario ranges under supplied assumptions. | Results are repayment forecasts, regulatory VaR, capital estimates, or proof a policy is safe. |
 | UCI public benchmark | Public benchmark evidence | The modeling pipeline runs on a real public credit-risk benchmark. | The benchmark validates Pavlodar geography, local borrowers, or Kazakhstan MFI deployment. |
-| Pilot readiness | Blocked real-world validation | The repo documents data, consent, calibration, proxy, and human-review requirements for a future pilot. | MicroScore is ready to use real borrower data or make operational lending decisions. |
+| Pilot readiness | Blocked real-world validation | The repo documents data, consent, calibration, proxy, and human-review requirements for a future pilot. | Senim Risk is ready to use real borrower data or make operational lending decisions. |
 
 ## Evidence Required Before Stronger Pilot Claims
 
-Before MicroScore can make real-world or KZT-denominated pilot claims, it needs:
+Before Senim Risk can make real-world or KZT-denominated pilot claims, it needs:
 
 1. a written data-use agreement and consent boundary;
 2. anonymized or pseudonymized local application records;

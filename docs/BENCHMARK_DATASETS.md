@@ -1,10 +1,10 @@
 # Public Benchmark Dataset Plan
 
-The main current weakness of MicroScore is synthetic borrower-level data. The
+The main current weakness of Senim Risk is synthetic borrower-level data. The
 Pavlodar layer is useful for local product design, but it is not evidence that
 the scoring pipeline works on real borrowers.
 
-MicroScore now has a public benchmark experiment scaffold alongside the
+Senim Risk now has a public benchmark experiment scaffold alongside the
 synthetic Pavlodar prototype. The first implemented benchmark target is UCI
 Default of Credit Card Clients.
 
@@ -52,7 +52,7 @@ Why it is a good first benchmark:
 - has a DOI and citation metadata
 - licensed under CC BY 4.0 on UCI
 
-Why it fits MicroScore:
+Why it fits Senim Risk:
 
 - credit-risk target
 - includes payment history, bill amounts, and payment amounts

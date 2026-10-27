@@ -1,4 +1,4 @@
-# MicroScore Stakeholder Interview Guide
+# Senim Risk Stakeholder Interview Guide
 
 This guide helps collect early qualitative feedback from people in Pavlodar and
 Pavlodar region. It is for research validation only. It should not collect
@@ -7,7 +7,7 @@ addresses, phone numbers, or identity documents.
 
 ## Goal
 
-MicroScore needs real local feedback to test whether the project is solving the
+Senim Risk needs real local feedback to test whether the project is solving the
 right problem. The interviews should answer four questions:
 
 1. Do thin-file borrowers in the region actually face the access problem the

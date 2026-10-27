@@ -8,12 +8,12 @@ if exist ".venv\Scripts\python.exe" (
   set "PYTHON=python"
 )
 
-echo Starting MicroScore...
+echo Starting Senim Risk...
 "%PYTHON%" -m microscore_api.dev
 
 if errorlevel 1 (
   echo.
-  echo MicroScore did not start.
+  echo Senim Risk did not start.
   echo Install dependencies with:
   echo   .venv\Scripts\python -m pip install -r requirements.txt
   echo.

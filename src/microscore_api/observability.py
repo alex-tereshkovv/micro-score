@@ -1,4 +1,4 @@
-"""Bounded, credential-safe runtime telemetry for the MicroScore prototype."""
+"""Bounded, credential-safe runtime telemetry for the Senim Risk prototype."""
 
 from __future__ import annotations
 

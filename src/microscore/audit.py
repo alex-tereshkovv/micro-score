@@ -1,4 +1,4 @@
-"""Proxy-feature and segment audits for MicroScore models."""
+"""Proxy-feature and segment audits for Senim Risk models."""
 
 from __future__ import annotations
 

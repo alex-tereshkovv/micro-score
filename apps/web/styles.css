@@ -172,19 +172,43 @@ button:disabled {
 }
 
 .auth-logo-lockup {
-  display: grid;
-  place-items: center;
-  width: min(350px, 64vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: min(520px, 76vw);
   isolation: isolate;
 }
 
 .auth-logo-image {
   display: block;
-  width: 100%;
-  height: auto;
+  width: 92px;
+  height: 92px;
+  flex: 0 0 auto;
   object-fit: contain;
-  mix-blend-mode: multiply;
-  filter: contrast(1.05) saturate(1.04);
+}
+
+.auth-logo-copy {
+  display: grid;
+  gap: 7px;
+  max-width: 330px;
+}
+
+.auth-logo-copy strong {
+  color: var(--navy);
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+}
+
+.auth-logo-copy strong span {
+  color: var(--teal);
+}
+
+.auth-logo-copy small {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 .page-enter {
@@ -5824,6 +5848,16 @@ tr.selected {
 
   .auth-logo-lockup {
     width: min(270px, 82vw);
+    gap: 12px;
+  }
+
+  .auth-logo-image {
+    width: 68px;
+    height: 68px;
+  }
+
+  .auth-logo-copy small {
+    font-size: 0.75rem;
   }
 
   .auth-layout {

@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "reports" / "submission" / "manifest.json"
 RELEASE_LABEL = "release-candidate-v1"
 RELEASE_DATE = "2026-10-25"
-EXPECTED_TEST_COUNT = 152
+EXPECTED_TEST_COUNT = 155
 EXPECTED_SMOKE_WORKFLOWS = 13
 
 CRITICAL_ARTIFACTS = (
@@ -35,8 +35,8 @@ CRITICAL_ARTIFACTS = (
     "docs/RELEASE_CHECKLIST.md",
     "docs/RESEARCH_PAPER.md",
     "docs/TECHNICAL_INTERVIEW_GUIDE.md",
-    "output/pdf/MicroScore_Engineering_Case_Study.pdf",
-    "output/pdf/MicroScore_Research_Paper.pdf",
+    "output/pdf/Senim_Risk_Engineering_Case_Study.pdf",
+    "output/pdf/Senim_Risk_Research_Paper.pdf",
     "reports/benchmark-artifacts/uci-default-credit-card-clients/model_metrics.csv",
     "reports/research-artifacts/manifest.json",
     "reports/research-artifacts/robustness_summary.csv",
@@ -167,7 +167,7 @@ def check_manifest() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Build or verify the deterministic MicroScore submission manifest."
+        description="Build or verify the deterministic Senim Risk submission manifest."
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true")

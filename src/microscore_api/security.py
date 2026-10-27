@@ -1,4 +1,4 @@
-"""Authentication helpers for the MicroScore API prototype."""
+"""Authentication helpers for the Senim Risk API prototype."""
 
 from __future__ import annotations
 

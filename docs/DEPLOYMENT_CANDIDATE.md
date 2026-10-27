@@ -1,6 +1,6 @@
 # Deployment Candidate v1
 
-Deployment Candidate v1 packages the current synthetic MicroScore product as a
+Deployment Candidate v1 packages the current synthetic Senim Risk product as a
 reproducible four-stage local environment:
 
 ```text

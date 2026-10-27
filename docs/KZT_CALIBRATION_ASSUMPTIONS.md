@@ -1,13 +1,13 @@
 # KZT Calibration Assumptions Pack
 
-This pack defines how MicroScore should talk about monetary values before the
+This pack defines how Senim Risk should talk about monetary values before the
 project has real, consented Kazakhstan MFI repayment data.
 
 It is a research and validation contract, not a product-behavior change.
 
 ## Current Position
 
-MicroScore currently uses **prototype amount units**. The synthetic demo
+Senim Risk currently uses **prototype amount units**. The synthetic demo
 contains fields such as `requested_amount`, `annual_income`,
 `total_outstanding_debt`, approved exposure, and portfolio result, but those
 values are on the same artificial scale as the synthetic dataset.
@@ -117,7 +117,7 @@ thin-file, fairness, or pilot-readiness claims.
 
 ## Evidence Required Before KZT-Denominated Claims
 
-MicroScore can start making KZT-denominated claims only after the project has:
+Senim Risk can start making KZT-denominated claims only after the project has:
 
 1. consented local application and repayment outcomes;
 2. verified KZT principal, income, debt, tenor, fee, and repayment fields;

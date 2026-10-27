@@ -30,7 +30,7 @@ from reportlab.platypus import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "output" / "pdf" / "MicroScore_Engineering_Case_Study.pdf"
+DEFAULT_OUTPUT = ROOT / "output" / "pdf" / "Senim_Risk_Engineering_Case_Study.pdf"
 RESEARCH_DIR = ROOT / "reports" / "research-artifacts"
 BENCHMARK_DIR = ROOT / "reports" / "benchmark-artifacts" / "uci-default-credit-card-clients"
 WEB_ASSETS = ROOT / "apps" / "web" / "assets"
@@ -59,14 +59,14 @@ def register_fonts() -> tuple[str, str]:
         (
             Path("C:/Windows/Fonts/arial.ttf"),
             Path("C:/Windows/Fonts/arialbd.ttf"),
-            "MicroScoreArial",
-            "MicroScoreArialBold",
+            "SenimRiskArial",
+            "SenimRiskArialBold",
         ),
         (
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-            "MicroScoreSans",
-            "MicroScoreSansBold",
+            "SenimRiskSans",
+            "SenimRiskSansBold",
         ),
     ]
     for regular, bold, regular_name, bold_name in candidates:
@@ -275,7 +275,7 @@ def page_header_footer(canvas, doc) -> None:
         canvas.line(doc.leftMargin, height - 24 * mm, width - doc.rightMargin, height - 24 * mm)
         canvas.setFont(FONT_BOLD, 7)
         canvas.setFillColor(TEAL_DARK)
-        canvas.drawString(doc.leftMargin, height - 19.5 * mm, "MICROSCORE ENGINEERING CASE STUDY")
+        canvas.drawString(doc.leftMargin, height - 19.5 * mm, "SENIM RISK ENGINEERING CASE STUDY")
         canvas.setFont(FONT, 7)
         canvas.setFillColor(MUTED)
         canvas.drawRightString(width - doc.rightMargin, height - 19.5 * mm, "ENGINEERING EVIDENCE PACKAGE")
@@ -424,18 +424,20 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     story: list = []
 
     # Cover
-    logo_path = WEB_ASSETS / "micro-score-lockup.png"
+    logo_path = WEB_ASSETS / "senim-risk-lockup.png"
     if logo_path.exists():
-        logo = Image(str(logo_path), width=57 * mm, height=26 * mm, kind="proportional")
+        logo = Image(str(logo_path), width=82 * mm, height=21 * mm, kind="proportional")
         logo.hAlign = "LEFT"
         story.append(logo)
+    else:
+        story.append(paragraph("SENIM RISK", styles["title"]))
     story.extend(
         [
-            Spacer(1, 8 * mm),
+            Spacer(1, 4 * mm),
             paragraph("ENGINEERING CASE STUDY", styles["eyebrow"]),
             paragraph("Engineering a responsible credit-risk system for thin-file borrowers", styles["title"]),
             paragraph(
-                "MicroScore combines interpretable machine learning, a role-based FastAPI product, "
+                "Senim Risk combines interpretable machine learning, a role-based FastAPI product, "
                 "tenant-aware data infrastructure, and reproducible Monte Carlo stress testing around "
                 "a financial-inclusion problem in Pavlodar, Kazakhstan.",
                 styles["subtitle"],
@@ -444,7 +446,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             metric_cards(
                 [
                     (metric(benchmark_rf["test_roc_auc"]), "UCI benchmark RF ROC-AUC"),
-                    ("152", "automated release-gate tests"),
+                    ("155", "automated release-gate tests"),
                     ("52 / 52", "PostgreSQL adapter methods"),
                     ("3", "connected engineering layers"),
                 ],
@@ -606,7 +608,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
                     ["Product API", "FastAPI, typed schemas, repository boundary", "Role access, tenant scoping, immutable score provenance, audit events"],
                     ["Persistence", "SQLite prototype + PostgreSQL adapter", "52/52 adapter methods and reviewed migration contract"],
                     ["Public demo", "Static HTML/CSS/JavaScript", "Browser-local synthetic API and GitHub Pages deployment"],
-                    ["Verification", "unittest + Node smoke workflows", "152 tests plus live API, security, research, and frontend gates"],
+                    ["Verification", "unittest + Node smoke workflows", "155 tests plus live API, security, research, and frontend gates"],
                 ],
                 [27 * mm, 52 * mm, 85 * mm],
                 styles,
@@ -789,7 +791,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         [
             section_heading("06", "Decision engineering", "From a score to policy trade-offs and uncertainty", styles),
             paragraph(
-                "MicroScore avoids a single binary threshold. A three-zone policy separates auto-approve, manual review, and auto-decline regions, then exposes how each policy changes access and risk. Monte Carlo sits above that policy layer and never changes borrower scores.",
+                "Senim Risk avoids a single binary threshold. A three-zone policy separates auto-approve, manual review, and auto-decline regions, then exposes how each policy changes access and risk. Monte Carlo sits above that policy layer and never changes borrower scores.",
                 styles["body"],
             ),
             Spacer(1, 3 * mm),
@@ -937,7 +939,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             Spacer(1, 4 * mm),
             metric_cards(
                 [
-                    ("152", "Python unit and integration tests"),
+                    ("155", "Python unit and integration tests"),
                     ("13", "local smoke workflows"),
                     ("52 / 52", "PostgreSQL adapter methods"),
                     ("1", "repeatable release command"),
@@ -962,7 +964,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             Spacer(1, 7 * mm),
             card(
                 "Verified release snapshot",
-                "The release candidate passed all 152 tests plus research, frontend, static-demo, PostgreSQL migration, live API, security, recovery, observability, and performance smoke checks before publication.",
+                "The release candidate passed all 155 tests plus research, frontend, static-demo, PostgreSQL migration, live API, security, recovery, observability, and performance smoke checks before publication.",
                 styles,
                 tone="teal",
             ),
@@ -978,7 +980,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         [
             section_heading("09", "Conclusion", "What is proven, what is not, and what comes next", styles),
             paragraph(
-                "MicroScore demonstrates the engineering of a responsible decision-support system: reproducible research, explicit failure analysis, a typed product API, auditable human review, tenant-aware infrastructure, and uncertainty tooling. It does not demonstrate that the current model is ready to make lending decisions in Kazakhstan.",
+                "Senim Risk demonstrates the engineering of a responsible decision-support system: reproducible research, explicit failure analysis, a typed product API, auditable human review, tenant-aware infrastructure, and uncertainty tooling. It does not demonstrate that the current model is ready to make lending decisions in Kazakhstan.",
                 styles["body"],
             ),
             Spacer(1, 4 * mm),
@@ -1093,10 +1095,11 @@ def build_pdf(output_path: Path) -> Path:
         rightMargin=23 * mm,
         topMargin=30 * mm,
         bottomMargin=23 * mm,
-        title="MicroScore Engineering Case Study",
+        title="Senim Risk Engineering Case Study",
         author="Alexandr",
-        subject="MicroScore engineering evidence package",
-        creator="MicroScore reproducible report builder",
+        subject="Senim Risk engineering evidence package",
+        creator="Senim Risk reproducible report builder",
+        invariant=1,
     )
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="main", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([PageTemplate(id="case-study", frames=[frame], onPage=page_header_footer)])
@@ -1105,7 +1108,7 @@ def build_pdf(output_path: Path) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build the MicroScore engineering case study PDF.")
+    parser = argparse.ArgumentParser(description="Build the Senim Risk engineering case study PDF.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     output = build_pdf(args.output.resolve())

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-MicroScore uses Monte Carlo simulation to describe uncertainty around a scored
+Senim Risk uses Monte Carlo simulation to describe uncertainty around a scored
 portfolio and a threshold policy. It does **not** randomize an individual
 borrower's score, produce a new credit score, or turn simulated profit into an
 automatic lending decision.

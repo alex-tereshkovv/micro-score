@@ -1,6 +1,6 @@
 # Pilot Data Schema
 
-This document defines the minimum data MicroScore should request during a
+This document defines the minimum data Senim Risk should request during a
 future supervised pilot with a microfinance organization. The goal is to test
 credit-risk decision support without collecting unnecessary sensitive data.
 
@@ -28,7 +28,7 @@ the application reaches storage or scoring.
 | Data class | Collect in pilot? | Use in model? | Notes |
 | --- | --- | --- | --- |
 | Internal borrower id | Yes | No | Random pilot id, not an IIN. |
-| Name | Avoid if possible | No | MFI may need it operationally; MicroScore does not. |
+| Name | Avoid if possible | No | MFI may need it operationally; Senim Risk does not. |
 | IIN/passport number | No | No | Too sensitive for this prototype stage. |
 | Phone/email | Avoid if possible | No | Use only if the MFI already manages contact. |
 | District/settlement type | Yes | Yes, with caution | Needed to validate Pavlodar regional assumptions. |
@@ -123,7 +123,7 @@ Do not collect these in the current prototype or early public demo:
 
 ## Validation Questions
 
-Before any real pilot, MicroScore needs answers to these questions:
+Before any real pilot, Senim Risk needs answers to these questions:
 
 1. Which fields can an MFI provide legally and ethically?
 2. Which fields are already available in summarized form?
@@ -145,6 +145,6 @@ A first pilot should be considered successful only if it can show:
 - analyst feedback on whether explanations are understandable;
 - documented reasons for false positives and false negatives.
 
-This is the quiet plumbing that makes a future MicroScore pilot serious. It is
+This is the quiet plumbing that makes a future Senim Risk pilot serious. It is
 less flashy than a new chart, but it prevents the project from growing in a
 messy direction later.

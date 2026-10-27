@@ -1,4 +1,4 @@
-"""Feature engineering for the MicroScore credit-risk dataset."""
+"""Feature engineering for the Senim Risk credit-risk dataset."""
 
 from __future__ import annotations
 

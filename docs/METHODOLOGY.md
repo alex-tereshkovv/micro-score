@@ -1,6 +1,6 @@
-# MicroScore Methodology
+# Senim Risk Methodology
 
-MicroScore is a research prototype for behavioral credit-risk scoring in
+Senim Risk is a research prototype for behavioral credit-risk scoring in
 Pavlodar region, Kazakhstan. The goal is not to automate lending decisions, but
 to study whether digital and financial behavior can improve credit access for
 borrowers with thin or missing formal credit histories.

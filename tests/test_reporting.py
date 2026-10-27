@@ -68,7 +68,7 @@ class ReportingTests(unittest.TestCase):
                 self.assertTrue(path.exists(), path)
 
             manifest = json.loads(artifacts.manifest_json.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["project"], "MicroScore")
+            self.assertEqual(manifest["project"], "Senim Risk")
             self.assertEqual(manifest["rows"], 80)
 
             model_metrics = pd.read_csv(artifacts.model_metrics_csv)
@@ -104,7 +104,7 @@ class ReportingTests(unittest.TestCase):
             self.assertIn("ci_lower", bootstrap_intervals.columns)
             self.assertIn("classification_flip_rate", covariate_shift.columns)
             self.assertIn(
-                "MicroScore Research Artifacts",
+                "Senim Risk Research Artifacts",
                 artifacts.summary_markdown.read_text(encoding="utf-8"),
             )
             self.assertIn(

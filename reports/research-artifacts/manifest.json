@@ -1,5 +1,5 @@
 {
-  "project": "MicroScore",
+  "project": "Senim Risk",
   "data_path": "data/raw/credit_risk_dataset.csv",
   "rows": 5000,
   "target": "credit_risk",

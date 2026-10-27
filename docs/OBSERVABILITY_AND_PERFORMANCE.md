@@ -1,6 +1,6 @@
 # Observability and Performance Gate v1
 
-MicroScore now has a bounded runtime-observability layer and a reproducible HTTP
+Senim Risk now has a bounded runtime-observability layer and a reproducible HTTP
 performance smoke test. The goal is to catch regressions in the complete
 request path before release, while keeping the evidence honest: this gate is
 not a production capacity study or a measured service-level objective.

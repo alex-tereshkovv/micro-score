@@ -1,4 +1,4 @@
--- MicroScore PostgreSQL Migration v1
+-- Senim Risk PostgreSQL Migration v1
 -- Version: 0001_initial_schema
 -- Purpose: mirror the SQLite prototype schema with PostgreSQL-native data types
 --          for the optional PostgreSQL Runtime v1 backend.

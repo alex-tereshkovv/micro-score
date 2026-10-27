@@ -1,4 +1,4 @@
-"""Local one-command launcher for the MicroScore web prototype."""
+"""Local one-command launcher for the Senim Risk web prototype."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def parse_args() -> object:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Start the MicroScore API and web UI for local demo work.",
+        description="Start the Senim Risk API and web UI for local demo work.",
     )
     parser.add_argument("--host", default=DEFAULT_HOST, help="Local host to bind.")
     parser.add_argument("--api-port", type=int, help="Preferred API port.")
@@ -76,7 +76,7 @@ def main() -> int:
         print(f"Web root not found: {WEB_ROOT}")
         return 1
 
-    print("MicroScore local launcher")
+    print("Senim Risk local launcher")
     print("Seeding demo accounts and Pavlodar application portfolio...")
     seed_demo_data()
 
@@ -117,7 +117,7 @@ def main() -> int:
     print(f"Web: http://{host}:{web_port}")
     print("Demo password: password123")
     print("Staff/admin MFA code: 246810")
-    print("Close this window or press Ctrl+C to stop MicroScore.")
+    print("Close this window or press Ctrl+C to stop Senim Risk.")
 
     if _wait_for_health(api_base) and not args.no_browser:
         webbrowser.open(web_url)
@@ -137,7 +137,7 @@ def main() -> int:
                 return int(web_process.returncode or 1)
             time.sleep(0.75)
     except KeyboardInterrupt:
-        print("\nStopping MicroScore...")
+        print("\nStopping Senim Risk...")
         return 0
     finally:
         for process in (api_process, web_process):

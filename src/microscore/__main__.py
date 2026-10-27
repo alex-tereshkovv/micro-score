@@ -1,4 +1,4 @@
-"""Run MicroScore from `python -m microscore`."""
+"""Run Senim Risk from `python -m microscore`."""
 
 from .cli import main
 

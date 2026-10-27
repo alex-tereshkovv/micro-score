@@ -1,6 +1,6 @@
-# MicroScore Project Brief
+# Senim Risk Project Brief
 
-MicroScore is an interpretable alternative credit-risk research and
+Senim Risk is an interpretable alternative credit-risk research and
 decision-support prototype for thin-file borrowers in Pavlodar, Kazakhstan. It
 connects reproducible modeling, responsible-ML documentation, and a working
 product demo for reviewing risk, explanations, and policy trade-offs.
@@ -23,7 +23,7 @@ product demo for reviewing risk, explanations, and policy trade-offs.
 2. Two- or five-minute technical walkthrough: https://alex-tereshkovv.github.io/micro-score/showcase.html
 3. Engineering evidence: https://alex-tereshkovv.github.io/micro-score/evidence.html
 4. Role-based demo: https://alex-tereshkovv.github.io/micro-score/
-5. Research paper: [PDF](../output/pdf/MicroScore_Research_Paper.pdf) · [source](RESEARCH_PAPER.md)
+5. Research paper: [PDF](../output/pdf/Senim_Risk_Research_Paper.pdf) · [source](RESEARCH_PAPER.md)
 6. Model governance: [MODEL_CARD.md](MODEL_CARD.md)
 7. Technical interview preparation: [TECHNICAL_INTERVIEW_GUIDE.md](TECHNICAL_INTERVIEW_GUIDE.md)
 8. Release-candidate boundary and evidence manifest: [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)
@@ -75,7 +75,7 @@ as a proxy-risk and validation problem rather than hiding the result.
 
 ## Why This Is A System, Not Just A Model
 
-MicroScore has three connected layers:
+Senim Risk has three connected layers:
 
 - Research: reproducible experiments, artifacts, and evidence boundaries.
 - Product: borrower, analyst, and admin workflows backed by typed contracts.
@@ -88,7 +88,7 @@ tests portfolio-level uncertainty without changing borrower scores.
 
 ## What Not To Claim
 
-MicroScore is not:
+Senim Risk is not:
 
 - a production credit-scoring model;
 - a replacement for a credit bureau or an analyst;
@@ -97,7 +97,7 @@ MicroScore is not:
 - proof that alternative behavioral data is sufficient for lending;
 - a calibrated financial forecast or regulatory risk model.
 
-The defensible claim is narrower: MicroScore is a working research-and-product
+The defensible claim is narrower: Senim Risk is a working research-and-product
 prototype for studying how interpretable alternative data, explicit policy,
 and human oversight could support regional lending decisions.
 
@@ -112,7 +112,7 @@ and human oversight could support regional lending decisions.
 
 ## Project Takeaway
 
-MicroScore is strongest when its evidence boundary remains visible. The project
+Senim Risk is strongest when its evidence boundary remains visible. The project
 combines ML experimentation with API design, persistence, frontend workflows,
 testing, governance, and honest negative results. Its present value is not a
 claim of lending readiness; it is a reproducible demonstration of how such a

@@ -16,6 +16,12 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1
 .venv\Scripts\python -m unittest discover -s tests
 ```
 
+- Public branding audit passes and reports only approved compatibility identifiers:
+
+```powershell
+.venv\Scripts\python scripts\brand_audit.py
+```
+
 - JavaScript syntax passes:
 
 ```powershell
@@ -157,8 +163,12 @@ git diff --check
   evidence, and non-production boundary before asking for a deep technical read.
 - Public markup and cache versions use neutral engineering-review language,
   without admissions-specific positioning.
-- The desktop architecture flow does not produce page-level horizontal scroll;
-  responsive layouts collapse at the existing 1080 px and 680 px breakpoints.
+- Reviewer home, evidence hub, and walkthrough do not produce page-level
+  horizontal scroll at desktop, tablet, or narrow mobile widths. Manual browser
+  QA covers 1440, 1024, 768, 390, and 320 CSS-pixel viewports.
+- Inactive walkthrough scenes use the native `hidden` contract and cannot
+  remain rendered off-canvas; public stylesheets do not impose a fixed 320 px
+  minimum width that conflicts with a visible vertical scrollbar.
 - Reviewer home, evidence hub, and walkthrough expose keyboard-visible skip
   links to their main content and retain visible focus treatment.
 - The walkthrough implements the ARIA tab/tab-panel relationship, keeps only

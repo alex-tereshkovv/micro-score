@@ -20,7 +20,7 @@ def resolve_data_path(path: str | Path | None = None) -> Path:
         return DEFAULT_DATA_PATH
 
     raise FileNotFoundError(
-        "Could not find the MicroScore dataset. Expected it at "
+        "Could not find the Senim Risk dataset. Expected it at "
         f"'{DEFAULT_DATA_PATH}'. The old notebook path "
         f"'{LEGACY_NOTEBOOK_DATA_PATH}' was removed when data moved to data/raw."
     )

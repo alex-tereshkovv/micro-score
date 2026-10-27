@@ -337,7 +337,7 @@ class ApiIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(export_response.status_code, 200, export_response.text)
         self.assertIn("text/csv", export_response.headers["content-type"])
-        self.assertIn("microscore-applications.csv", export_response.headers["content-disposition"])
+        self.assertIn("senim-risk-applications.csv", export_response.headers["content-disposition"])
         csv_text = export_response.text
         self.assertIn(
             "application_id,organization_id,borrower_email,status",
@@ -1564,7 +1564,7 @@ class ApiIntegrationTests(unittest.TestCase):
             os.environ,
             {
                 "MICROSCORE_INVITE_DELIVERY_PROVIDER": "transactional_email",
-                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/micro-score",
+                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/senim-risk",
             },
             clear=False,
         ):
@@ -1602,7 +1602,7 @@ class ApiIntegrationTests(unittest.TestCase):
             os.environ,
             {
                 "MICROSCORE_INVITE_DELIVERY_PROVIDER": "transactional_email",
-                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/micro-score",
+                "MICROSCORE_INVITE_WEB_BASE_URL": "https://onboarding.example.com/senim-risk",
                 "MICROSCORE_TRANSACTIONAL_EMAIL_API_KEY": secret_value,
                 "MICROSCORE_TRANSACTIONAL_EMAIL_FROM": "security@example.com",
                 "MICROSCORE_TRANSACTIONAL_EMAIL_TEMPLATE_ID": "staff-invite-v1",

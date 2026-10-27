@@ -20,8 +20,8 @@ MARKDOWN_ENTRY_POINTS = (
     ROOT / "docs" / "PROJECT_BRIEF.md",
 )
 DEPLOYMENT_ONLY_ASSETS = {
-    "assets/MicroScore_Engineering_Case_Study.pdf",
-    "assets/MicroScore_Research_Paper.pdf",
+    "assets/Senim_Risk_Engineering_Case_Study.pdf",
+    "assets/Senim_Risk_Research_Paper.pdf",
 }
 FORBIDDEN_TRACKED_PARTS = {
     ".ipynb_checkpoints",
@@ -132,7 +132,7 @@ def main() -> None:
     styles = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
     release_gate = (ROOT / "scripts" / "check.ps1").read_text(encoding="utf-8")
 
-    for claim in ["0.492", "0.775", "152", "52 / 52"]:
+    for claim in ["0.492", "0.775", "155", "52 / 52"]:
         if claim not in index_html:
             raise AssertionError(f"Reviewer home is missing evidence claim: {claim}")
     for boundary in [
@@ -151,7 +151,7 @@ def main() -> None:
         raise AssertionError(f"Expected 13 milestones, found {evidence_parser.milestones}")
     if evidence_parser.decisions != 5:
         raise AssertionError(f"Expected 5 engineering decisions, found {evidence_parser.decisions}")
-    for claim in ["0.501", "0.775", "152", "52 / 52", "90+"]:
+    for claim in ["0.501", "0.775", "155", "52 / 52", "90+"]:
         if claim not in evidence_html:
             raise AssertionError(f"Evidence hub is missing claim: {claim}")
 
@@ -163,14 +163,14 @@ def main() -> None:
     if len(github_links) < 15:
         raise AssertionError(f"Expected at least 15 GitHub proof links, found {len(github_links)}")
     if any("alex-tereshkovv/micro-score" not in link for link in github_links):
-        raise AssertionError("Evidence hub links outside the MicroScore repository")
+        raise AssertionError("Evidence hub links outside the Senim Risk repository")
 
     public_release_text = "\n".join([index_html, showcase_html, evidence_html, styles]).lower()
     if "admissions" in public_release_text:
         raise AssertionError("Public release still contains admissions-specific positioning")
     if "Engineering portfolio" not in showcase_html:
         raise AssertionError("Technical walkthrough is missing neutral portfolio positioning")
-    if "20261025-reviewer-accessibility-v2" not in index_html:
+    if "20261027-senim-risk-brand-v2" not in index_html:
         raise AssertionError("Reviewer home cache version is stale")
 
     accessibility_contracts = {
@@ -181,10 +181,12 @@ def main() -> None:
         "evidence.html": [
             'class="skip-link" href="#evidence-main"',
             '<main id="evidence-main" tabindex="-1">',
+            "20261027-senim-risk-brand-v2",
         ],
         "showcase.html": [
             'class="skip-link" href="#showcase-main"',
             'id="showcase-main" class="showcase-stage" tabindex="-1"',
+            "20261027-senim-risk-brand-v2",
             'role="tabpanel"',
             'aria-controls="showcase-scene-1"',
             'id="showcase-tab-7"',
@@ -219,17 +221,14 @@ def main() -> None:
         if marker not in showcase_script:
             raise AssertionError(f"Walkthrough keyboard contract is missing: {marker}")
 
-    for stylesheet in [
-        styles,
-        (WEB_ROOT / "evidence.css").read_text(encoding="utf-8"),
-        (WEB_ROOT / "showcase.css").read_text(encoding="utf-8"),
-    ]:
+    evidence_styles = (WEB_ROOT / "evidence.css").read_text(encoding="utf-8")
+    showcase_styles = (WEB_ROOT / "showcase.css").read_text(encoding="utf-8")
+    for stylesheet in [styles, evidence_styles, showcase_styles]:
         for marker in [".skip-link", "prefers-reduced-motion: reduce"]:
             accessibility_checks += 1
             if marker not in stylesheet:
                 raise AssertionError(f"Public stylesheet is missing accessibility marker: {marker}")
 
-    evidence_styles = (WEB_ROOT / "evidence.css").read_text(encoding="utf-8")
     for marker in [
         "width: min(calc(100% + 80px), calc(100vw - 32px));",
         "margin-left: max(-40px, calc((100% - (100vw - 32px)) / 2));",
@@ -237,6 +236,18 @@ def main() -> None:
         accessibility_checks += 1
         if marker not in evidence_styles:
             raise AssertionError(f"Evidence full-bleed section can overflow the viewport: {marker}")
+
+    responsive_contracts = {
+        "evidence.css": (evidence_styles, ["[hidden]", "min-width: 0"]),
+        "showcase.css": (showcase_styles, ["[hidden]", "min-width: 0"]),
+    }
+    for stylesheet_name, (stylesheet, markers) in responsive_contracts.items():
+        for marker in markers:
+            accessibility_checks += 1
+            if marker not in stylesheet:
+                raise AssertionError(
+                    f"{stylesheet_name} is missing responsive overflow protection: {marker}"
+                )
 
     expected_grid = (
         "grid-template-columns: repeat(3, minmax(0, 1fr) minmax(18px, auto)) "

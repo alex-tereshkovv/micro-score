@@ -1,9 +1,11 @@
-# MicroScore
+# Senim Risk
+
+<p align="center"><img src="apps/web/assets/senim-risk-social-preview.png" alt="Senim Risk — an interpretable credit-risk system for thin-file borrowers" width="100%" /></p>
 
 [![CI](https://github.com/alex-tereshkovv/micro-score/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-tereshkovv/micro-score/actions/workflows/ci.yml)
 
-Interpretable credit-risk research and decision-support prototype for thin-file
-borrowers in Pavlodar, Kazakhstan.
+An interpretable credit-risk system for thin-file borrowers. The project combines
+reproducible research and a human-in-the-loop product prototype for Pavlodar, Kazakhstan.
 
 ## Try The Live Demo
 
@@ -30,12 +32,12 @@ lending service and does not collect real borrower data.
 | Key limitation | No validation on real Kazakhstan MFI borrower data |
 | Public benchmark | UCI Random Forest ROC-AUC `0.775`, Brier score `0.159` |
 | Governance | Versioned models, audit trail, policy analysis, seeded Monte Carlo |
-| Quality gate | 152 automated tests plus research, HTTP, database, observability, performance, recovery, supply-chain, container, submission-manifest, and browser smoke checks |
+| Quality gate | 155 automated tests plus research, HTTP, database, observability, performance, recovery, supply-chain, container, submission-manifest, and browser smoke checks |
 
 ## Why This Matters
 
 Thin-file borrowers can be rejected because they lack conventional credit
-history, not because their risk is known to be high. MicroScore investigates
+history, not because their risk is known to be high. Senim Risk investigates
 whether behavioral signals could support a more informative review while
 keeping the model interpretable, the decision human-controlled, and the limits
 of the evidence explicit.
@@ -108,7 +110,7 @@ install the optional `.[notebook]` development extra separately.
 Run the complete Windows demo:
 
 ```powershell
-.\Start-MicroScore.cmd
+.\Start-Senim-Risk.cmd
 ```
 
 Or start the production-shaped synthetic stack with Docker Compose:
@@ -141,7 +143,7 @@ Manual API and web-server commands are documented in
 ## Read The Project
 
 - [Project brief](docs/PROJECT_BRIEF.md) — the shortest complete overview
-- [Research paper PDF](output/pdf/MicroScore_Research_Paper.pdf) · [source](docs/RESEARCH_PAPER.md) — question, method, evidence, limitations
+- [Research paper PDF](output/pdf/Senim_Risk_Research_Paper.pdf) · [source](docs/RESEARCH_PAPER.md) — question, method, evidence, limitations
 - [Technical interview guide](docs/TECHNICAL_INTERVIEW_GUIDE.md) — explain the central engineering and ML decisions
 - [Architecture](docs/ARCHITECTURE.md) — runtimes, data flow, boundaries, and gaps
 - [PostgreSQL Runtime v1](docs/POSTGRESQL_RUNTIME.md) — backend selection, CI parity, and operational limits
@@ -155,11 +157,11 @@ Manual API and web-server commands are documented in
 - [Model robustness and uncertainty](docs/ROBUSTNESS_AND_UNCERTAINTY.md) — repeated splits, bootstrap intervals, and input stress
 - [Engineering quality](docs/ENGINEERING_QUALITY.md) — verification strategy
 - [Pilot data schema](docs/PILOT_DATA_SCHEMA.md) — minimum-data and privacy boundary
-- [Engineering case study PDF](output/pdf/MicroScore_Engineering_Case_Study.pdf)
+- [Engineering case study PDF](output/pdf/Senim_Risk_Engineering_Case_Study.pdf)
 
 ## Scope And Limitations
 
-MicroScore is a research-and-product prototype, not a production credit model.
+Senim Risk is a research-and-product prototype, not a production credit model.
 It must not be used for real approval or rejection. Its Pavlodar borrower data
 is synthetic; the UCI benchmark comes from Taiwan credit-card data; financial
 and Monte Carlo assumptions are methodological examples rather than calibrated
@@ -173,5 +175,5 @@ Alexandr — Pavlodar, Kazakhstan
 
 The project began with a local question: can people with little formal credit
 history be evaluated using better evidence without hiding uncertainty or
-removing human responsibility? MicroScore is my attempt to answer that question
+removing human responsibility? Senim Risk is my attempt to answer that question
 through reproducible research and a working system.

@@ -3,15 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "microscore"
+name = "senim-risk"
 version = "0.1.0"
-description = "Behavioral credit-risk scoring research for microfinance contexts."
+description = "An interpretable credit-risk system for thin-file borrowers."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0",
     "numpy>=1.26",
     "matplotlib>=3.8",
+    "Pillow>=10.0",
     "scikit-learn>=1.4",
     "xlrd>=2.0",
 ]
@@ -32,6 +33,9 @@ report = [
 ]
 
 [project.scripts]
+senim-risk-train = "microscore.cli:main"
+senim-risk-seed-api = "microscore_api.seed:main"
+senim-risk-web = "microscore_api.dev:main"
 microscore-train = "microscore.cli:main"
 microscore-seed-api = "microscore_api.seed:main"
 microscore-web = "microscore_api.dev:main"

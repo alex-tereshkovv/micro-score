@@ -1,4 +1,4 @@
-# MicroScore: An Interpretable Decision-Support Prototype for Thin-File Credit Risk
+# Senim Risk: An Interpretable Decision-Support Prototype for Thin-File Credit Risk
 
 **Alexandr | Pavlodar, Kazakhstan | September 2026**
 
@@ -6,7 +6,7 @@
 
 Thin-file borrowers have too little conventional credit history for many
 standard underwriting processes, but alternative behavioral data can introduce
-new privacy, proxy, and reliability risks. MicroScore studies this tension
+new privacy, proxy, and reliability risks. Senim Risk studies this tension
 through a reproducible machine-learning pipeline and a working decision-support
 prototype. Experiment A uses 5,000 synthetic borrower records to compare
 Logistic Regression and Random Forest, audit leakage and proxy dependence, test
@@ -22,7 +22,7 @@ random ranking (0.486-0.492). On the UCI benchmark, Random Forest reaches
 ROC-AUC 0.775 and Brier score 0.159. These results show that a credible score
 cannot be judged from one headline metric: feature provenance, ablation,
 calibration, policy effects, and deployment context are equally important.
-MicroScore is therefore presented as a human-in-the-loop research prototype,
+Senim Risk is therefore presented as a human-in-the-loop research prototype,
 not a validated lending model.
 
 **Keywords:** alternative credit scoring; thin-file borrowers; interpretable
@@ -39,7 +39,7 @@ also reveal what drives the score, how sensitive the result is to individual
 features, what policy converts a probability into an action, and where the
 evidence stops.
 
-MicroScore investigates these questions in the context of a possible regional
+Senim Risk investigates these questions in the context of a possible regional
 microfinance workflow in Pavlodar, Kazakhstan. The project combines two layers:
 
 - a research pipeline for modeling, ablation, calibration, error analysis,
@@ -71,7 +71,7 @@ The World Bank and International Committee on Credit Reporting describe
 alternative data as a possible route to richer credit profiles for thin-file or
 credit-invisible customers, while emphasizing consent, data quality,
 discrimination, cybersecurity, and explainability risks [1, 2]. This motivates
-MicroScore's decision to treat alternative data as evidence to be audited, not
+Senim Risk's decision to treat alternative data as evidence to be audited, not
 as automatically fairer data.
 
 The public benchmark originates from the UCI Default of Credit Card Clients
@@ -110,7 +110,7 @@ attributes.
 ### 4.2 Experiment B: Public UCI Benchmark
 
 Experiment B uses the UCI Default of Credit Card Clients dataset, which contains
-30,000 records from Taiwan and is distributed under CC BY 4.0 [3]. MicroScore
+30,000 records from Taiwan and is distributed under CC BY 4.0 [3]. Senim Risk
 normalizes its fields into the same evaluation workflow but keeps all benchmark
 artifacts in a separate directory. Results are never merged with the synthetic
 experiment.
@@ -181,7 +181,7 @@ diagnostic checks, not proof of fairness.
 
 ### 5.5 Decision Policies And Portfolio Uncertainty
 
-A model probability is not a lending decision. MicroScore defines a lower
+A model probability is not a lending decision. Senim Risk defines a lower
 approve threshold, an upper decline threshold, and a manual-review interval
 between them. Four named policies expose different risk and inclusion postures.
 
@@ -295,7 +295,7 @@ local decision thresholds.
 
 At threshold 0.50, the synthetic Logistic Regression produces 63 false
 positives and 221 false negatives on the 1,000-row test set. The false-positive
-rate is 0.269 and the false-negative rate is 0.289. In MicroScore's risk label,
+rate is 0.269 and the false-negative rate is 0.289. In Senim Risk's risk label,
 a false positive may send a lower-risk borrower to unnecessary scrutiny, while
 a false negative may expose the lender to an unrecognized higher-risk case.
 
@@ -324,7 +324,7 @@ figures are scenario outputs, not recommended production policies.
 Under the current illustrative interest margin and loss-given-default
 assumptions, the nominal profit-optimal threshold approves no applicants. This
 is a warning about both the dataset and the objective: optimizing only the
-modeled financial result can eliminate access. MicroScore therefore reports
+modeled financial result can eliminate access. Senim Risk therefore reports
 minimum-approval constraints, segment outcomes, and review policies rather than
 presenting one profit-maximizing cutoff as the answer.
 
@@ -369,7 +369,7 @@ The main limitations are substantive, not cosmetic:
 8. **Prototype infrastructure.** Local authentication, SQLite, and the partial
    PostgreSQL path are not production controls.
 
-MicroScore must not be used to approve, decline, price, or rank real borrowers.
+Senim Risk must not be used to approve, decline, price, or rank real borrowers.
 A future pilot would require data minimization and consent, legal and privacy
 review, independent validation, temporal and segment testing, probability
 calibration, human appeal and override procedures, monitoring, incident
@@ -412,7 +412,7 @@ better evidence:
 
 ## 11. Conclusion
 
-MicroScore's strongest result is a limitation discovered through ablation. A
+Senim Risk's strongest result is a limitation discovered through ablation. A
 synthetic Random Forest appears promising at ROC-AUC 0.830, yet its ranking
 falls to 0.492 when one repayment-history proxy is removed. The public UCI
 benchmark confirms that the pipeline can operate on real data, but does not
@@ -424,7 +424,7 @@ The project therefore treats credit scoring as an evidence and decision-system
 problem rather than a leaderboard problem. A defensible prototype must connect
 model metrics to feature provenance, probability calibration, policy trade-offs,
 human review, auditability, and explicit non-use boundaries. That is the central
-engineering lesson of MicroScore.
+engineering lesson of Senim Risk.
 
 ## References
 
@@ -457,5 +457,5 @@ Letters*, vol. 27, no. 8, pp. 861-874, 2006.
 Reforms of the Republic of Kazakhstan, "Pavlodar Region," accessed September
 27, 2026. [Official statistics](https://stat.gov.kz/ru/region/pavlodar/)
 
-[8] MicroScore repository, source code and reproducible artifacts.
+[8] Senim Risk repository, source code and reproducible artifacts.
 [Repository](https://github.com/alex-tereshkovv/micro-score)

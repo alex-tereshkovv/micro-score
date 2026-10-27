@@ -1,6 +1,6 @@
 # PostgreSQL Recovery Gate v1
 
-MicroScore now proves one narrow but important operational claim: the database
+Senim Risk now proves one narrow but important operational claim: the database
 created by the disposable PostgreSQL workflow can be dumped, restored into a
 clean database, and compared without losing schema or content.
 

@@ -1,8 +1,8 @@
-# MicroScore Impact Plan
+# Senim Risk Impact Plan
 
 ## Why Pavlodar
 
-MicroScore focuses on Pavlodar and Pavlodar region because the project started
+Senim Risk focuses on Pavlodar and Pavlodar region because the project started
 from a local observation: people in smaller cities and rural districts can be
 rejected for credit because they lack formal credit history, official
 employment, or collateral. The region also contains a useful mix of urban,
@@ -81,7 +81,7 @@ MFI analysts:
 
 ## Impact Claim Status
 
-MicroScore currently has a strong social motivation and a working prototype,
+Senim Risk currently has a strong social motivation and a working prototype,
 but it does not yet prove real-world impact. The impact claim will become
 stronger only after stakeholder interviews, real-data validation, and a pilot
 review with an MFI or financial-inclusion expert.

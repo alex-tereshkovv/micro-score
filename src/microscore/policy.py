@@ -1,4 +1,4 @@
-"""Approval/review/decline policy analysis for MicroScore."""
+"""Approval/review/decline policy analysis for Senim Risk."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ class PolicyAnalysisReport:
 
 
 def default_threshold_policies() -> tuple[ThresholdPolicy, ...]:
-    """Return standard MicroScore policy scenarios."""
+    """Return standard Senim Risk policy scenarios."""
 
     return (
         ThresholdPolicy(

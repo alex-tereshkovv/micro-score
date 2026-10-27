@@ -1,7 +1,7 @@
 # Demo Video Script
 
 This script supports a two-minute portfolio overview and a five-minute technical
-defense. Keep the recording calm, direct, and honest: MicroScore is a
+defense. Keep the recording calm, direct, and honest: Senim Risk is a
 research-backed product prototype, not a deployed lending system.
 
 ## Recording Setup
@@ -40,7 +40,7 @@ return to the case study.
 
 ### 0:00 - 0:17 — The problem
 
-MicroScore is an interpretable alternative credit-risk scoring prototype for
+Senim Risk is an interpretable alternative credit-risk scoring prototype for
 thin-file borrowers in Pavlodar, Kazakhstan. The problem is that many people can
 be rejected because they lack formal credit history, even when their behavior may
 show repayment discipline.
@@ -85,10 +85,10 @@ is privacy-safe validation with local experts or an MFI partner.
 
 ### 1:42 - 1:59 — Evidence and close
 
-End on the evidence: 152 Python tests, a reproducible ten-page engineering
+End on the evidence: 155 Python tests, a reproducible ten-page engineering
 report, a public synthetic-data demo, and the inspected source repository.
 
-Closing line: “MicroScore is not a claim that a model should decide who receives
+Closing line: “Senim Risk is not a claim that a model should decide who receives
 credit. It is an engineering argument that high-impact models should live inside
 systems that make evidence, uncertainty, and human responsibility visible.”
 
@@ -139,7 +139,7 @@ Use these short captions if the video platform allows chapter markers:
 - Duration: 90-130 seconds
 - Resolution: 1080p if possible
 - Audio: clear voiceover, no background music needed
-- Filename: `microscore-demo-video.mp4`
+- Filename: `senim-risk-demo-video.mp4`
 
 ## What Not To Say
 

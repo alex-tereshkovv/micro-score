@@ -43,7 +43,7 @@ staff/admin MFA code: 246810
 
 ### 0:00 - 0:15 Problem
 
-MicroScore studies alternative credit-risk scoring for thin-file borrowers in
+Senim Risk studies alternative credit-risk scoring for thin-file borrowers in
 Pavlodar, Kazakhstan. The problem is that people can be rejected because they
 have no formal credit history, even when their behavior may show repayment
 discipline.
@@ -94,7 +94,7 @@ Run the Monte Carlo Lab with a fixed seed. Compare baseline, adverse, and severe
 ranges for defaults, exposure, portfolio result, and probability of loss. Say
 clearly that this does not change borrower scores and is scenario planning, not
 a forecast. Then point to review-packet flags and the decision audit. This is
-where MicroScore moves beyond a raw classifier: it makes both model limitations
+where Senim Risk moves beyond a raw classifier: it makes both model limitations
 and policy uncertainty visible.
 
 ### 1:40 - 2:00 Next Step
@@ -112,7 +112,7 @@ from an MFI under privacy-safe conditions.
 
 ## Short Reviewer Summary
 
-MicroScore is an interpretable, human-in-the-loop credit-risk research prototype
+Senim Risk is an interpretable, human-in-the-loop credit-risk research prototype
 for thin-file borrowers. Its strongest current contribution is not accuracy
 alone, but the combination of behavioral scoring, proxy-risk analysis,
 review-packet governance, and a working product flow.
